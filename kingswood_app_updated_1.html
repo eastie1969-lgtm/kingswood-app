@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kingswood Field Report App</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
+    <script src="https://upload-widget.cloudinary.com/latest/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; }
+        @media (max-width: 1024px) { .split { grid-template-columns: 1fr; } }
+        
+        .panel { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }
+        .panel-header { background: #001f3f; color: white; padding: 16px; font-weight: 600; }
+        .panel-content { padding: 20px; max-height: 800px; overflow-y: auto; }
+        
+        .login-screen { text-align: center; padding: 40px 20px; }
+        .login-screen h2 { color: #001f3f; margin-bottom: 30px; font-size: 24px; }
+        .form-group { margin-bottom: 16px; text-align: left; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; color: #001f3f; margin-bottom: 6px; text-transform: uppercase; }
+        .form-group select, .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; font-family: inherit; }
+        
+        .button { background: #001f3f; color: white; border: none; padding: 12px 16px; border-radius: 4px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 10px; }
+        .button:hover { background: #003d66; }
+        .button.secondary { background: #666; }
+        .button.secondary:hover { background: #555; }
+        .button:disabled { background: #ccc; cursor: not-allowed; }
+        
+        .hidden { display: none !important; }
+        
+        .job-card { background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; padding: 12px; margin-bottom: 12px; cursor: pointer; }
+        .job-card:hover { background: #f0f0f0; }
+        .job-card h3 { font-size: 14px; margin-bottom: 4px; color: #001f3f; }
+        .job-card p { font-size: 12px; opacity: 0.7; margin: 2px 0; }
+        
+        .report-card { background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; padding: 12px; margin-bottom: 12px; cursor: pointer; }
+        .report-card:hover { background: #f0f0f0; }
+        .report-card h3 { font-size: 13px; margin-bottom: 4px; color: #001f3f; }
+        .report-card p { font-size: 12px; margin: 2px 0; }
+        
+        .section { margin-bottom: 20px; }
+        .section-title { font-size: 13px; font-weight: 600; color: #001f3f; text-transform: uppercase; margin-bottom: 10px; border-bottom: 2px solid #001f3f; padding-bottom: 6px; }
+        
+        .checkbox-group label, .radio-group label { display: block; margin-bottom: 6px; font-size: 13px; }
+        .checkbox-group input, .radio-group input { margin-right: 6px; }
+        
+        .photo-section { background: #e8f4f8; border: 2px dashed #001f3f; border-radius: 4px; padding: 16px; text-align: center; margin-bottom: 16px; }
+        .photo-section input { display: none; }
+        .photo-count { background: #001f3f; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; display: inline-block; margin-top: 10px; }
+        .photo-preview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+        .photo-preview img { width: 100%; height: 80px; object-fit: cover; border-radius: 4px; }
+        .photo-preview .pending { background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #666; }
+        
+        .info-box { background: #e8f4f8; border-left: 3px solid #001f3f; padding: 12px; border-radius: 4px; font-size: 12px; margin-bottom: 12px; }
+        .screenshot-preview { width: 100%; height: 100px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #666; margin-top: 6px; overflow: hidden; }
+        
+        .admin-job-form { background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; padding: 16px; margin-bottom: 16px; }
+        
+        .success-message { background: #4caf50; color: white; padding: 12px; border-radius: 4px; margin-bottom: 12px; }
+        .error-message { background: #d32f2f; color: white; padding: 12px; border-radius: 4px; margin-bottom: 12px; }
+        
+        .tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid #ddd; }
+        .tab { padding: 12px 16px; cursor: pointer; border-bottom: 2px solid transparent; font-size: 13px; font-weight: 600; color: #666; }
+        .tab.active { border-bottom-color: #001f3f; color: #001f3f; }
+        
+        .loading { color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="split">
+            <!-- TECH SIDE -->
+            <div class="panel">
+                <div class="panel-header">Tech Interface</div>
+                <div class="panel-content">
+                    <div id="techLogin" class="login-screen">
+                        <h2>Kingswood</h2>
+                        <div class="form-group">
+                            <label>Your Name</label>
+                            <select id="techName">
+                                <option value="">-- Select --</option>
+                                <option value="Ian D">Ian D</option>
+                                <option value="Lee K">Lee K</option>
+                                <option value="James C">James C</option>
+                                <option value="Russell P">Russell P</option>
+                                <option value="Iain M">Iain M</option>
+                                <option value="Aaron G">Aaron G</option>
+                                <option value="Bill S">Bill S</option>
+                                <option value="Ross H">Ross H</option>
+                                <option value="Leigh S">Leigh S</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>PIN</label>
+                            <input type="password" id="techPin" placeholder="••••">
+                        </div>
+                        <button class="button" onclick="techLogin()">Log In</button>
+                        <p id="techLoginError" class="error-message hidden"></p>
+                    </div>
+
+                    <div id="techJobList" class="hidden">
+                        <div style="margin-bottom: 16px;">
+                            <h3 style="color: #001f3f; margin-bottom: 4px;">Today's Jobs</h3>
+                            <p style="font-size: 12px; color: #666;">Tap a job to start report</p>
+                        </div>
+                        <div id="techJobsContainer"></div>
+                        <button class="button secondary" onclick="techLogout()">Log Out</button>
+                    </div>
+
+                    <div id="techReportForm" class="hidden">
+                        <div style="margin-bottom: 16px;">
+                            <button class="button secondary" onclick="backToJobList()" style="margin-bottom: 8px;">← Back</button>
+                            <h3 id="reportJobTitle" style="color: #001f3f;"></h3>
+                            <p id="reportJobAddress" style="font-size: 12px; color: #666;"></p>
+                        </div>
+
+                        <div class="info-box">
+                            <strong>What Ark Needs:</strong><br>
+                            <div id="arkScreenshot" class="screenshot-preview"></div>
+                        </div>
+
+                        <form id="reportFormElement">
+                            <div class="section">
+                                <div class="section-title">Date of Visit</div>
+                                <input type="date" id="visitDate" required>
+                            </div>
+
+                            <div class="section">
+                                <div class="section-title">Type of Pest (select all that apply)</div>
+                                <div class="checkbox-group">
+                                    <label><input type="checkbox" name="pest" value="Rats"> Rats</label>
+                                    <label><input type="checkbox" name="pest" value="Mice"> Mice</label>
+                                    <label><input type="checkbox" name="pest" value="Squirrels"> Squirrels</label>
+                                    <label><input type="checkbox" name="pest" value="Pigeons"> Pigeons</label>
+                                    <label><input type="checkbox" name="pest" value="Other"> Other</label>
+                                </div>
+                            </div>
+
+                            <div class="section">
+                                <div class="section-title">Vulnerable People Present?</div>
+                                <select id="vulnerablePeople" required>
+                                    <option value="">-- Select --</option>
+                                    <option value="Over 60">Over 60</option>
+                                    <option value="Under 16">Under 16</option>
+                                    <option value="Pregnant">Pregnant</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
+
+                            <div class="section">
+                                <div class="section-title">Is This a Health Risk?</div>
+                                <select id="healthRisk" required>
+                                    <option value="">-- Select --</option>
+                                    <option value="Yes">Yes</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
+
+                            <div class="section">
+                                <div class="section-title">Infestation Location</div>
+                                <input type="text" id="infestationLocation" placeholder="e.g. Roof cavity, Kitchen, Loft space" required>
+                            </div>
+
+                            <div class="section">
+                                <div class="section-title">Housekeeping</div>
+                                <select id="housekeeping" required>
+                                    <option value="">-- Select --</option>
+                                    <option value="Good">Good</option>
+                                    <option value="OK">OK</option>
+                                    <option value="Poor">Poor</option>
+                                    <option value="Cluttered">Cluttered</option>
+                                    <option value="Hoarder">Hoarder</option>
+                                </select>
+                            </div>
+
+                            <div class="section">
+                                <div class="section-title">Upload Photos (6-20 required)</div>
+                                <div class="photo-section">
+                                    <div style="font-size: 28px; margin-bottom: 8px;">📷</div>
+                                    <button type="button" class="button" onclick="document.getElementById('photoInput').click()">Take / Upload Photos</button>
+                                    <input type="file" id="photoInput" multiple accept="image/*" onchange="addPhotos(event)">
+                                    <div class="photo-count" id="photoCount">0 / 20</div>
+                                    <div class="photo-preview" id="photoPreview"></div>
+                                </div>
+                            </div>
+
+                            <div class="section">
+                                <div class="section-title">Kingswood Tech Report</div>
+                                <textarea id="techReport" placeholder="What you found..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-height: 100px; font-size: 13px;" required></textarea>
+                            </div>
+
+                            <div class="section">
+                                <div class="section-title">Recommendations (Optional)</div>
+                                <textarea id="recommendations" placeholder="What you recommend..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px; font-size: 13px;"></textarea>
+                            </div>
+
+                            <button type="button" class="button" onclick="uploadToCloudinary()" style="margin-top: 20px;">Submit Report</button>
+                        </form>
+                        <p id="reportError" class="error-message hidden"></p>
+                    </div>
+
+                    <div id="techSuccess" class="hidden">
+                        <div style="text-align: center; padding: 40px 20px;">
+                            <div style="font-size: 48px; margin-bottom: 16px;">✓</div>
+                            <h3 style="color: #001f3f; margin-bottom: 8px;">Report Submitted!</h3>
+                            <p style="font-size: 13px; color: #666; margin-bottom: 24px;">Photos uploading to cloud. Kev will review.</p>
+                            <button class="button" onclick="backToJobList()">Back to Jobs</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ADMIN SIDE -->
+            <div class="panel">
+                <div class="panel-header">Admin Interface</div>
+                <div class="panel-content">
+                    <div id="adminLogin" class="login-screen">
+                        <h2>Admin</h2>
+                        <div class="form-group">
+                            <label>PIN</label>
+                            <input type="password" id="adminPin" placeholder="••••">
+                        </div>
+                        <button class="button" onclick="adminLogin()">Log In</button>
+                        <p id="adminLoginError" class="error-message hidden"></p>
+                    </div>
+
+                    <div id="adminDashboard" class="hidden">
+                        <div class="tabs">
+                            <div class="tab active" onclick="switchAdminTab('assign')">Assign Jobs</div>
+                            <div class="tab" onclick="switchAdminTab('reports')">View Reports</div>
+                        </div>
+
+                        <div id="assignJobsTab">
+                            <div class="admin-job-form">
+                                <h3 style="color: #001f3f; margin-bottom: 12px;">Create New Job</h3>
+                                <div class="form-group">
+                                    <label>Tech Name</label>
+                                    <select id="assignTech">
+                                        <option value="">-- Select --</option>
+                                        <option value="Ian D">Ian D</option>
+                                        <option value="Lee K">Lee K</option>
+                                        <option value="James C">James C</option>
+                                        <option value="Russell P">Russell P</option>
+                                        <option value="Iain M">Iain M</option>
+                                        <option value="Aaron G">Aaron G</option>
+                                        <option value="Bill S">Bill S</option>
+                                        <option value="Ross H">Ross H</option>
+                                        <option value="Leigh S">Leigh S</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Job Title</label>
+                                    <input type="text" id="jobTitle" placeholder="e.g. Pigeon Proofing Survey">
+                                </div>
+                                <div class="form-group">
+                                    <label>Address</label>
+                                    <input type="text" id="jobAddress" placeholder="e.g. 47 Maple Street">
+                                </div>
+                                <div class="form-group">
+                                    <label>Postcode</label>
+                                    <input type="text" id="jobPostcode" placeholder="SE1 4RQ">
+                                </div>
+                                <div class="form-group">
+                                    <label>Client</label>
+                                    <input type="text" id="jobClient" placeholder="e.g. Clarion Housing">
+                                </div>
+                                <div class="form-group">
+                                    <label>Job Details</label>
+                                    <textarea id="jobDetails" placeholder="What needs to be done..." style="min-height: 60px;"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>Ark Screenshot (paste text or upload)</label>
+                                    <textarea id="arkScreenshotText" placeholder="[Screenshot text or description]" style="min-height: 60px;"></textarea>
+                                </div>
+                                <button class="button" onclick="createJob()">Create Job</button>
+                                <p id="jobCreateError" class="error-message hidden"></p>
+                            </div>
+
+                            <div style="margin-top: 20px;">
+                                <h3 style="color: #001f3f; margin-bottom: 12px;">Assigned Jobs</h3>
+                                <div id="assignedJobsList"></div>
+                            </div>
+
+                            <button class="button secondary" onclick="adminLogout()">Log Out</button>
+                        </div>
+
+                        <div id="reportsTab" class="hidden">
+                            <div style="margin-bottom: 16px;">
+                                <h3 style="color: #001f3f; margin-bottom: 12px;">Submitted Reports</h3>
+                                <div id="reportsList"></div>
+                            </div>
+                            <button class="button" id="exportBtn" onclick="exportSelectedReport()" style="margin-bottom: 12px; display: none;">📥 Export Selected Report</button>
+                            <button class="button secondary" onclick="adminLogout()">Log Out</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tech PIN definitions
+        const techPINs = {
+            'Ian D': '1001',
+            'Lee K': '1002',
+            'James C': '1003',
+            'Russell P': '1004',
+            'Iain M': '1005',
+            'Aaron G': '1006',
+            'Bill S': '1007',
+            'Ross H': '1008',
+            'Leigh S': '1009'
+        };
+        
+        // Azure/OneDrive credentials
+        const AZURE_CLIENT_ID = 'b1fb1dd3-8196-42f8-b7df-73b78452cc99';
+        const AZURE_TENANT_ID = '50e38053-598c-4104-a12a-0d0d3ec69083';
+        const AZURE_CLIENT_SECRET = 'lgR8Q~Qod5_sCQNLdhX6kwn.uhK6-MhVh06gXbi9';
+        let accessToken = null;
+
+        // Firebase config
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB4s6GOKwusO7rQ3LcTTP5JjxTEct5fwPk",
+            authDomain: "kingswood-field-reports.firebaseapp.com",
+            projectId: "kingswood-field-reports",
+            storageBucket: "kingswood-field-reports.firebasestorage.app",
+            messagingSenderId: "964792740154",
+            appId: "1:964792740154:web:c7ee47da910cdae418c803",
+            measurementId: "G-0Z9PK7V732"
+        };
+
+        // Initialize Firebase (will fail without proper config, but app will still work locally)
+        let db, storage;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            storage = firebase.storage();
+        } catch (e) {
+            console.log('Firebase not configured. Using local storage only.');
+        }
+
+        // Local data storage (fallback if Firebase not available)
+        let jobs = [
+            { id: 1, tech: "Ian D", title: "Pigeon Proofing Survey", address: "47 Maple Street", postcode: "SE1 4RQ", client: "Clarion Housing", details: "Full survey and proofing assessment", screenshot: "[Ark Screenshot 1]", createdAt: new Date().toISOString() },
+            { id: 2, tech: "Bill S", title: "Rodent Treatment Follow-up", address: "12 Baker Road", postcode: "SW2 1AH", client: "MTVH", details: "Check traps and bait stations", screenshot: "[Ark Screenshot 2]", createdAt: new Date().toISOString() },
+            { id: 3, tech: "James C", title: "General Pest Inspection", address: "99 High Street", postcode: "E1 6AN", client: "Ark Pest Control", details: "Full property inspection", screenshot: "[Ark Screenshot 3]", createdAt: new Date().toISOString() }
+        ];
+        
+        let reports = [];
+        let currentTech = null;
+        let currentJobId = null;
+        let photoFiles = [];
+
+        // TECH SIDE
+        function techLogin() {
+            const name = document.getElementById('techName').value;
+            const pin = document.getElementById('techPin').value;
+            const errorEl = document.getElementById('techLoginError');
+            
+            if (!name) {
+                errorEl.textContent = 'Please select your name';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            if (pin !== techPINs[name]) {
+                errorEl.textContent = 'Invalid PIN';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            errorEl.classList.add('hidden');
+            currentTech = name;
+            photoFiles = [];
+            document.getElementById('techLogin').classList.add('hidden');
+            document.getElementById('techJobList').classList.remove('hidden');
+            renderTechJobs();
+        }
+
+        function renderTechJobs() {
+            const container = document.getElementById('techJobsContainer');
+            const techJobs = jobs.filter(j => j.tech === currentTech);
+            if (techJobs.length === 0) {
+                container.innerHTML = '<p style="color: #666; font-size: 12px;">No jobs assigned yet.</p>';
+                return;
+            }
+            container.innerHTML = techJobs.map(job => `
+                <div class="job-card" onclick="startReport(${job.id})">
+                    <h3>${job.title}</h3>
+                    <p>📍 ${job.address}, ${job.postcode}</p>
+                    <p>${job.client}</p>
+                </div>
+            `).join('');
+        }
+
+        function startReport(jobId) {
+            currentJobId = jobId;
+            const job = jobs.find(j => j.id === jobId);
+            document.getElementById('reportJobTitle').textContent = job.title;
+            document.getElementById('reportJobAddress').textContent = `${job.address}, ${job.postcode}`;
+            document.getElementById('arkScreenshot').textContent = job.screenshot;
+            document.getElementById('visitDate').valueAsDate = new Date();
+            document.getElementById('techJobList').classList.add('hidden');
+            document.getElementById('techReportForm').classList.remove('hidden');
+            photoFiles = [];
+            updatePhotoCount();
+        }
+
+        function backToJobList() {
+            document.getElementById('techReportForm').classList.add('hidden');
+            document.getElementById('techSuccess').classList.add('hidden');
+            document.getElementById('techJobList').classList.remove('hidden');
+            document.getElementById('reportFormElement').reset();
+            photoFiles = [];
+        }
+
+        // Upload functions below
+        async function getAccessToken() {
+            try {
+                const response = await fetch(`https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        client_id: AZURE_CLIENT_ID,
+                        client_secret: AZURE_CLIENT_SECRET,
+                        grant_type: 'client_credentials',
+                        scope: 'https://graph.microsoft.com/.default'
+                    })
+                });
+                const data = await response.json();
+                accessToken = data.access_token;
+                console.log('Access token obtained');
+                return accessToken;
+            } catch (error) {
+                console.error('Error getting access token:', error);
+                return null;
+            }
+        }
+
+        async function uploadToOneDrive(report, photoUrls) {
+            if (!accessToken) {
+                await getAccessToken();
+            }
+
+            try {
+                // Create folder structure: /Kingswood Reports/JobTitle/
+                const folderPath = `/Kingswood Reports/${report.jobTitle}_${report.tech}_${report.date}`;
+                
+                // Upload report as text file
+                const reportText = `KINGSWOOD FIELD REPORT
+======================
+
+Job: ${report.jobTitle}
+Tech: ${report.tech}
+Address: ${report.address}
+Client: ${report.client}
+Date: ${report.date}
+
+ANSWERS:
+--------
+Pest Types: ${report.pestTypes.join(', ')}
+Vulnerable People: ${report.vulnerablePeople}
+Health Risk: ${report.healthRisk}
+Location: ${report.location}
+Housekeeping: ${report.housekeeping}
+
+KINGSWOOD TECH REPORT:
+${report.techReport}
+
+RECOMMENDATIONS:
+${report.recommendations || '(None provided)'}
+
+Photos: ${photoUrls.length}
+Submitted: ${report.submittedAt}`;
+
+                // Upload report file
+                await uploadFileToOneDrive(`${folderPath}/REPORT.txt`, reportText, accessToken);
+
+                // Download and upload photos from Cloudinary
+                for (let i = 0; i < photoUrls.length; i++) {
+                    try {
+                        const response = await fetch(photoUrls[i]);
+                        const blob = await response.blob();
+                        await uploadFileToOneDrive(`${folderPath}/photo_${String(i + 1).padStart(2, '0')}.jpg`, blob, accessToken);
+                    } catch (e) {
+                        console.log('Error uploading photo:', e);
+                    }
+                }
+
+                console.log('All files uploaded to OneDrive');
+                return true;
+            } catch (error) {
+                console.error('Error uploading to OneDrive:', error);
+                return false;
+            }
+        }
+
+        async function uploadFileToOneDrive(filePath, content, token) {
+            const filename = filePath.split('/').pop();
+            const folderPath = filePath.substring(0, filePath.lastIndexOf('/'));
+
+            try {
+                // Upload file to OneDrive
+                const uploadUrl = `https://graph.microsoft.com/v1.0/me/drive/root:${filePath}:/content`;
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': content instanceof Blob ? 'application/octet-stream' : 'text/plain'
+                    },
+                    body: content
+                });
+
+                if (uploadResponse.ok) {
+                    console.log(`Uploaded: ${filename}`);
+                    return true;
+                } else {
+                    console.error(`Failed to upload ${filename}:`, uploadResponse.status);
+                    return false;
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                return false;
+            }
+        }
+
+        function addPhotos(event) {
+            const newFiles = Array.from(event.target.files);
+            photoFiles.push(...newFiles);
+            if (photoFiles.length > 20) {
+                photoFiles = photoFiles.slice(0, 20);
+            }
+            updatePhotoCount();
+        }
+
+        function uploadToCloudinary() {
+            if (photoFiles.length === 0) {
+                alert('Please select photos first');
+                return;
+            }
+
+            if (photoFiles.length < 6) {
+                alert('Upload at least 6 photos');
+                return;
+            }
+
+            cloudinaryUrls = [];
+            let uploadedCount = 0;
+            const errorEl = document.getElementById('reportError');
+
+            photoFiles.forEach((file, index) => {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('upload_preset', 'kingswood_unsigned');
+                formData.append('api_key', '258848636237715');
+
+                fetch('https://api.cloudinary.com/v1_1/dslbyhqnn/image/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.secure_url) {
+                        cloudinaryUrls.push(data.secure_url);
+                        console.log(`Photo ${index + 1} uploaded successfully`);
+                    } else if (data.error) {
+                        console.error(`Photo ${index + 1} error:`, data.error.message);
+                    }
+                    uploadedCount++;
+                    if (uploadedCount === photoFiles.length) {
+                        finishReportSubmission();
+                    }
+                })
+                .catch(error => {
+                    console.error(`Photo ${index + 1} upload failed:`, error);
+                    uploadedCount++;
+                    if (uploadedCount === photoFiles.length) {
+                        finishReportSubmission();
+                    }
+                });
+            });
+        }
+
+        function finishReportSubmission() {
+            const errorEl = document.getElementById('reportError');
+            const date = document.getElementById('visitDate').value;
+            const pestTypes = Array.from(document.querySelectorAll('input[name="pest"]:checked')).map(c => c.value);
+            const vulnerablePeople = document.getElementById('vulnerablePeople').value;
+            const healthRisk = document.getElementById('healthRisk').value;
+            const location = document.getElementById('infestationLocation').value;
+            const housekeeping = document.getElementById('housekeeping').value;
+            const techReport = document.getElementById('techReport').value;
+            const recommendations = document.getElementById('recommendations').value;
+
+            if (!date || pestTypes.length === 0 || !vulnerablePeople || !healthRisk || !location || !housekeeping || !techReport) {
+                errorEl.textContent = 'Please fill all required fields';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            errorEl.classList.add('hidden');
+            const job = jobs.find(j => j.id === currentJobId);
+            
+            const report = {
+                id: reports.length + 1,
+                jobId: currentJobId,
+                tech: currentTech,
+                jobTitle: job.title,
+                address: job.address,
+                date,
+                pestTypes,
+                vulnerablePeople,
+                healthRisk,
+                location,
+                housekeeping,
+                techReport,
+                recommendations,
+                photoCount: photoFiles.length,
+                photoUrls: cloudinaryUrls,
+                submittedAt: new Date().toLocaleString()
+            };
+
+            reports.push(report);
+
+            // Save to Firestore if available
+            if (db) {
+                db.collection('reports').add(report).catch(e => console.log('Firestore save failed:', e));
+            }
+
+            // Upload to OneDrive
+            uploadToOneDrive(report, cloudinaryUrls).then(success => {
+                if (success) {
+                    console.log('Report uploaded to OneDrive');
+                } else {
+                    console.log('OneDrive upload failed, but report saved locally');
+                }
+                document.getElementById('techReportForm').classList.add('hidden');
+                document.getElementById('techSuccess').classList.remove('hidden');
+            });
+        }
+
+        function updatePhotoCount() {
+            document.getElementById('photoCount').textContent = `${photoFiles.length} / 20`;
+            const preview = document.getElementById('photoPreview');
+            preview.innerHTML = photoFiles.map((f, i) => {
+                const url = URL.createObjectURL(f);
+                return `
+                    <div style="position: relative;">
+                        <img src="${url}" alt="Photo ${i+1}" style="width: 100%; height: 80px; object-fit: cover; border-radius: 4px;">
+                        <button type="button" style="position: absolute; top: 2px; right: 2px; background: red; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px; padding: 0;" onclick="removePhoto(${i})">×</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function removePhoto(index) {
+            photoFiles.splice(index, 1);
+            updatePhotoCount();
+        }
+
+        function techLogout() {
+            currentTech = null;
+            document.getElementById('techJobList').classList.add('hidden');
+            document.getElementById('techLogin').classList.remove('hidden');
+            document.getElementById('techName').value = '';
+            document.getElementById('techPin').value = '';
+        }
+
+        // ADMIN SIDE
+        function adminLogin() {
+            const pin = document.getElementById('adminPin').value;
+            const errorEl = document.getElementById('adminLoginError');
+            
+            if (pin !== '2026') {
+                errorEl.textContent = 'Invalid PIN';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            errorEl.classList.add('hidden');
+            document.getElementById('adminLogin').classList.add('hidden');
+            document.getElementById('adminDashboard').classList.remove('hidden');
+            renderAssignedJobs();
+            renderReports();
+        }
+
+        function switchAdminTab(tab) {
+            document.getElementById('assignJobsTab').classList.toggle('hidden', tab !== 'assign');
+            document.getElementById('reportsTab').classList.toggle('hidden', tab !== 'reports');
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            if (tab === 'reports') renderReports();
+        }
+
+        function createJob() {
+            const tech = document.getElementById('assignTech').value;
+            const title = document.getElementById('jobTitle').value;
+            const address = document.getElementById('jobAddress').value;
+            const postcode = document.getElementById('jobPostcode').value;
+            const client = document.getElementById('jobClient').value;
+            const details = document.getElementById('jobDetails').value;
+            const screenshot = document.getElementById('arkScreenshotText').value;
+            const errorEl = document.getElementById('jobCreateError');
+
+            if (!tech || !title || !address || !postcode || !client || !details) {
+                errorEl.textContent = 'Fill all required fields';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            errorEl.classList.add('hidden');
+            const newJob = {
+                id: Math.max(...jobs.map(j => j.id), 0) + 1,
+                tech, title, address, postcode, client, details,
+                screenshot: screenshot || '[Ark Screenshot]',
+                createdAt: new Date().toISOString()
+            };
+            
+            jobs.push(newJob);
+
+            // Save to Firestore if available
+            if (db) {
+                db.collection('jobs').add(newJob).catch(e => console.log('Firestore save failed:', e));
+            }
+
+            document.getElementById('assignTech').value = '';
+            document.getElementById('jobTitle').value = '';
+            document.getElementById('jobAddress').value = '';
+            document.getElementById('jobPostcode').value = '';
+            document.getElementById('jobClient').value = '';
+            document.getElementById('jobDetails').value = '';
+            document.getElementById('arkScreenshotText').value = '';
+            renderAssignedJobs();
+        }
+
+        function renderAssignedJobs() {
+            const container = document.getElementById('assignedJobsList');
+            const today = new Date().toISOString().split('T')[0];
+            const todayJobs = jobs.filter(job => job.createdAt.split('T')[0] === today);
+            
+            if (todayJobs.length === 0) {
+                container.innerHTML = '<p style="color: #666; font-size: 12px;">No jobs assigned for today.</p>';
+                return;
+            }
+            
+            container.innerHTML = todayJobs.map(job => {
+                const jobReports = reports.filter(r => r.jobId === job.id);
+                return `
+                    <div class="report-card">
+                        <h3>${job.title}</h3>
+                        <p><strong>Tech:</strong> ${job.tech}</p>
+                        <p><strong>Address:</strong> ${job.address}, ${job.postcode}</p>
+                        <p><strong>Client:</strong> ${job.client}</p>
+                        <p><strong>Details:</strong> ${job.details}</p>
+                        ${jobReports.length > 0 ? `<p style="color: #4caf50; font-weight: 600;">✓ Report Submitted</p>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderReports() {
+            const container = document.getElementById('reportsList');
+            const today = new Date().toISOString().split('T')[0];
+            const todayReports = reports.filter(r => r.date === today);
+            
+            if (todayReports.length === 0) {
+                container.innerHTML = '<p style="color: #666; font-size: 12px;">No reports submitted today.</p>';
+                return;
+            }
+            
+            container.innerHTML = todayReports.map((report, index) => `
+                <div class="report-card" onclick="viewReportDetail(${reports.indexOf(report)})">
+                    <h3>${report.jobTitle}</h3>
+                    <p><strong>Tech:</strong> ${report.tech}</p>
+                    <p><strong>Date:</strong> ${report.date}</p>
+                    <p><strong>Pests:</strong> ${report.pestTypes.join(', ')}</p>
+                    <p><strong>Housekeeping:</strong> ${report.housekeeping}</p>
+                    <p><strong>Photos:</strong> ${report.photoCount}</p>
+                    <p style="font-size: 11px; color: #999;">Click to view details</p>
+                </div>
+            `).join('');
+        }
+
+        function adminLogout() {
+            document.getElementById('adminDashboard').classList.add('hidden');
+            document.getElementById('adminLogin').classList.remove('hidden');
+            document.getElementById('adminPin').value = '';
+        }
+
+        // Initialize
+        document.getElementById('visitDate').valueAsDate = new Date();
+
+        // Export functionality
+        let selectedReportIndex = null;
+
+        function viewReportDetail(index) {
+            const report = reports[index];
+            selectedReportIndex = index;
+            document.getElementById('exportBtn').style.display = 'block';
+            
+            alert(`
+REPORT DETAILS
+==============
+
+Job: ${report.jobTitle}
+Tech: ${report.tech}
+Address: ${report.address}
+Date: ${report.date}
+
+ANSWERS:
+--------
+Pest Types: ${report.pestTypes.join(', ')}
+Vulnerable People: ${report.vulnerablePeople}
+Health Risk: ${report.healthRisk}
+Location: ${report.location}
+Housekeeping: ${report.housekeeping}
+
+KINGSWOOD TECH REPORT:
+${report.techReport}
+
+RECOMMENDATIONS:
+${report.recommendations || '(None provided)'}
+
+PHOTOS: ${report.photoCount}
+Submitted: ${report.submittedAt}
+            `);
+        }
+
+        async function exportSelectedReport() {
+            if (selectedReportIndex === null) {
+                alert('Please select a report first');
+                return;
+            }
+
+            const report = reports[selectedReportIndex];
+            const zip = new JSZip();
+
+            // Add report data as text file
+            const reportText = `KINGSWOOD FIELD REPORT
+======================
+
+Job: ${report.jobTitle}
+Tech: ${report.tech}
+Address: ${report.address}
+Client: ${report.client}
+Date: ${report.date}
+
+ANSWERS:
+--------
+Pest Types: ${report.pestTypes.join(', ')}
+Vulnerable People: ${report.vulnerablePeople}
+Health Risk: ${report.healthRisk}
+Location: ${report.location}
+Housekeeping: ${report.housekeeping}
+
+KINGSWOOD TECH REPORT:
+${report.techReport}
+
+RECOMMENDATIONS:
+${report.recommendations || '(None provided)'}
+
+Photos Uploaded: ${report.photoCount}
+Submitted: ${report.submittedAt}`;
+
+            zip.file('REPORT.txt', reportText);
+
+            // Download photos from Cloudinary
+            if (report.photoUrls && report.photoUrls.length > 0) {
+                const photoFolder = zip.folder('photos');
+                
+                for (let i = 0; i < report.photoUrls.length; i++) {
+                    try {
+                        const response = await fetch(report.photoUrls[i]);
+                        const blob = await response.blob();
+                        const filename = `photo_${String(i + 1).padStart(2, '0')}.jpg`;
+                        photoFolder.file(filename, blob);
+                    } catch (e) {
+                        console.log('Error downloading photo:', e);
+                    }
+                }
+            }
+
+            // Generate ZIP
+            zip.generateAsync({type: 'blob'}).then(content => {
+                const url = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${report.jobTitle}_${report.tech}_${report.date}.zip`;
+                a.click();
+                URL.revokeObjectURL(url);
+                document.getElementById('exportBtn').style.display = 'none';
+                selectedReportIndex = null;
+                alert('Report and photos downloaded!');
+            }).catch(error => {
+                console.error('ZIP creation failed:', error);
+                alert('Error creating ZIP file');
+            });
+        }
+    </script>
+</body>
+</html>
