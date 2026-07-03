@@ -1,0 +1,43 @@
+name: Unpack Kingswood Hub upload
+
+on:
+  push:
+    paths:
+      - 'Kingswood-Hub-GitHub-Upload-*.zip'
+      - '.github/workflows/unpack-hub.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Unpack latest Kingswood Hub zip
+        run: |
+          set -e
+          ZIP_FILE=$(ls -t Kingswood-Hub-GitHub-Upload-*.zip | head -n 1)
+          echo "Unpacking $ZIP_FILE"
+          unzip -o "$ZIP_FILE" -d .
+          rm -f Kingswood-Hub-GitHub-Upload-*.zip
+          rm -f hub-server.log hub-server.err.log proofing-builder.log proofing-builder.err.log
+          rm -rf data/backups tmp node_modules
+          rm -f data/tech-app-pins-private.json
+
+      - name: Commit unpacked Hub files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Unpack Kingswood Hub files"
+            git push
+          fi
