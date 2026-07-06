@@ -20,17 +20,36 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Unpack latest Kingswood Hub zip
+        shell: bash
         run: |
-          set -e
-          ZIP_FILE=$(ls -t Kingswood-Hub-GitHub-Upload-*.zip | head -n 1)
+          set -euo pipefail
+          ls -la
+          ZIP_FILE=$(find . -maxdepth 1 -name 'Kingswood-Hub-GitHub-Upload-*.zip' -type f | sort | tail -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "No Kingswood Hub ZIP found"
+            exit 1
+          fi
           echo "Unpacking $ZIP_FILE"
-          unzip -o "$ZIP_FILE" -d .
-          rm -f Kingswood-Hub-GitHub-Upload-*.zip
+          python3 - <<'PY'
+          import glob, zipfile, pathlib
+          matches = sorted(glob.glob('Kingswood-Hub-GitHub-Upload-*.zip'))
+          if not matches:
+              raise SystemExit('No Kingswood Hub ZIP found')
+          zip_path = matches[-1]
+          with zipfile.ZipFile(zip_path) as zf:
+              zf.extractall('.')
+          pathlib.Path(zip_path).unlink(missing_ok=True)
+          PY
           rm -f hub-server.log hub-server.err.log proofing-builder.log proofing-builder.err.log
           rm -rf data/backups tmp node_modules
           rm -f data/tech-app-pins-private.json
+          test -f package.json
+          test -f render.yaml
+          test -f index.html
+          test -f app.js
 
       - name: Commit unpacked Hub files
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
