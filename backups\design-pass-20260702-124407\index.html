@@ -1,0 +1,926 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kingswood Command Centre</title>
+    <link rel="stylesheet" href="styles.css?v=valuations-polish-56">
+  </head>
+  <body class="locked">
+    <section class="auth-screen" id="authScreen" aria-label="Command Centre PIN">
+      <div class="auth-card">
+        <img src="assets/kingswood-silver-logo.png" alt="Kingswood">
+        <div class="auth-title">
+          <h1>Kingswood Connect</h1>
+          <p>Operations Portal</p>
+        </div>
+        <form id="pinForm" class="pin-form">
+          <label>
+            Name
+            <select id="loginNameInput" required>
+              <option value="">Select your name</option>
+              <option value="Kevin">Kevin</option>
+              <option value="Alex">Alex</option>
+              <option value="Jodie">Jodie</option>
+            </select>
+          </label>
+          <label>
+            PIN
+            <input id="pinInput" type="password" inputmode="numeric" autocomplete="current-password" maxlength="4" placeholder="Enter your PIN" required>
+          </label>
+          <button class="primary-button auth-submit" type="submit">Sign In</button>
+          <span id="pinMessage" class="pin-message" role="alert"></span>
+        </form>
+        <small>&copy; 2026 Kingswood London Ltd</small>
+      </div>
+    </section>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-block">
+          <img class="brand-logo" src="assets/kingswood-silver-logo.png" alt="Kingswood">
+          <div class="brand-copy">
+            <span>Kingswood</span>
+            <strong>Connect</strong>
+          </div>
+        </div>
+        <nav class="main-nav" aria-label="Hub sections">
+          <button class="nav-button active" type="button" data-section="dashboard" data-icon="dashboard">Dashboard</button>
+          <button class="nav-button" type="button" data-section="admin-centre" data-icon="briefcase">Job Dispatch</button>
+          <button class="nav-button" type="button" data-section="diary" data-icon="calendar">Job Diary</button>
+          <button class="nav-button" type="button" data-section="weekly-planner" data-icon="screen">Weekly Planner</button>
+          <button class="nav-button" type="button" data-section="valuations" data-icon="pound">Valuations</button>
+          <button class="nav-button" type="button" data-section="tracking" data-icon="map">Live Tracking</button>
+          <button class="nav-button" type="button" data-section="rams" data-icon="file-check">RAMS Centre</button>
+          <button class="nav-button" type="button" data-section="proofing-reports" data-icon="file-text">Proofing Reports</button>
+          <button class="nav-button" type="button" data-section="compliance" data-icon="shield">Compliance Centre</button>
+          <button class="nav-button" type="button" data-section="documents" data-icon="folder">Company Documents</button>
+          <button class="nav-button" type="button" data-section="vehicles" data-icon="truck">Vehicles</button>
+          <button class="nav-button" type="button" data-section="fines" data-icon="receipt">Fines and Charges</button>
+          <button class="nav-button" type="button" data-section="staff" data-icon="users">Staff Management</button>
+          <button class="nav-button" type="button" data-section="training" data-icon="clipboard">Training Matrix</button>
+          <button class="nav-button" type="button" data-section="technicians" data-icon="user-check">Technicians</button>
+          <button class="nav-button" type="button" data-section="assets" data-icon="package">Assets</button>
+          <button class="nav-button" type="button" data-section="clients" data-icon="building">Clients</button>
+          <button class="nav-button" type="button" data-section="history" data-icon="history">Job History</button>
+          <button class="nav-button" type="button" data-section="notifications" data-icon="bell">Notifications</button>
+          <button class="nav-button" type="button" data-section="settings" data-icon="settings">Settings</button>
+        </nav>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Central command centre</p>
+            <h1 id="pageTitle">Dashboard</h1>
+            <p class="user-greeting" id="userGreeting">Good morning</p>
+          </div>
+          <div class="topbar-clock" aria-label="Live office time">
+            <span>Live office time</span>
+            <strong id="liveDateTime">Loading time</strong>
+            <small id="storageStatus">Checking OneDrive storage</small>
+          </div>
+          <label class="global-search">
+            Search everything
+            <input id="globalSearch" type="search" placeholder="Address, postcode, job, technician, vehicle">
+          </label>
+          <div class="user-panel">
+            <span id="signedInUser">Signed in</span>
+            <button class="secondary-button" id="lockHubButton" type="button">Lock</button>
+          </div>
+        </header>
+
+        <main>
+          <section class="section-panel active" id="dashboard" data-title="Dashboard">
+            <div class="dashboard-layout">
+              <div>
+                <div class="dashboard-grid metric-grid-primary" aria-label="Main dashboard priorities">
+                  <article class="metric primary normal">
+                    <span>Jobs Today</span>
+                    <strong id="jobsTodayCount">0</strong>
+                  </article>
+                  <article class="metric primary overdue">
+                    <span>Compliance Overdue</span>
+                    <strong id="complianceOverdueCount">0</strong>
+                  </article>
+                </div>
+
+                <div class="dashboard-grid metric-grid-secondary" aria-label="Secondary dashboard alerts">
+                  <article class="metric compact warning">
+                    <span>Vehicle Alerts</span>
+                    <strong id="vehicleAlertCount">0</strong>
+                  </article>
+                  <article class="metric compact">
+                    <span>MOT Reminders</span>
+                    <strong id="motReminderCount">0</strong>
+                  </article>
+                  <article class="metric compact">
+                    <span>Staff Available</span>
+                    <strong id="staffAvailableCount">0</strong>
+                  </article>
+                  <article class="metric compact warning">
+                    <span>Staff Unavailable</span>
+                    <strong id="staffUnavailableCount">0</strong>
+                  </article>
+                </div>
+              </div>
+
+              <aside class="dashboard-alerts-panel">
+                <details open>
+                  <summary>Alerts</summary>
+                  <div class="alert-stat-list">
+                    <article>
+                      <span>Insurance Reminders</span>
+                      <strong id="insuranceReminderCount">0</strong>
+                    </article>
+                    <article>
+                      <span>Compliance Due</span>
+                      <strong id="complianceDueCount">0</strong>
+                    </article>
+                    <article>
+                      <span>Fine Deadlines</span>
+                      <strong id="fineDeadlineCount">0</strong>
+                    </article>
+                    <article>
+                      <span>Open Charges</span>
+                      <strong id="openFineCount">0</strong>
+                    </article>
+                    <article>
+                      <span>Jobs Tomorrow</span>
+                      <strong id="jobsTomorrowCount">0</strong>
+                    </article>
+                    <article>
+                      <span>Awaiting Reports</span>
+                      <strong id="reportsDueCount">0</strong>
+                    </article>
+                  </div>
+                </details>
+              </aside>
+            </div>
+
+            <section class="work-panel dashboard-valuation">
+              <div class="panel-heading">
+                <div>
+                  <h2>Monthly Valuation Running Totals</h2>
+                  <p class="panel-note">
+                    <span id="valuationMonthLabel">Current month</span>
+                    <span id="valuationDueLabel"></span>
+                  </p>
+                </div>
+                <button class="secondary-button" type="button" data-jump-section="valuations">Open Valuations</button>
+              </div>
+              <div class="summary-grid valuation-total-grid" aria-label="Monthly valuation totals">
+                <article class="summary-tile valuation-total-card ark-total-card">
+                  <span class="summary-label">Ark</span>
+                  <strong id="arkMonthTotal">£0.00</strong>
+                </article>
+                <article class="summary-tile valuation-total-card jg-total-card">
+                  <span class="summary-label">JG Pest Control</span>
+                  <strong id="jgMonthTotal">£0.00</strong>
+                </article>
+                <article class="summary-tile valuation-total-card private-total-card">
+                  <span class="summary-label">Private</span>
+                  <strong id="privateMonthTotal">£0.00</strong>
+                </article>
+              </div>
+            </section>
+
+            <div class="two-column">
+              <section class="work-panel">
+                <div class="panel-heading">
+                  <h2>Today and Tomorrow</h2>
+                </div>
+                <div id="dashboardJobs" class="stack-list"></div>
+              </section>
+
+              <section class="work-panel">
+                <div class="panel-heading">
+                  <h2>Technician Locations</h2>
+                </div>
+                <div id="technicianLocations" class="stack-list"></div>
+              </section>
+            </div>
+
+            <section class="work-panel dashboard-compliance">
+              <div class="panel-heading">
+                <h2>Compliance Watch</h2>
+                <button class="secondary-button" type="button" data-jump-section="compliance">Open Compliance Centre</button>
+              </div>
+              <div id="dashboardCompliance" class="stack-list"></div>
+            </section>
+
+            <section class="work-panel dashboard-setup">
+              <div class="panel-heading">
+                <h2>Setup & Data Input</h2>
+                <button class="secondary-button" type="button" data-jump-section="settings">Open Settings</button>
+              </div>
+              <div id="setupGrid" class="setup-grid"></div>
+            </section>
+          </section>
+
+          <section class="section-panel" id="admin-centre" data-title="Job Dispatch">
+            <div class="panel-heading">
+              <div>
+                <h2>Job Dispatch</h2>
+                <p class="panel-note">Create office jobs and publish the latest job list to the technician app.</p>
+              </div>
+              <div class="button-row">
+                <button class="secondary-button" type="button" data-open-section="weekly-planner">Open planner in new window</button>
+              </div>
+            </div>
+
+            <section class="work-panel">
+              <div class="panel-heading compact-heading">
+                <h2>Send Jobs to Tech</h2>
+              </div>
+              <div class="admin-flow-grid admin-flow-single">
+                <button class="setup-action" type="button" data-manage="jobs">
+                  <strong class="card-title">Create or edit job</strong>
+                  <span class="card-subtitle">Add the date, slot, client, address, technician, notes and screenshots. Press Send to Tech App when ready.</span>
+                </button>
+              </div>
+            </section>
+          </section>
+
+          <section class="section-panel" id="diary" data-title="Job Diary">
+            <div class="panel-heading">
+              <h2>Central Job Diary</h2>
+              <button class="primary-button" type="button" data-manage="jobs">Create Job</button>
+            </div>
+            <div class="toolbar job-diary-toolbar">
+              <label class="job-month-control">
+                Month
+                <select id="jobMonthFilter"></select>
+              </label>
+              <label class="job-year-control">
+                Year
+                <select id="jobYearFilter"></select>
+              </label>
+              <label class="job-postcode-control">
+                Search postcode
+                <input id="jobSearch" type="search" placeholder="Postcode">
+              </label>
+            </div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Job</th>
+                    <th>Postcode</th>
+                    <th>Ref</th>
+                    <th>Client</th>
+                    <th>Technician</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="jobsTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section-panel" id="weekly-planner" data-title="Weekly Planner">
+            <div class="panel-heading">
+              <h2>Weekly Planner</h2>
+              <button class="primary-button" type="button" data-manage="planner">Add Planner Item</button>
+            </div>
+            <div class="summary-grid" aria-label="Weekly planner summary">
+              <article class="summary-tile">
+                <span class="summary-label">Planner Items</span>
+                <strong id="plannerItemCount">0</strong>
+              </article>
+              <article class="summary-tile">
+                <span class="summary-label">Technicians</span>
+                <strong id="plannerTechnicianCount">0</strong>
+              </article>
+              <article class="summary-tile traffic-amber">
+                <span class="summary-label">Unavailable / Total Slots</span>
+                <strong id="plannerUnavailableCount">0</strong>
+              </article>
+              <article class="summary-tile">
+                <span class="summary-label">Current Week</span>
+                <strong id="plannerWeekLabel">-</strong>
+              </article>
+            </div>
+            <div id="plannerWeekTabs" class="planner-week-tabs" aria-label="Planner weeks"></div>
+            <div id="plannerBoard" class="planner-board"></div>
+          </section>
+
+          <section class="section-panel" id="valuations" data-title="Valuations">
+            <div class="panel-heading">
+              <div>
+                <h2>Valuations</h2>
+                <p class="panel-note">
+                  <span id="valuationPageMonthLabel">Current month</span>
+                  <span id="valuationPageDueLabel"></span>
+                </p>
+              </div>
+              <div class="button-row valuation-actions">
+                <button class="secondary-button" id="valuationGraphButton" type="button">Graph</button>
+                <button class="secondary-button" id="exportValuationsButton" type="button">Export CSV</button>
+                <span class="action-divider"></span>
+                <button class="secondary-button generate-action" id="generateArkValuationButton" type="button">Ark</button>
+                <button class="secondary-button generate-action" id="generatePrivateValuationButton" type="button">Private</button>
+                <button class="secondary-button generate-action" id="generateOtherValuationButton" type="button">Other</button>
+                <button class="primary-button" type="button" data-manage="valuations">Add Valuation</button>
+              </div>
+            </div>
+            <div class="summary-grid valuation-page-summary" aria-label="Valuations summary">
+              <article class="summary-tile valuation-total-card ark-total-card">
+                <span class="summary-label">Ark</span>
+                <strong id="valuationArkTotal">£0.00</strong>
+              </article>
+              <article class="summary-tile valuation-total-card jg-total-card">
+                <span class="summary-label">JG Pest Control</span>
+                <strong id="valuationJgTotal">£0.00</strong>
+              </article>
+              <article class="summary-tile valuation-total-card private-total-card">
+                <span class="summary-label">Private</span>
+                <strong id="valuationPrivateTotal">£0.00</strong>
+              </article>
+              <article class="summary-tile">
+                <span class="summary-label">Reports Outstanding</span>
+                <strong id="valuationReportOutstandingCount">0</strong>
+              </article>
+            </div>
+            <div class="valuation-filter-panel">
+              <div class="valuation-filter-heading">
+                <strong>Month view</strong>
+                <span>Generate valuation files from the selected month</span>
+              </div>
+            <div class="toolbar valuation-toolbar">
+              <label>
+                Month
+                <select id="valuationMonthFilter"></select>
+              </label>
+              <label>
+                Year
+                <select id="valuationYearFilter"></select>
+              </label>
+              <label>
+                Client
+                <select id="valuationClientFilter">
+                  <option value="all">All clients</option>
+                </select>
+              </label>
+              <label>
+                Status
+                <select id="valuationStatusFilter">
+                  <option value="all">All statuses</option>
+                  <option value="completed">Completed</option>
+                  <option value="not-completed">Not completed</option>
+                  <option value="report-outstanding">Report outstanding</option>
+                </select>
+              </label>
+              <label>
+                Search valuations
+                <input id="valuationSearch" type="search" placeholder="Address, postcode, client, Ark ref, technician">
+              </label>
+            </div>
+            </div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Address</th>
+                    <th>Client</th>
+                    <th>Technician</th>
+                    <th>Completed</th>
+                    <th>Report</th>
+                    <th>Cost</th>
+                    <th>Ark Report</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="valuationsTableBody"></tbody>
+                <tfoot>
+                  <tr class="valuation-running-total-row">
+                    <td colspan="6">Running total for selected month</td>
+                    <td id="valuationTableRunningTotal">£0.00</td>
+                    <td colspan="2"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </section>
+
+          <section class="section-panel" id="tracking" data-title="Live Vehicle Tracking">
+            <div class="panel-heading">
+              <h2>Live Vehicle Tracking</h2>
+              <span class="status draft">Ready for tracker link</span>
+            </div>
+            <div class="map-placeholder">
+              <div>
+                <strong>Live map will appear here</strong>
+                <span>Once vehicle tracking is installed, this area can show speed, last update, journey history, and nearest technician.</span>
+              </div>
+            </div>
+            <div id="trackingList" class="stack-list"></div>
+          </section>
+
+          <section class="section-panel" id="rams" data-title="RAMS Centre">
+            <div class="panel-heading">
+              <h2>RAMS Centre</h2>
+              <button class="primary-button" id="addRamsButton" type="button">Add RAMS</button>
+            </div>
+            <div class="summary-grid" aria-label="RAMS summary">
+              <article class="summary-tile">
+                <span class="summary-label">Total RAMS</span>
+                <strong id="totalCount">0</strong>
+              </article>
+              <article class="summary-tile">
+                <span class="summary-label">Attached to Jobs</span>
+                <strong id="attachedCount">0</strong>
+              </article>
+              <article class="summary-tile">
+                <span class="summary-label">Sent to Clients</span>
+                <strong id="sentCount">0</strong>
+              </article>
+              <article class="summary-tile">
+                <span class="summary-label">Needs Sending</span>
+                <strong id="needsSendingCount">0</strong>
+              </article>
+            </div>
+            <div class="toolbar" aria-label="RAMS filters">
+              <label>
+                Search RAMS
+                <input id="searchInput" type="search" placeholder="Client, job, or RAMS title">
+              </label>
+              <label>
+                Status
+                <select id="statusFilter">
+                  <option value="all">All</option>
+                  <option value="draft">Draft</option>
+                  <option value="attached">Attached</option>
+                  <option value="sent">Sent</option>
+                </select>
+              </label>
+            </div>
+            <div class="table-shell" aria-label="RAMS documents">
+              <table>
+                <thead>
+                  <tr>
+                    <th>RAMS Title</th>
+                    <th>Client</th>
+                    <th>Job</th>
+                    <th>Status</th>
+                    <th>Sent Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="ramsTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section-panel" id="proofing-reports" data-title="Proofing Reports">
+            <div class="panel-heading">
+              <div>
+                <h2>Pest Proofing Report Builder</h2>
+                <p class="panel-note">Create polished Kingswood proofing reports from operative notes, photos, and job details.</p>
+              </div>
+              <button class="primary-button" type="button" data-proofing-open>Open Full Screen</button>
+            </div>
+            <section class="work-panel embedded-tool-panel">
+              <iframe
+                class="embedded-tool-frame"
+                data-src="http://127.0.0.1:5000/"
+                title="Pest Proofing Report Builder"
+                loading="lazy"
+              ></iframe>
+            </section>
+          </section>
+
+          <section class="section-panel" id="compliance" data-title="Compliance Centre">
+            <div class="panel-heading">
+              <h2>Compliance Centre</h2>
+              <button class="primary-button" type="button" data-manage="compliance">Add Compliance Item</button>
+            </div>
+            <div class="summary-grid" aria-label="Compliance summary">
+              <article class="summary-tile traffic-green">
+                <span class="summary-label">Green</span>
+                <strong id="greenComplianceCount">0</strong>
+              </article>
+              <article class="summary-tile traffic-amber">
+                <span class="summary-label">Amber</span>
+                <strong id="amberComplianceCount">0</strong>
+              </article>
+              <article class="summary-tile traffic-red">
+                <span class="summary-label">Red</span>
+                <strong id="redComplianceCount">0</strong>
+              </article>
+              <article class="summary-tile">
+                <span class="summary-label">Total Items</span>
+                <strong id="totalComplianceCount">0</strong>
+              </article>
+            </div>
+            <div class="toolbar">
+              <label>
+                Category
+                <select id="complianceCategoryFilter">
+                  <option value="all">All categories</option>
+                  <option value="Vehicle">Vehicle</option>
+                  <option value="Technician">Technician</option>
+                  <option value="Equipment">Equipment</option>
+                  <option value="Company">Company</option>
+                </select>
+              </label>
+              <label>
+                Search compliance
+                <input id="complianceSearch" type="search" placeholder="MOT, insurance, ladder, technician">
+              </label>
+            </div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Item</th>
+                    <th>Category</th>
+                    <th>Owner</th>
+                    <th>Due Date</th>
+                    <th>Days</th>
+                    <th>Reminder</th>
+                  </tr>
+                </thead>
+                <tbody id="complianceTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section-panel" id="documents" data-title="Company Documents">
+            <div class="panel-heading">
+              <h2>Company Documents</h2>
+              <button class="primary-button" type="button" data-manage="documents">Add Document</button>
+            </div>
+            <div id="documentsGrid" class="module-grid"></div>
+          </section>
+
+          <section class="section-panel" id="vehicles" data-title="Vehicle Management">
+            <div class="panel-heading">
+              <h2>Vehicle Management</h2>
+              <button class="primary-button" type="button" data-manage="vehicles">Add Vehicle</button>
+            </div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Registration</th>
+                    <th>Vehicle</th>
+                    <th>Driver</th>
+                    <th>MOT</th>
+                    <th>Insurance</th>
+                    <th>Tracker</th>
+                  </tr>
+                </thead>
+                <tbody id="vehiclesTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section-panel" id="fines" data-title="Fines and Charges">
+            <div class="panel-heading">
+              <h2>Fines and Charges</h2>
+              <button class="primary-button" type="button" data-manage="fines">Add Fine</button>
+            </div>
+            <div class="summary-grid" aria-label="Fines summary">
+              <article class="summary-tile">
+                <span class="summary-label">Open</span>
+                <strong id="finesOpenCount">0</strong>
+              </article>
+              <article class="summary-tile traffic-amber">
+                <span class="summary-label">Deadline Soon</span>
+                <strong id="finesDeadlineSoonCount">0</strong>
+              </article>
+              <article class="summary-tile">
+                <span class="summary-label">Paid or Deducted</span>
+                <strong id="finesClosedCount">0</strong>
+              </article>
+              <article class="summary-tile">
+                <span class="summary-label">Total Value</span>
+                <strong id="finesTotalValue">GBP 0</strong>
+              </article>
+            </div>
+            <div class="toolbar">
+              <label>
+                Status
+                <select id="fineStatusFilter">
+                  <option value="all">All statuses</option>
+                  <option value="New">New</option>
+                  <option value="Appealed">Appealed</option>
+                  <option value="Paid">Paid</option>
+                  <option value="Deducted from wages">Deducted from wages</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+              </label>
+              <label>
+                Search fines
+                <input id="fineSearch" type="search" placeholder="Vehicle, driver, location, fine type">
+              </label>
+            </div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Vehicle</th>
+                    <th>Driver</th>
+                    <th>Location</th>
+                    <th>Fine Type</th>
+                    <th>Amount</th>
+                    <th>Deadline</th>
+                    <th>Status</th>
+                    <th>Evidence</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="finesTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section-panel" id="staff" data-title="Staff Management">
+            <div class="panel-heading">
+              <h2>Staff Management</h2>
+              <button class="primary-button" type="button" data-manage="staff">Add Staff Member</button>
+            </div>
+            <div class="summary-grid" aria-label="Staff summary">
+              <article class="summary-tile">
+                <span class="summary-label">Present Today</span>
+                <strong id="staffPresentCount">0</strong>
+              </article>
+              <article class="summary-tile traffic-amber">
+                <span class="summary-label">Unavailable Today</span>
+                <strong id="staffUnavailableTodayCount">0</strong>
+              </article>
+              <article class="summary-tile">
+                <span class="summary-label">Holiday Requests</span>
+                <strong id="holidayRequestCount">0</strong>
+              </article>
+              <article class="summary-tile">
+                <span class="summary-label">Training Days</span>
+                <strong id="trainingDayCount">0</strong>
+              </article>
+            </div>
+            <div class="toolbar">
+              <label>
+                Attendance
+                <select id="attendanceStatusFilter">
+                  <option value="all">All attendance</option>
+                  <option value="Present">Present</option>
+                  <option value="Sick">Sick</option>
+                  <option value="Holiday">Holiday</option>
+                  <option value="Training">Training</option>
+                  <option value="Unpaid leave">Unpaid leave</option>
+                  <option value="Late">Late</option>
+                  <option value="Absent">Absent</option>
+                </select>
+              </label>
+              <label>
+                Search staff
+                <input id="staffSearch" type="search" placeholder="Name, role, van, qualification">
+              </label>
+            </div>
+            <div id="staffGrid" class="module-grid"></div>
+
+            <div class="two-column staff-lower">
+              <section class="work-panel">
+                <div class="panel-heading">
+                  <h2>Attendance Today</h2>
+                  <button class="secondary-button" type="button" data-manage="attendance">Record Attendance</button>
+                </div>
+                <div id="attendanceList" class="stack-list"></div>
+              </section>
+
+              <section class="work-panel">
+                <div class="panel-heading">
+                  <h2>Simple Reports</h2>
+                  <button class="secondary-button" type="button" data-manage="holidays">Book Holiday</button>
+                </div>
+                <div id="staffReports" class="stack-list"></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="section-panel" id="training" data-title="Training Matrix">
+            <div class="panel-heading">
+              <div>
+                <h2>Training Matrix</h2>
+                <p class="panel-note">Track employee training, qualifications and expiry dates. Staff profiles update automatically from this matrix.</p>
+              </div>
+              <button class="primary-button" type="button" data-manage="training">Add Training Record</button>
+            </div>
+            <div class="summary-grid" aria-label="Training summary">
+              <article class="summary-tile">
+                <span class="summary-label">Current</span>
+                <strong id="trainingCurrentCount">0</strong>
+              </article>
+              <article class="summary-tile traffic-amber">
+                <span class="summary-label">Expiring Soon</span>
+                <strong id="trainingExpiringCount">0</strong>
+              </article>
+              <article class="summary-tile traffic-red">
+                <span class="summary-label">Expired</span>
+                <strong id="trainingExpiredCount">0</strong>
+              </article>
+              <article class="summary-tile">
+                <span class="summary-label">Employees Covered</span>
+                <strong id="trainingEmployeeCount">0</strong>
+              </article>
+            </div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Training / Qualification</th>
+                    <th>Provider</th>
+                    <th>Completed</th>
+                    <th>Expires</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="trainingTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section-panel" id="technicians" data-title="Technician Management">
+            <div class="panel-heading">
+              <h2>Technician Management</h2>
+            </div>
+            <div id="techniciansGrid" class="module-grid"></div>
+          </section>
+
+          <section class="section-panel" id="assets" data-title="Asset Register">
+            <div class="panel-heading">
+              <h2>Asset Register</h2>
+              <button class="primary-button" type="button" data-manage="assets">Add Asset</button>
+            </div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Asset</th>
+                    <th>Category</th>
+                    <th>Held By</th>
+                    <th>Inspection Due</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="assetsTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section-panel" id="clients" data-title="Clients">
+            <div class="panel-heading">
+              <h2>Clients</h2>
+              <button class="primary-button" type="button" data-manage="clients">Add Client</button>
+            </div>
+            <div id="clientsGrid" class="module-grid"></div>
+          </section>
+
+          <section class="section-panel" id="history" data-title="Job History">
+            <div class="panel-heading">
+              <h2>Property Job History</h2>
+            </div>
+            <div id="historyList" class="stack-list"></div>
+          </section>
+
+          <section class="section-panel" id="notifications" data-title="Notifications">
+            <div class="panel-heading">
+              <h2>Notifications</h2>
+            </div>
+            <div id="notificationsList" class="stack-list"></div>
+          </section>
+
+          <section class="section-panel" id="settings" data-title="Settings">
+            <div class="panel-heading">
+              <h2>Settings & Data Input</h2>
+            </div>
+            <div class="settings-intro">
+              <strong>Feed the command centre from here.</strong>
+              <p>Use this area to add the real Kingswood data that drives the dashboard, diary, compliance reminders, staff records, vehicle alerts, RAMS, documents, clients, and reporting.</p>
+            </div>
+            <section class="work-panel reset-panel">
+              <div class="panel-heading">
+                <div>
+                  <h2>Reset Data</h2>
+                  <p class="panel-note">Clear the starter/sample records when you are ready to enter real Kingswood information.</p>
+                </div>
+              </div>
+              <div class="reset-grid">
+                <button class="secondary-button reset-action" type="button" data-clear-data="jobs">Clear sample jobs</button>
+                <button class="secondary-button reset-action" type="button" data-clear-data="planner">Clear imported planner</button>
+                <button class="secondary-button reset-action" type="button" data-clear-data="vehicles">Clear sample vehicles</button>
+                <button class="secondary-button reset-action" type="button" data-clear-data="staff">Clear sample staff</button>
+                <button class="secondary-button reset-action" type="button" data-clear-data="training">Clear sample training</button>
+                <button class="secondary-button reset-action" type="button" data-clear-data="rams">Clear sample RAMS</button>
+                <button class="danger-button reset-action reset-all" type="button" data-clear-data="all">Clear all starter data</button>
+              </div>
+              <p class="integration-status" id="resetStatus">Nothing has been cleared yet.</p>
+            </section>
+            <div id="settingsGrid" class="module-grid"></div>
+            <section class="work-panel settings-live-panel" id="settingsDetailPanel">
+              <div id="settingsDetail"></div>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="ramsDialog">
+      <form method="dialog" id="ramsForm">
+        <div class="dialog-header">
+          <h2 id="dialogTitle">Add RAMS</h2>
+          <button class="icon-button" value="cancel" aria-label="Close" type="submit">x</button>
+        </div>
+
+        <input id="editingId" type="hidden">
+
+        <label>
+          RAMS title
+          <input id="titleInput" required placeholder="Example: Electrical Works RAMS">
+        </label>
+
+        <label>
+          Client
+          <input id="clientInput" required placeholder="Example: Ark">
+        </label>
+
+        <label>
+          Job
+          <input id="jobInput" required placeholder="Example: Proofing works - Camden">
+        </label>
+
+        <label>
+          Status
+          <select id="statusInput">
+            <option value="draft">Draft</option>
+            <option value="attached">Attached to job</option>
+            <option value="sent">Sent to client</option>
+          </select>
+        </label>
+
+        <label>
+          Sent date
+          <input id="sentDateInput" type="date">
+        </label>
+
+        <label>
+          Notes
+          <textarea id="notesInput" rows="4" placeholder="Optional file location, technician note, or client email reminder"></textarea>
+        </label>
+
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel" type="submit">Cancel</button>
+          <button class="primary-button" id="saveButton" value="default" type="submit">Save RAMS</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dataDialog">
+      <form method="dialog" id="dataForm">
+        <div class="dialog-header">
+          <h2 id="dataDialogTitle">Add Record</h2>
+          <button class="icon-button" value="cancel" aria-label="Close" type="submit">x</button>
+        </div>
+
+        <input id="dataCollectionInput" type="hidden">
+        <input id="dataIndexInput" type="hidden">
+        <div id="dataFields" class="data-fields"></div>
+
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel" type="submit">Cancel</button>
+          <button class="primary-button" id="dataSaveButton" value="default" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="jobDetailDialog">
+      <div class="job-detail-dialog">
+        <div class="dialog-header">
+          <h2 id="jobDetailTitle">Job Details</h2>
+          <button class="icon-button" id="closeJobDetailButton" aria-label="Close" type="button">x</button>
+        </div>
+        <div id="jobDetailContent"></div>
+      </div>
+    </dialog>
+
+    <dialog id="valuationGraphDialog">
+      <div class="valuation-graph-dialog">
+        <div class="dialog-header">
+          <h2>Valuation Graph</h2>
+          <button class="icon-button" id="closeValuationGraphButton" aria-label="Close" type="button">x</button>
+        </div>
+        <p class="panel-note" id="valuationGraphSubtitle">Selected month</p>
+        <div id="valuationGraphContent" class="valuation-graph"></div>
+      </div>
+    </dialog>
+
+    <script src="app.js?v=valuations-polish-56"></script>
+  </body>
+</html>

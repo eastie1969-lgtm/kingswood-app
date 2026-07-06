@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: kingswood-hub
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    disk:
+      name: kingswood-hub-data
+      mountPath: /var/data
+      sizeGB: 5
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /var/data
+      - key: PROOFING_REPORT_DIR
+        value: /var/data/proofing-reports
+      - key: OPENAI_MODEL
+        value: gpt-5.4-mini

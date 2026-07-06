@@ -1,0 +1,16 @@
+{
+  "name": "kingswood-hub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kingswood Connect central command centre.",
+  "scripts": {
+    "start": "node .preview-server.cjs",
+    "check": "node --check app.js && node --check .preview-server.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "playwright": "^1.54.0"
+  }
+}

@@ -1,0 +1,13 @@
+.env.local
+node_modules/
+npm-debug.log*
+hub-server.log
+hub-server.err.log
+hub-server-*.log
+hub-server-*.err.log
+proofing-builder.log
+proofing-builder.err.log
+data/backups/
+data/tech-app-pins-private.json
+tmp/
+visual-check-*.png
