@@ -1,4 +1,4 @@
-name: Unpack Kingswood Hub upload
+name: Prepare Kingswood Hub repo
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  unpack:
+  prepare:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -19,36 +19,59 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Unpack latest Kingswood Hub zip
+      - name: Unpack zip if present and normalise paths
         shell: bash
         run: |
           set -euo pipefail
-          ls -la
-          ZIP_FILE=$(find . -maxdepth 1 -name 'Kingswood-Hub-GitHub-Upload-*.zip' -type f | sort | tail -n 1)
-          if [ -z "$ZIP_FILE" ]; then
-            echo "No Kingswood Hub ZIP found"
-            exit 1
-          fi
-          echo "Unpacking $ZIP_FILE"
           python3 - <<'PY'
-          import glob, zipfile, pathlib
-          matches = sorted(glob.glob('Kingswood-Hub-GitHub-Upload-*.zip'))
-          if not matches:
-              raise SystemExit('No Kingswood Hub ZIP found')
-          zip_path = matches[-1]
-          with zipfile.ZipFile(zip_path) as zf:
-              zf.extractall('.')
-          pathlib.Path(zip_path).unlink(missing_ok=True)
-          PY
-          rm -f hub-server.log hub-server.err.log proofing-builder.log proofing-builder.err.log
-          rm -rf data/backups tmp node_modules
-          rm -f data/tech-app-pins-private.json
-          test -f package.json
-          test -f render.yaml
-          test -f index.html
-          test -f app.js
+          import glob, shutil, zipfile
+          from pathlib import Path
 
-      - name: Commit unpacked Hub files
+          zips = sorted(glob.glob('Kingswood-Hub-GitHub-Upload-*.zip'))
+          if zips:
+              zip_path = zips[-1]
+              print(f'Unpacking {zip_path}')
+              with zipfile.ZipFile(zip_path) as zf:
+                  zf.extractall('.')
+              Path(zip_path).unlink(missing_ok=True)
+
+          # Convert Windows-style backslash filenames into proper folders for Linux hosting.
+          files = [p for p in Path('.').iterdir() if '\\' in p.name]
+          for p in files:
+              target = Path(p.name.replace('\\', '/'))
+              target.parent.mkdir(parents=True, exist_ok=True)
+              if target.exists():
+                  if target.is_dir():
+                      shutil.rmtree(target)
+                  else:
+                      target.unlink()
+              p.rename(target)
+
+          for path in [
+              'data/backups',
+              'tmp',
+              'node_modules',
+              'backups',
+          ]:
+              shutil.rmtree(path, ignore_errors=True)
+
+          for path in [
+              'data/tech-app-pins-private.json',
+              'hub-server.log',
+              'hub-server.err.log',
+              'proofing-builder.log',
+              'proofing-builder.err.log',
+              'Kingswood-Hub-GitHub-Upload-20260703-115433.zip',
+          ]:
+              Path(path).unlink(missing_ok=True)
+
+          required = ['package.json', 'render.yaml', 'index.html', 'app.js', 'styles.css', '.preview-server.cjs']
+          missing = [p for p in required if not Path(p).exists()]
+          if missing:
+              raise SystemExit('Missing required files: ' + ', '.join(missing))
+          PY
+
+      - name: Commit prepared Hub files
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -57,6 +80,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Unpack Kingswood Hub files"
+            git commit -m "Prepare Kingswood Hub for hosting"
             git push
           fi
