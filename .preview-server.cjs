@@ -14,6 +14,7 @@ const connectV12FeedFile = path.join(dataDir, "connect-v12-feed.json");
 const localEnvFile = path.join(root, ".env.local");
 const proofingReportDir = process.env.PROOFING_REPORT_DIR
   || path.resolve(root, "..", "..", "Kingswood Field Reports", "Proofing Reports");
+const ramsDocumentDir = process.env.RAMS_DOCUMENT_DIR || path.join(root, "RAMS");
 
 if (fs.existsSync(localEnvFile)) {
   const envLines = fs.readFileSync(localEnvFile, "utf8").split(/\r?\n/);
@@ -131,6 +132,10 @@ function readRequestBody(request) {
 function localRamsDraft(payload) {
   const job = payload.job || {};
   const source = String(payload.source || payload.scope || "Site-specific works to be reviewed before starting.").trim();
+  const lowerSource = source.toLowerCase();
+  const hasCosHH = /coshh|chemical|rodenticide|insecticide|biocide|bait|sds/.test(lowerSource);
+  const hasBio = /guano|dropping|droppings|bird|rodent|weils|weil|psittacosis|biological/.test(lowerSource);
+  const hasHeight = /ladder|tower|mewp|height|roof|access/.test(lowerSource);
   const lines = source
     .split(/\r?\n|•|-/)
     .map((line) => line.trim())
@@ -149,18 +154,52 @@ function localRamsDraft(payload) {
     due: job.date || new Date().toISOString().slice(0, 10)
   }));
 
+  if (hasCosHH) {
+    hazards.unshift({
+      hazard: "COSHH / chemical exposure",
+      who: "Technicians, site staff, residents and members of the public through contact, inhalation or accidental exposure.",
+      controls: "Relevant Safety Data Sheet (SDS) to be attached. Minimum PPE: nitrile gloves, minimum 0.4mm thickness, and suitable RPE such as FFP3 disposable mask or half-mask with ABEK1 filters.",
+      further: "Confirm product label, COSHH assessment, application area and exclusion arrangements before use.",
+      owner: job.technician || "Assigned technician",
+      due: job.date || new Date().toISOString().slice(0, 10)
+    });
+  }
+
+  if (hasBio) {
+    hazards.unshift({
+      hazard: "Biological hazards from bird guano or rodent droppings",
+      who: "Technicians and others nearby through airborne dust, pathogens, Weil's disease or Psittacosis.",
+      controls: "Guano or droppings must be thoroughly treated with a professional biocide spray before disturbance to suppress airborne dust and pathogens.",
+      further: "Segregate the area, use suitable PPE/RPE and double-bag contaminated waste for controlled disposal.",
+      owner: job.technician || "Assigned technician",
+      due: job.date || new Date().toISOString().slice(0, 10)
+    });
+  }
+
+  if (hasHeight) {
+    hazards.unshift({
+      hazard: "Working at height",
+      who: "Technicians through falls from ladders, towers or access equipment; others from falling tools or materials.",
+      controls: "Ladders to be used for short-duration, low-risk tasks only, fully secured on level ground, maintaining 3 points of contact at all times.",
+      further: "Inspect access equipment before use and stop work if conditions are unsuitable.",
+      owner: job.technician || "Assigned technician",
+      due: job.date || new Date().toISOString().slice(0, 10)
+    });
+  }
+
   return {
     title: `${job.address || "Job"} RAMS`,
     scope: payload.scope || `Carry out the planned works at ${job.address || "the job address"} in line with Kingswood procedures.`,
-    ppe: ["Safety boots", "Gloves", "Hi-vis", "Eye protection as required"],
+    ppe: hasCosHH
+      ? ["Safety boots", "Hi-vis", "Eye protection", "Nitrile gloves minimum 0.4mm thickness", "FFP3 disposable mask or half-mask with ABEK1 filters"]
+      : ["Safety boots", "Gloves", "Hi-vis", "Eye protection as required"],
     equipment: ["Hand tools", "Access equipment", "Proofing materials", "Waste bags"],
     hazards,
     method: [
-      "Attend site, sign in where required and confirm access arrangements.",
-      "Review the work area and confirm the RAMS match the actual site conditions.",
-      "Set up the work area, keep routes clear and protect residents / public from the works.",
-      "Carry out the works using the agreed tools, PPE and controls.",
-      "Remove waste, check the area is safe, take completion photos and report any changes."
+      "Step 1: Arrival & Induction - Operative reports to the principal contractor's site office, presents RAMS, signs in and completes mandatory site safety inductions.",
+      "Step 2: Area Segregation - Set up physical barriers, warning signs or lockable bait stations to exclude other trades and members of the public from the work zone.",
+      "Step 3: Execution & Control - Complete the pest control or proofing works using the agreed tools, PPE and controls, with spill kit active and available where substances are used.",
+      "Step 4: Waste Mitigation - Spent chemical containers, contaminated PPE and biological debris such as bird guano will be double-bagged, removed from site and disposed of under hazardous waste consignment procedures."
     ]
   };
 }
@@ -172,10 +211,15 @@ async function openAiRamsDraft(payload) {
   }
 
   const prompt = [
-    "Create a UK RAMS draft for Kingswood London Ltd.",
-    "Use clear, professional wording suitable for office review before issue.",
-    "Do not invent legal approvals, certifications, signatures or site facts not provided.",
-    "Keep the output practical for pest proofing, access, public/resident safety, PPE, tools, waste, and stop-work/change-control.",
+    "Create a professional UK RAMS draft for Kingswood (London) Ltd for a main contractor construction or facilities management site.",
+    "The user is Kevin Eastman, Director of Kingswood (London) Ltd.",
+    "The draft must be site-specific, practical, and suitable for strict principal contractor review.",
+    "Use clear UK English. Avoid Americanisms, vague corporate jargon, legal claims not supported by the input, or invented site facts.",
+    "Explicitly include the following statutory frameworks in substance through the generated sections: The Management of Health and Safety at Work Regulations 1999 Regulation 3; COSHH Regulations 2002 for biocide, rodenticide and insecticide applications; Work at Height Regulations 2005 for ladders, towers or MEWP work; Personal Protective Equipment at Work (Amendment) Regulations 2022 including the same PPE duties for core employees and limb (b) workers.",
+    "The method array must be chronological and include these four steps: Step 1 Arrival & Induction; Step 2 Area Segregation; Step 3 Execution & Control; Step 4 Waste Mitigation.",
+    "If chemical, COSHH, rodenticide, insecticide, biocide or SDS hazards appear, include SDS attachment wording and minimum PPE: nitrile gloves minimum 0.4mm thickness plus appropriate RPE such as FFP3 mask or half-mask with ABEK1 filters.",
+    "If biological hazards, bird guano or rodent droppings appear, include pre-treatment with professional biocide spray before disturbance to suppress airborne dust and pathogens including Weil's disease and Psittacosis.",
+    "If ladders, towers, MEWP or working at height appear, include: Ladders to be used for short-duration, low-risk tasks only, fully secured on level ground, maintaining 3 points of contact at all times.",
     "The document must still be reviewed by a competent person before issue."
   ].join(" ");
 
@@ -215,7 +259,7 @@ async function openAiRamsDraft(payload) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-5.5",
+      model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
       input: [
         { role: "system", content: prompt },
         { role: "user", content: JSON.stringify(payload, null, 2) }
@@ -443,6 +487,58 @@ async function saveProofingPdf(payload) {
   }
 }
 
+async function saveRamsPdf(payload) {
+  const year = safeFileName(payload.year || String(new Date().getFullYear()), "2026");
+  const client = safeFileName(payload.client || "Client", "Client");
+  const jobRef = safeFileName(payload.jobRef || "Job", "Job");
+  const title = safeFileName(payload.title || "RAMS", "RAMS");
+  const datedDir = path.join(ramsDocumentDir, year, client);
+  fs.mkdirSync(datedDir, { recursive: true });
+
+  const fileBase = safeFileName(`${jobRef} - ${title}`, "RAMS");
+  const pdfPath = path.join(datedDir, `${fileBase}.pdf`);
+  const htmlPath = path.join(datedDir, `${fileBase}.html`);
+  const html = String(payload.html || "");
+
+  if (!html.trim()) {
+    throw new Error("No RAMS HTML was provided.");
+  }
+
+  try {
+    const { chromium } = loadPlaywright();
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "networkidle" });
+    await page.pdf({
+      path: pdfPath,
+      format: "A4",
+      printBackground: true,
+      margin: {
+        top: "14mm",
+        right: "14mm",
+        bottom: "16mm",
+        left: "14mm"
+      }
+    });
+    await browser.close();
+    return {
+      saved: true,
+      fileType: "pdf",
+      filePath: pdfPath,
+      relativePath: path.relative(root, pdfPath)
+    };
+  } catch (error) {
+    fs.writeFileSync(htmlPath, html, "utf8");
+    return {
+      saved: true,
+      fileType: "html",
+      filePath: htmlPath,
+      relativePath: path.relative(root, htmlPath),
+      message: `PDF rendering failed, but an editable HTML RAMS was saved. ${error.message}`
+    };
+  }
+}
+
 const server = http.createServer((request, response) => {
   if (request.method === "OPTIONS") {
     response.writeHead(204, jsonHeaders);
@@ -545,6 +641,20 @@ const server = http.createServer((request, response) => {
       .catch((error) => {
         response.writeHead(500, { ...jsonHeaders, "Content-Type": "application/json; charset=utf-8" });
         response.end(JSON.stringify({ saved: false, message: error.message || "Could not save proofing PDF" }));
+      });
+    return;
+  }
+
+  if (request.url === "/api/save-rams-pdf" && request.method === "POST") {
+    readRequestBody(request)
+      .then((body) => saveRamsPdf(JSON.parse(body || "{}")))
+      .then((result) => {
+        response.writeHead(200, { ...jsonHeaders, "Content-Type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify(result));
+      })
+      .catch((error) => {
+        response.writeHead(500, { ...jsonHeaders, "Content-Type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({ saved: false, message: error.message || "Could not save RAMS document" }));
       });
     return;
   }

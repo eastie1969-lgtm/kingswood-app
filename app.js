@@ -1,7 +1,7 @@
 const storageKey = "kingswood-hub-rams";
 const authStorageKey = "kingswood-hub-user";
 const sectionStorageKey = "kingswood-hub-section";
-const appVersion = "111";
+const appVersion = "140";
 const authorisedUsers = {
   Kevin: "1969",
   Alex: "1981",
@@ -13,6 +13,12 @@ function localIsoDate(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function isoDaysAgo(days) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return localIsoDate(date);
 }
 
 const today = localIsoDate();
@@ -243,6 +249,28 @@ let holidayRequests = [
   { name: "Dan", from: "2026-08-03", to: "2026-08-07", days: 5, status: "Declined" }
 ];
 
+let companyHolidays = [];
+let leaveAllowanceResetYear = "";
+
+const ukBankHolidays = [
+  { title: "New Year's Day", date: "2026-01-01", type: "Bank holiday" },
+  { title: "Good Friday", date: "2026-04-03", type: "Bank holiday" },
+  { title: "Easter Monday", date: "2026-04-06", type: "Bank holiday" },
+  { title: "Early May bank holiday", date: "2026-05-04", type: "Bank holiday" },
+  { title: "Spring bank holiday", date: "2026-05-25", type: "Bank holiday" },
+  { title: "Summer bank holiday", date: "2026-08-31", type: "Bank holiday" },
+  { title: "Christmas Day", date: "2026-12-25", type: "Bank holiday" },
+  { title: "Boxing Day substitute day", date: "2026-12-28", type: "Bank holiday" },
+  { title: "New Year's Day", date: "2027-01-01", type: "Bank holiday" },
+  { title: "Good Friday", date: "2027-03-26", type: "Bank holiday" },
+  { title: "Easter Monday", date: "2027-03-29", type: "Bank holiday" },
+  { title: "Early May bank holiday", date: "2027-05-03", type: "Bank holiday" },
+  { title: "Spring bank holiday", date: "2027-05-31", type: "Bank holiday" },
+  { title: "Summer bank holiday", date: "2027-08-30", type: "Bank holiday" },
+  { title: "Christmas Day substitute day", date: "2027-12-27", type: "Bank holiday" },
+  { title: "Boxing Day substitute day", date: "2027-12-28", type: "Bank holiday" }
+];
+
 let trainingMatrix = [
   { employee: "Dan", course: "Working at Height", provider: "Internal", completedDate: "2026-02-10", expiryDate: "2026-08-15", certificate: "On file", notes: "Required for high access works." },
   { employee: "Mason", course: "BPCA Level 2", provider: "BPCA", completedDate: "2025-09-12", expiryDate: "2027-09-12", certificate: "On file", notes: "Core technician qualification." },
@@ -456,6 +484,19 @@ const jobDetailDialog = document.querySelector("#jobDetailDialog");
 const jobDetailTitle = document.querySelector("#jobDetailTitle");
 const jobDetailContent = document.querySelector("#jobDetailContent");
 const closeJobDetailButton = document.querySelector("#closeJobDetailButton");
+const staffDetailDialog = document.querySelector("#staffDetailDialog");
+const staffDetailTitle = document.querySelector("#staffDetailTitle");
+const staffDetailBody = document.querySelector("#staffDetailBody");
+const closeStaffDetailButton = document.querySelector("#closeStaffDetailButton");
+const sickCallDialog = document.querySelector("#sickCallDialog");
+const sickCallForm = document.querySelector("#sickCallForm");
+const sickCallTitle = document.querySelector("#sickCallTitle");
+const sickCallName = document.querySelector("#sickCallName");
+const sickCallCategory = document.querySelector("#sickCallCategory");
+const sickCallWorkInjury = document.querySelector("#sickCallWorkInjury");
+const sickCallIncidentNote = document.querySelector("#sickCallIncidentNote");
+const sickCallInjuryWrap = document.querySelector("#sickCallInjuryWrap");
+const sickCallIncidentWrap = document.querySelector("#sickCallIncidentWrap");
 const valuationGraphDialog = document.querySelector("#valuationGraphDialog");
 const valuationGraphContent = document.querySelector("#valuationGraphContent");
 const valuationGraphSubtitle = document.querySelector("#valuationGraphSubtitle");
@@ -472,7 +513,6 @@ const ramsBuildDate = document.querySelector("#ramsBuildDate");
 const ramsBuildTitle = document.querySelector("#ramsBuildTitle");
 const ramsBuildScope = document.querySelector("#ramsBuildScope");
 const ramsBuildSource = document.querySelector("#ramsBuildSource");
-const pasteRamsSourceButton = document.querySelector("#pasteRamsSourceButton");
 const ramsBuildPpe = document.querySelector("#ramsBuildPpe");
 const ramsBuildEquipment = document.querySelector("#ramsBuildEquipment");
 const ramsBuilderPreview = document.querySelector("#ramsBuilderPreview");
@@ -555,10 +595,12 @@ const dataModels = {
       ["title", "Job title", "job-title-select"],
       ["client", "Client"],
       ["mainClient", "Main Client", "main-client-select"],
+      ["siteCategory", "Site category", "site-category-select"],
       ["address", "Address"],
       ["postcode", "Postcode"],
       ["residentPhone", "Resident phone"],
-      ["technician", "Technician", "staff-select"],
+      ["technician", "Technician", "job-technician-select"],
+      ["rpeRequired", "Mandatory RPE required", "checkbox"],
       ["jobDetails", "Job details", "snippet-textarea"],
       ["reportNotes", "Report notes", "textarea"],
       ["photos", "Screenshot / photos", "snippet-textarea"],
@@ -575,7 +617,7 @@ const dataModels = {
       ["session", "Session", "session-select"],
       ["type", "Type", "planner-type-select"],
       ["jobAction", "Job action", "planner-action-select"],
-      ["reassignTo", "Reassign to", "staff-select"],
+      ["reassignTo", "Reassign to", "job-technician-select"],
       ["task", "Notes", "textarea"]
     ]
   },
@@ -651,7 +693,12 @@ const dataModels = {
       ["email", "Email", "email"],
       ["techPin", "Tech app PIN", "password"],
       ["emergencyContact", "Emergency contact"],
+      ["nextOfKin", "Next of kin"],
       ["assignedVan", "Assigned van"],
+      ["rpeMaskType", "RPE mask type"],
+      ["rpeMaskSize", "RPE mask size"],
+      ["faceFitDate", "Last successful face-fit date", "date"],
+      ["incidentHistory", "Internal accident / incident log history", "textarea"],
       ["trainingRecords", "Training records", "textarea"],
       ["qualifications", "Qualifications", "textarea"],
       ["drivingLicence", "Driving licence details", "textarea"],
@@ -668,7 +715,12 @@ const dataModels = {
     fields: [
       ["date", "Date", "date"],
       ["name", "Staff member", "staff-select"],
-      ["status", "Status"],
+      ["status", "Status", "attendance-status-select"],
+      ["category", "Functional H&S category", "absence-category-select"],
+      ["recoveryDate", "Logged recovery / return date", "date"],
+      ["workplaceInjury", "Was this injury sustained during an onsite work activity for Kingswood?", "yes-no-select"],
+      ["workplaceIncident", "Incident log / management note", "textarea"],
+      ["returnToWorkCompleted", "Return to Work Health Declaration Completed", "checkbox"],
       ["returnToWorkNotes", "Return to work notes", "textarea"],
       ["fitNote", "Fit note / file note", "textarea"]
     ]
@@ -683,6 +735,18 @@ const dataModels = {
       ["to", "To", "date"],
       ["days", "Days", "number"],
       ["status", "Status"]
+    ]
+  },
+  companyHolidays: {
+    title: "Company Holiday / Shutdown",
+    get: () => companyHolidays,
+    set: (items) => { companyHolidays = items; },
+    fields: [
+      ["title", "Title"],
+      ["from", "From", "date"],
+      ["to", "To", "date"],
+      ["days", "Days", "number"],
+      ["type", "Type"]
     ]
   },
   training: {
@@ -803,6 +867,33 @@ function renderSelectField(key, label, value, options) {
       <select data-field="${key}">
         <option value="">-- Select --</option>
         ${optionValues.map((option) => `<option value="${escapeHtml(option)}" ${option === value ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function renderCheckboxField(key, label, value) {
+  return `
+    <label class="checkbox-field full-width">
+      <input data-field="${key}" type="checkbox" ${value === true || value === "true" || value === "on" ? "checked" : ""}>
+      <span>${label}</span>
+    </label>
+  `;
+}
+
+function renderJobTechnicianField(key, label, value, jobDate = today) {
+  const optionValues = [...new Set([value, ...staffNames()].filter(Boolean))];
+  return `
+    <label>
+      ${label}
+      <select data-field="${key}" data-job-technician-select>
+        <option value="">-- Select --</option>
+        ${optionValues.map((option) => {
+          const attendance = attendanceFor(option, jobDate || today);
+          const locked = isUnavailableStatus(attendance.status) && option !== value;
+          const suffix = locked ? ` - unavailable (${attendance.status})` : "";
+          return `<option value="${escapeHtml(option)}" ${option === value ? "selected" : ""} ${locked ? "disabled" : ""}>${escapeHtml(option + suffix)}</option>`;
+        }).join("")}
       </select>
     </label>
   `;
@@ -972,12 +1063,12 @@ function enhanceDashboardCards() {
     const meta = dashboardCardMeta[value.id] || ["dashboard", "Live dashboard count", "items"];
     metric.dataset.countId = value.id;
     metric.innerHTML = `
-      <div class="metric-heading">
-        <span class="metric-title">${escapeHtml(title)}</span>
-        <span class="metric-inline"><i aria-hidden="true"></i><span id="${value.id}Badge">0 ${meta[2]}</span></span>
+      <div class="metric-heading kw-card-header">
+        <span class="metric-title kw-label">${escapeHtml(title)}</span>
+        <span class="metric-inline kw-sub-label"><i aria-hidden="true"></i><span id="${value.id}Badge">0 ${meta[2]}</span></span>
       </div>
-      <p class="metric-subtitle">${escapeHtml(meta[1])}</p>
-      <strong class="metric-value" id="${value.id}">${escapeHtml(value.textContent)}</strong>
+      <p class="metric-subtitle kw-card-hint">${escapeHtml(meta[1])}</p>
+      <strong class="metric-value kw-metric" id="${value.id}">${escapeHtml(value.textContent)}</strong>
     `;
   });
 }
@@ -996,6 +1087,7 @@ function updateDashboardBadges() {
 
 function technicianJob(job) {
   const attendance = attendanceFor(job.technician, job.date);
+  const restriction = activeSicknessRestrictionFor(job.technician, job.date);
   return {
     date: job.date,
     jobNumber: job.number,
@@ -1013,7 +1105,13 @@ function technicianJob(job) {
     status: job.status,
     report: job.report,
     navigationSearch: job.address,
-    availabilityWarning: isUnavailableStatus(attendance.status) ? `${job.technician} is marked as ${attendance.status}` : "",
+    availabilityWarning: isUnavailableStatus(attendance.status)
+      ? `${job.technician} is marked as ${attendance.status}`
+      : restriction?.type === "food-premises" && jobIsFoodPremises(job)
+        ? restriction.message
+        : restriction?.type === "rpe-warning" && jobRequiresRpe(job)
+          ? restriction.message
+          : "",
     rams: ramsItems
       .filter((item) => item.job.includes(job.number) || item.job.includes(job.title) || item.client === job.client)
       .map((item) => ({
@@ -1027,20 +1125,50 @@ function technicianJob(job) {
 }
 
 function buildTechnicianFeed() {
+  const currentYear = String(new Date().getFullYear());
+  const individualTechnicianApps = staffProfiles.map((staff) => {
+    const summary = staffLeaveSummary(staff, currentYear);
+    return {
+      name: staff.name,
+      activeStatus: publicStaffStatus(staff.name, today),
+      holidayAllowance: `${summary.holidayAllowance} days entitlement`,
+      personalHolidaysApprovedAndTaken: `${summary.holidayTaken} days approved/taken`,
+      companyBankHolidayDeductions: `${summary.companyBankDeductions} company/bank holiday days deducted`,
+      remainingHolidayBalance: `${summary.holidayRemaining} days remaining`,
+      totalSickDaysRegistered: `${summary.sickDays} sick days registered in ${currentYear}`
+    };
+  });
   return {
     app: "Kingswood Technician App",
     source: "Kingswood Command Centre",
     publishedAt: new Date().toISOString(),
     jobs: jobs.map(technicianJob),
+    individualTechnicianApps,
     staffAvailability: staffProfiles.map((staff) => {
       const attendance = attendanceFor(staff.name, today);
+      const restriction = activeSicknessRestrictionFor(staff.name, today);
+      const summary = staffLeaveSummary(staff, currentYear);
       return {
         name: staff.name,
         role: staff.role,
         phone: staff.phone,
         assignedVan: staff.assignedVan,
         todayStatus: attendance.status,
-        availableToday: !isUnavailableStatus(attendance.status)
+        availableToday: !isUnavailableStatus(attendance.status),
+        activeStatus: publicStaffStatus(staff.name, today),
+        activeRestriction: restriction ? {
+          type: restriction.type,
+          label: restriction.label,
+          message: restriction.message
+        } : null,
+        leaveSummary: {
+          year: summary.year,
+          holidayAllowance: summary.holidayAllowance,
+          holidayTaken: summary.holidayTaken,
+          holidayRemaining: summary.holidayRemaining,
+          sickDays: summary.sickDays,
+          companyHolidayDays: summary.companyBankDeductions
+        }
       };
     }),
     vehicles: vehicles.map((vehicle) => ({
@@ -1081,6 +1209,7 @@ function buildAdminFeed() {
     staffProfiles,
     attendanceRecords,
     holidayRequests,
+    companyHolidays,
     fines,
     clients: clients.map(asCardObject),
     assets: assets.map(asAssetObject),
@@ -1287,6 +1416,7 @@ function clearDataCollection(collection) {
       technicians = [];
       attendanceRecords = [];
       holidayRequests = [];
+      companyHolidays = [];
       trainingMatrix = [];
     },
     training: () => {
@@ -1356,6 +1486,7 @@ function fieldValue(item, key) {
 }
 
 let ramsItems = loadRams();
+let activeBuiltRamsId = "";
 let proofingReports = [];
 let proofingPhotos = { before: [], after: [] };
 
@@ -1373,6 +1504,7 @@ function commandData() {
     staffProfiles,
     attendanceRecords,
     holidayRequests,
+    companyHolidays,
     trainingMatrix,
     weeklyPlanner,
     emailTemplates,
@@ -1386,6 +1518,7 @@ function commandData() {
     valuations,
     clients,
     integrationFeeds,
+    leaveAllowanceResetYear,
     savedAt: new Date().toISOString()
   };
 }
@@ -1399,6 +1532,7 @@ function applyCommandData(data) {
   if (Array.isArray(data.staffProfiles)) staffProfiles = data.staffProfiles;
   if (Array.isArray(data.attendanceRecords)) attendanceRecords = data.attendanceRecords;
   if (Array.isArray(data.holidayRequests)) holidayRequests = data.holidayRequests;
+  if (Array.isArray(data.companyHolidays)) companyHolidays = data.companyHolidays;
   if (Array.isArray(data.trainingMatrix)) trainingMatrix = data.trainingMatrix;
   if (Array.isArray(data.weeklyPlanner)) weeklyPlanner = data.weeklyPlanner;
   if (Array.isArray(data.emailTemplates)) emailTemplates = data.emailTemplates;
@@ -1412,6 +1546,19 @@ function applyCommandData(data) {
   if (Array.isArray(data.valuations)) valuations = data.valuations;
   if (Array.isArray(data.clients)) clients = data.clients;
   if (data.integrationFeeds && typeof data.integrationFeeds === "object") integrationFeeds = data.integrationFeeds;
+  if (data.leaveAllowanceResetYear) leaveAllowanceResetYear = String(data.leaveAllowanceResetYear);
+}
+
+function enforceAnnualLeaveRenewal() {
+  const currentYear = String(new Date().getFullYear());
+  if (leaveAllowanceResetYear === currentYear) return false;
+  staffProfiles = staffProfiles.map((staff) => ({
+    ...staff,
+    holidayAllowance: 28,
+    holidayAllowanceYear: currentYear
+  }));
+  leaveAllowanceResetYear = currentYear;
+  return true;
 }
 
 function hubApiUrls(path) {
@@ -1448,6 +1595,7 @@ function redirectFileViewToHub(apiUrl) {
 }
 
 async function loadCommandData() {
+  let leaveResetChanged = false;
   if (location.protocol === "file:") {
     try {
       const serverResponse = await fetchFirstHubApi("/api/data", { cache: "no-store" });
@@ -1457,9 +1605,14 @@ async function loadCommandData() {
         const data = await response.json();
         if (Object.keys(data).length > 0) {
           applyCommandData(data);
+          leaveResetChanged = enforceAnnualLeaveRenewal();
           storageStatus.textContent = serverResponse ? "OneDrive data loaded" : "OneDrive file data loaded";
+          if (leaveResetChanged) {
+            await saveCommandData();
+          }
         } else {
           storageStatus.textContent = "Start Kingswood Hub to save to OneDrive";
+          enforceAnnualLeaveRenewal();
         }
       } else {
         storageStatus.textContent = "Start Kingswood Hub to save to OneDrive";
@@ -1478,13 +1631,15 @@ async function loadCommandData() {
 
     if (Object.keys(data).length > 0) {
       applyCommandData(data);
+      leaveResetChanged = enforceAnnualLeaveRenewal();
       const valuationSyncChanged = syncValuationsFromJobs();
       storageStatus.textContent = "OneDrive data loaded";
-      if (valuationSyncChanged) {
+      if (valuationSyncChanged || leaveResetChanged) {
         await saveCommandData();
       }
     } else {
       storageStatus.textContent = "Creating OneDrive data file";
+      enforceAnnualLeaveRenewal();
       await saveCommandData();
     }
   } catch {
@@ -1567,8 +1722,23 @@ function openDataDialog(collection, index = "", seed = {}) {
   dataFields.innerHTML = model.fields.map(([key, label, type = "text"]) => {
     const value = escapeHtml(fieldValue(item, key));
     const full = type === "textarea" ? " full-width" : "";
+    if (type === "checkbox") {
+      return renderCheckboxField(key, label, fieldValue(item, key));
+    }
     if (type === "staff-select") {
       return renderSelectField(key, label, fieldValue(item, key), staffNames());
+    }
+    if (type === "job-technician-select") {
+      return renderJobTechnicianField(key, label, fieldValue(item, key), fieldValue(item, "date") || today);
+    }
+    if (type === "attendance-status-select") {
+      return renderSelectField(key, label, fieldValue(item, key), ["Present", "Absent - Called in Sick", "Sick", "Holiday", "Training", "Unpaid leave", "Late", "Absent"]);
+    }
+    if (type === "absence-category-select") {
+      return renderSelectField(key, label, fieldValue(item, key), ["Gastrointestinal (Vomiting/Diarrhoea)", "Respiratory / Chest", "Musculoskeletal / Physical Injury", "General Illness", "Annual Leave", "Occupational Sick Leave / Industrial Injury"]);
+    }
+    if (type === "yes-no-select") {
+      return renderSelectField(key, label, fieldValue(item, key), ["No", "Yes"]);
     }
     if (type === "role-select") {
       return renderSelectField(key, label, fieldValue(item, key), ["Technician", "Senior Technician", "Trainee Technician", "Admin", "Manager", "Director"]);
@@ -1584,6 +1754,9 @@ function openDataDialog(collection, index = "", seed = {}) {
     }
     if (type === "main-client-select") {
       return renderSelectField(key, label, fieldValue(item, key), ["Ark", "JG Pest Control", "Other"]);
+    }
+    if (type === "site-category-select") {
+      return renderSelectField(key, label, fieldValue(item, key), ["Residential", "Commercial Kitchen", "Food Premises", "Catering", "Construction Site", "Office", "Warehouse", "External Area", "Other"]);
     }
     if (type === "planner-type-select") {
       return renderSelectField(key, label, fieldValue(item, key) || plannerTypeFromItem(item), ["Holiday", "Provisional", "Sick", "Other"]);
@@ -1616,6 +1789,7 @@ function openDataDialog(collection, index = "", seed = {}) {
     `;
   }).join("");
   setupSnippetFields();
+  setupSmartDataDialog(collection);
   dataDialog.showModal();
 }
 
@@ -1652,6 +1826,267 @@ function setupSnippetFields() {
   });
 }
 
+function setupSmartDataDialog(collection) {
+  if (collection === "jobs" || collection === "planner") {
+    const dateField = dataFields.querySelector('[data-field="date"]');
+    const technicianField = dataFields.querySelector("[data-job-technician-select]");
+    dateField?.addEventListener("change", () => {
+      if (!technicianField) return;
+      const current = technicianField.value;
+      const key = technicianField.dataset.field || "technician";
+      const label = key === "reassignTo" ? "Reassign to" : "Technician";
+      const wrapper = technicianField.closest("label");
+      if (!wrapper) return;
+      wrapper.outerHTML = renderJobTechnicianField(key, label, current, dateField.value || today);
+    });
+  }
+
+  if (collection !== "attendance") return;
+  const statusField = dataFields.querySelector('[data-field="status"]');
+  const categoryField = dataFields.querySelector('[data-field="category"]');
+  const recoveryDateField = dataFields.querySelector('[data-field="recoveryDate"]')?.closest("label");
+  const workplaceInjuryField = dataFields.querySelector('[data-field="workplaceInjury"]')?.closest("label");
+  const incidentField = dataFields.querySelector('[data-field="workplaceIncident"]')?.closest("label");
+  const returnToWorkField = dataFields.querySelector('[data-field="returnToWorkCompleted"]')?.closest("label");
+  const setCategoryOptions = (options, fallback = "") => {
+    if (!categoryField) return;
+    const current = categoryField.value;
+    const nextValue = options.includes(current) ? current : fallback;
+    categoryField.innerHTML = `<option value="">-- Select --</option>${options.map((option) => `<option value="${escapeHtml(option)}" ${option === nextValue ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}`;
+  };
+
+  const refreshAbsenceFields = () => {
+    const status = statusField?.value || "";
+    if (status === "Holiday") {
+      setCategoryOptions(["Annual Leave"], "Annual Leave");
+    } else if (isSickCallStatus(status)) {
+      setCategoryOptions(["Gastrointestinal (Vomiting/Diarrhoea)", "Respiratory / Chest", "Musculoskeletal / Physical Injury", "General Illness"], categoryField?.value || "General Illness");
+    } else {
+      setCategoryOptions(["General Illness", "Annual Leave", "Occupational Sick Leave / Industrial Injury"], categoryField?.value || "");
+    }
+    const selectedCategory = categoryField?.value || "";
+    const isSick = isSickCallStatus(status);
+    const isMusculoskeletal = selectedCategory === "Musculoskeletal / Physical Injury";
+    const isOccupational = selectedCategory === "Occupational Sick Leave / Industrial Injury" || (isMusculoskeletal && dataFields.querySelector('[data-field="workplaceInjury"]')?.value === "Yes");
+    if (recoveryDateField) {
+      recoveryDateField.classList.toggle("field-required-attention", isSick && (selectedCategory === "Gastrointestinal (Vomiting/Diarrhoea)" || selectedCategory === "Respiratory / Chest"));
+    }
+    if (workplaceInjuryField) {
+      workplaceInjuryField.classList.toggle("hidden", !isMusculoskeletal);
+      workplaceInjuryField.classList.toggle("field-required-attention", isMusculoskeletal);
+    }
+    if (incidentField) {
+      incidentField.classList.toggle("field-required-attention", isOccupational);
+      incidentField.querySelector("textarea").placeholder = isOccupational
+        ? "Add the internal incident log reference and brief management note. Do not record private medical detail."
+        : "Management note only. Do not record private medical detail.";
+    }
+    if (returnToWorkField) {
+      returnToWorkField.classList.toggle("field-required-attention", isSick);
+    }
+  };
+
+  statusField?.addEventListener("change", refreshAbsenceFields);
+  categoryField?.addEventListener("change", refreshAbsenceFields);
+  dataFields.querySelector('[data-field="workplaceInjury"]')?.addEventListener("change", refreshAbsenceFields);
+  refreshAbsenceFields();
+}
+
+function dateRangeValues(from, to) {
+  if (!from || !to) return [];
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
+  const dates = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+function isWorkingWeekday(dateValue) {
+  const date = new Date(`${dateValue}T00:00:00`);
+  const day = date.getDay();
+  return day >= 1 && day <= 5;
+}
+
+function workingDateRangeValues(from, to) {
+  return dateRangeValues(from, to).filter(isWorkingWeekday);
+}
+
+function countConsecutiveOccupationalSickDays(name, dateValue) {
+  if (!name || !dateValue) return 0;
+  const recordDates = new Set(attendanceRecords
+    .filter((record) => record.name === name && isSickCallStatus(record.status) && (record.category === "Occupational Sick Leave / Industrial Injury" || (record.category === "Musculoskeletal / Physical Injury" && record.workplaceInjury === "Yes")))
+    .map((record) => record.date));
+  recordDates.add(dateValue);
+
+  const start = new Date(`${dateValue}T00:00:00`);
+  if (Number.isNaN(start.getTime())) return 0;
+  let count = 1;
+  const check = new Date(start);
+  check.setDate(check.getDate() - 1);
+  while (recordDates.has(check.toISOString().slice(0, 10))) {
+    count += 1;
+    check.setDate(check.getDate() - 1);
+  }
+  check.setTime(start.getTime());
+  check.setDate(check.getDate() + 1);
+  while (recordDates.has(check.toISOString().slice(0, 10))) {
+    count += 1;
+    check.setDate(check.getDate() + 1);
+  }
+  return count;
+}
+
+function validateAttendanceRecord(item) {
+  if (["Holiday", "Sick", "Absent"].includes(item.status) && !item.category) {
+    window.alert("Please choose an absence category before saving this absence.");
+    return false;
+  }
+  if (item.status === "Absent - Called in Sick" && !item.category) {
+    window.alert("Please choose a functional H&S category for this sick call-in.");
+    return false;
+  }
+  if (item.category === "Annual Leave" && item.status !== "Holiday") {
+    window.alert("Annual Leave must be recorded with the Holiday status.");
+    return false;
+  }
+  if (isSickCallStatus(item.status) && item.category === "Annual Leave") {
+    window.alert("Please choose one of the four functional H&S sick call-in categories, not Annual Leave.");
+    return false;
+  }
+  if (isSickCallStatus(item.status) && item.category === "Gastrointestinal (Vomiting/Diarrhoea)" && !item.recoveryDate) {
+    window.alert("Please enter the logged recovery / return date so the 48-hour food premises restriction can be applied.");
+    return false;
+  }
+  if (isSickCallStatus(item.status) && item.category === "Respiratory / Chest" && !item.recoveryDate) {
+    window.alert("Please enter the logged recovery / return date so the RPE fitness warning can be applied.");
+    return false;
+  }
+  if (isSickCallStatus(item.status) && item.category === "Musculoskeletal / Physical Injury" && !item.workplaceInjury) {
+    window.alert("Please confirm whether this injury was sustained during an onsite work activity for Kingswood.");
+    return false;
+  }
+  if (item.category === "Musculoskeletal / Physical Injury" && item.workplaceInjury === "Yes" && !item.workplaceIncident) {
+    window.alert("Please add the internal Incident Log reference for this onsite work injury.");
+    return false;
+  }
+  if (item.category === "Occupational Sick Leave / Industrial Injury" && !item.workplaceIncident) {
+    window.alert("Please confirm whether this illness/injury was caused by an onsite incident or chemical/biological exposure.");
+    return false;
+  }
+  if (item.status === "Present") {
+    const previousSick = attendanceRecords
+      .filter((record) => record.name === item.name && record.status === "Sick" && record.date < item.date)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (previousSick && !item.returnToWorkCompleted) {
+      window.alert("Return to Work Health Declaration Completed must be ticked before returning a sick employee to Present Today.");
+      return false;
+    }
+  }
+  if ((item.category === "Occupational Sick Leave / Industrial Injury" || (item.category === "Musculoskeletal / Physical Injury" && item.workplaceInjury === "Yes")) && countConsecutiveOccupationalSickDays(item.name, item.date) > 7) {
+    window.alert("CRITICAL: Employee absent for >7 days due to workplace injury/illness. Evaluate if a RIDDOR notification to the HSE is required.");
+  }
+  return true;
+}
+
+function validateJobTechnicianAvailability(item) {
+  if (!item.technician || !item.date) return true;
+  const attendance = attendanceFor(item.technician, item.date);
+  if (isUnavailableStatus(attendance.status)) {
+    window.alert(`${item.technician} is marked as ${attendance.status} on ${formatDateUk(item.date)} and cannot be allocated to this job.`);
+    return false;
+  }
+  const restriction = activeSicknessRestrictionFor(item.technician, item.date);
+  if (restriction?.type === "food-premises" && jobIsFoodPremises(item)) {
+    window.alert(`${item.technician} is restricted from Food Premises, Commercial Kitchen and Catering work on ${formatDateUk(item.date)}.`);
+    return false;
+  }
+  if (restriction?.type === "rpe-warning" && jobRequiresRpe(item)) {
+    window.alert("Verify operative is fully fit to wear tight-fitting respiratory protection before work commences.");
+  }
+  return true;
+}
+
+function applyApprovedHolidayRequest(request) {
+  if (request.status !== "Approved") return;
+  workingDateRangeValues(request.from, request.to).forEach((date) => {
+    const existing = attendanceRecords.find((record) => record.name === request.name && record.date === date);
+    const holidayRecord = {
+      date,
+      name: request.name,
+      status: "Holiday",
+      category: "Annual Leave",
+      returnToWorkCompleted: false,
+      returnToWorkNotes: "Approved annual leave.",
+      fitNote: "",
+      source: "holiday"
+    };
+    if (existing) Object.assign(existing, holidayRecord);
+    else attendanceRecords.push(holidayRecord);
+  });
+}
+
+function refreshSickCallDialog() {
+  const category = sickCallCategory?.value || "";
+  const isInjury = category === "Musculoskeletal / Physical Injury";
+  sickCallInjuryWrap?.classList.toggle("hidden", !isInjury);
+  sickCallIncidentWrap?.classList.toggle("hidden", !(isInjury && sickCallWorkInjury?.value === "Yes"));
+}
+
+function openSickCallDialog(name) {
+  if (!sickCallDialog || !sickCallForm) return;
+  sickCallForm.reset();
+  sickCallName.value = name;
+  sickCallTitle.textContent = `${name} - Sick Call-In`;
+  refreshSickCallDialog();
+  sickCallDialog.showModal();
+}
+
+async function saveSickCallIn() {
+  const name = sickCallName?.value || "";
+  const category = sickCallCategory?.value || "";
+  const workplaceInjury = sickCallWorkInjury?.value || "";
+  const workplaceIncident = sickCallIncidentNote?.value.trim() || "";
+  if (!name || !category) {
+    window.alert("Please choose a symptom category.");
+    return false;
+  }
+  if (category === "Musculoskeletal / Physical Injury" && !workplaceInjury) {
+    window.alert("Please confirm whether this injury was sustained during an onsite work activity for Kingswood.");
+    return false;
+  }
+  if (category === "Musculoskeletal / Physical Injury" && workplaceInjury === "Yes" && !workplaceIncident) {
+    window.alert("Please add the internal Incident Log reference.");
+    return false;
+  }
+
+  const item = {
+    date: today,
+    name,
+    status: "Absent - Called in Sick",
+    category,
+    recoveryDate: category === "Gastrointestinal (Vomiting/Diarrhoea)" || category === "Respiratory / Chest" ? today : "",
+    workplaceInjury: category === "Musculoskeletal / Physical Injury" ? workplaceInjury : "",
+    workplaceIncident: category === "Musculoskeletal / Physical Injury" ? workplaceIncident : "",
+    returnToWorkCompleted: false,
+    returnToWorkNotes: "Sick call-in logged from Attendance Today.",
+    fitNote: "",
+    source: "attendance-today"
+  };
+
+  if (!validateAttendanceRecord(item)) return false;
+  const existingIndex = attendanceRecords.findIndex((record) => record.name === name && record.date === today);
+  if (existingIndex >= 0) attendanceRecords[existingIndex] = { ...attendanceRecords[existingIndex], ...item };
+  else attendanceRecords.unshift(item);
+  await publishIntegrationFeeds();
+  render();
+  return true;
+}
+
 async function saveDataDialog() {
   const collection = dataCollectionInput.value;
   const index = dataIndexInput.value;
@@ -1662,12 +2097,43 @@ async function saveDataDialog() {
   const item = index === "" ? {} : { ...previousItem };
   model.fields.forEach(([key, , type = "text"]) => {
     const input = dataFields.querySelector(`[data-field="${key}"]`);
-    item[key] = type === "number" ? Number(input.value || 0) : input.value.trim();
+    if (!input) return;
+    item[key] = type === "number"
+      ? Number(input.value || 0)
+      : type === "checkbox"
+        ? input.checked
+        : input.value.trim();
   });
   if (collection === "jobs") {
     item.status = item.status || "Booked";
     item.report = item.report || "Not due";
     item.completed = item.completed || "n";
+    if (!validateJobTechnicianAvailability(item)) {
+      return false;
+    }
+  }
+  if (collection === "attendance") {
+    if (!validateAttendanceRecord(item)) {
+      return false;
+    }
+  }
+  if (collection === "holidays") {
+    const dates = workingDateRangeValues(item.from, item.to);
+    if (!dates.length) {
+      window.alert("Please enter a valid holiday date range.");
+      return false;
+    }
+    item.days = item.days || dates.length;
+    if (!item.status) item.status = "Pending";
+  }
+  if (collection === "companyHolidays") {
+    const dates = workingDateRangeValues(item.from, item.to);
+    if (!dates.length) {
+      window.alert("Please enter a valid company holiday date range.");
+      return false;
+    }
+    item.days = item.days || dates.length;
+    if (!item.type) item.type = "Company holiday";
   }
   if (collection === "planner") {
     if (previousItem?.task && !previousItem.originalTask) {
@@ -1691,6 +2157,9 @@ async function saveDataDialog() {
   }
 
   model.set(items);
+  if (collection === "holidays") {
+    applyApprovedHolidayRequest(item);
+  }
   if (collection === "planner") {
     syncAttendanceFromPlanner();
   }
@@ -1700,7 +2169,7 @@ async function saveDataDialog() {
   if (collection === "staff" || collection === "training") {
     syncTechniciansFromStaff();
   }
-  if (collection === "jobs" || collection === "planner") {
+  if (collection === "jobs" || collection === "planner" || collection === "attendance" || collection === "holidays" || collection === "companyHolidays" || collection === "staff") {
     await publishIntegrationFeeds();
   } else {
     await saveCommandData();
@@ -1736,9 +2205,9 @@ function statusLabel(status) {
     draft: "Draft",
     attached: "Attached",
     sent: "Sent",
-    "sent-client": "Sent to client",
-    "sent-tech": "Sent to tech",
-    read: "Read confirmed",
+    "sent-client": "Sent",
+    "sent-tech": "Sent",
+    read: "Sent",
     review: "Needs review"
   };
   return labels[status] || "Draft";
@@ -2409,6 +2878,24 @@ function datePlusDays(dateValue, days) {
   return localIsoDate(date);
 }
 
+function isSickCallStatus(status) {
+  return status === "Sick" || status === "Absent - Called in Sick";
+}
+
+function isFoodPremisesCategory(category) {
+  return ["Commercial Kitchen", "Food Premises", "Catering"].includes(category);
+}
+
+function jobIsFoodPremises(job = {}) {
+  const text = `${job.siteCategory || ""} ${job.title || ""} ${job.client || ""} ${job.address || ""} ${job.jobDetails || ""}`.toLowerCase();
+  return isFoodPremisesCategory(job.siteCategory) || /\b(commercial kitchen|food premises|catering|kitchen|restaurant|canteen|food prep)\b/.test(text);
+}
+
+function jobRequiresRpe(job = {}) {
+  const text = `${job.title || ""} ${job.jobDetails || ""} ${job.reportNotes || ""}`.toLowerCase();
+  return job.rpeRequired === true || job.rpeRequired === "true" || /\b(rpe|ffp3|half[-\s]?mask|respirator|abek)\b/.test(text);
+}
+
 function plannerCurrentWeekStart() {
   return plannerWeekStartForDate(localIsoDate());
 }
@@ -2616,7 +3103,44 @@ function attendanceFor(name, dateValue) {
 }
 
 function isUnavailableStatus(status) {
-  return status === "Sick" || status === "Holiday" || status === "Training" || status === "Unpaid leave" || status === "Absent";
+  return status === "Sick" || status === "Absent - Called in Sick" || status === "Holiday" || status === "Training" || status === "Unpaid leave" || status === "Absent";
+}
+
+function activeSicknessRestrictionFor(name, dateValue = today) {
+  const records = attendanceRecords
+    .filter((record) => record.name === name && isSickCallStatus(record.status))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  for (const record of records) {
+    if (record.category === "Gastrointestinal (Vomiting/Diarrhoea)" && record.recoveryDate) {
+      const restrictionEnd = datePlusDays(record.recoveryDate, 2);
+      if (dateValue >= record.recoveryDate && dateValue < restrictionEnd) {
+        return {
+          type: "food-premises",
+          label: "Active - Restricted from Food Premises",
+          message: "48-hour restriction after gastrointestinal illness. Do not allocate to Commercial Kitchen, Food Premises or Catering work."
+        };
+      }
+    }
+    if (record.category === "Respiratory / Chest" && record.recoveryDate) {
+      const warningEnd = datePlusDays(record.recoveryDate, 3);
+      if (dateValue >= record.recoveryDate && dateValue <= warningEnd) {
+        return {
+          type: "rpe-warning",
+          label: "Active - RPE fitness check needed",
+          message: "Verify operative is fully fit to wear tight-fitting respiratory protection before work commences."
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function publicStaffStatus(name, dateValue = today) {
+  const attendance = attendanceFor(name, dateValue);
+  const restriction = activeSicknessRestrictionFor(name, dateValue);
+  if (restriction) return restriction.label;
+  if (isUnavailableStatus(attendance.status)) return `Unavailable - ${attendance.status}`;
+  return "Active";
 }
 
 function staffStatusClass(status) {
@@ -2634,17 +3158,111 @@ function attendanceYear(record) {
 }
 
 function holidayUsedForYear(name, year = String(new Date().getFullYear())) {
-  return new Set(attendanceRecords
-    .filter((record) => record.name === name && record.status === "Holiday" && attendanceYear(record) === year)
+  const personalDays = new Set(attendanceRecords
+    .filter((record) => record.name === name && record.status === "Holiday" && attendanceYear(record) === year && isWorkingWeekday(record.date))
     .map((record) => record.date)
-  ).size;
+  );
+  companyHolidayDatesForYear(year).forEach((date) => personalDays.add(date));
+  return personalDays.size;
+}
+
+function companyHolidayDatesForYear(year = String(new Date().getFullYear())) {
+  const dates = new Set();
+  companyHolidays.forEach((holiday) => {
+    workingDateRangeValues(holiday.from, holiday.to)
+      .filter((date) => date.startsWith(year))
+      .forEach((date) => dates.add(date));
+  });
+  ukBankHolidays
+    .filter((holiday) => holiday.date.startsWith(year))
+    .forEach((holiday) => dates.add(holiday.date));
+  return dates;
+}
+
+function companyHolidayDaysForYear(year = String(new Date().getFullYear())) {
+  return companyHolidayDatesForYear(year).size;
+}
+
+function holidayCalendarEntriesForYear(year = String(new Date().getFullYear())) {
+  const bank = ukBankHolidays
+    .filter((holiday) => holiday.date.startsWith(year))
+    .map((holiday) => ({ title: holiday.title, date: holiday.date, type: holiday.type }));
+  const company = companyHolidays.flatMap((holiday) => workingDateRangeValues(holiday.from, holiday.to)
+    .filter((date) => date.startsWith(year))
+    .map((date) => ({
+      title: holiday.title || holiday.type || "Company holiday",
+      date,
+      type: holiday.type || "Company holiday"
+    })));
+  return [...bank, ...company].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function sicknessDaysForYear(name, year = String(new Date().getFullYear())) {
   return new Set(attendanceRecords
-    .filter((record) => record.name === name && record.status === "Sick" && attendanceYear(record) === year)
+    .filter((record) => record.name === name && isSickCallStatus(record.status) && attendanceYear(record) === year)
     .map((record) => record.date)
   ).size;
+}
+
+function totalHolidayAllowanceForYear(year = String(new Date().getFullYear())) {
+  return staffProfiles.reduce((sum, staff) => sum + Number(staff.holidayAllowance || 0), 0);
+}
+
+function totalHolidayUsedForYear(year = String(new Date().getFullYear())) {
+  return staffProfiles.reduce((sum, staff) => sum + holidayUsedForYear(staff.name, year), 0);
+}
+
+function totalSickDaysForYear(year = String(new Date().getFullYear())) {
+  return staffProfiles.reduce((sum, staff) => sum + sicknessDaysForYear(staff.name, year), 0);
+}
+
+function staffLeaveSummary(staff, year = String(new Date().getFullYear())) {
+  const allowance = Number(staff.holidayAllowance || 28);
+  const taken = holidayUsedForYear(staff.name, year);
+  const companyBankDeductions = companyHolidayDaysForYear(year);
+  return {
+    year,
+    holidayAllowance: allowance,
+    holidayTaken: taken,
+    companyBankDeductions,
+    holidayRemaining: allowance - taken,
+    sickDays: sicknessDaysForYear(staff.name, year)
+  };
+}
+
+function incidentHistoryForStaff(staff) {
+  const profileNotes = String(staff.incidentHistory || "").trim();
+  const attendanceIncidents = attendanceRecords
+    .filter((record) => record.name === staff.name && record.workplaceIncident)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .map((record) => `${formatDateUk(record.date)} - ${record.workplaceIncident}`);
+  return [profileNotes, ...attendanceIncidents].filter(Boolean);
+}
+
+function occupationalRiddorAlerts() {
+  const alerts = [];
+  staffProfiles.forEach((staff) => {
+    const dates = [...new Set(attendanceRecords
+      .filter((record) => record.name === staff.name && isSickCallStatus(record.status) && (record.category === "Occupational Sick Leave / Industrial Injury" || (record.category === "Musculoskeletal / Physical Injury" && record.workplaceInjury === "Yes")))
+      .map((record) => record.date)
+      .filter(Boolean)
+      .sort())];
+    let streak = 0;
+    let previous = null;
+    dates.forEach((date) => {
+      const current = new Date(`${date}T00:00:00`);
+      const consecutive = previous && ((current - previous) / 86400000) === 1;
+      streak = consecutive ? streak + 1 : 1;
+      previous = current;
+      if (streak > 7 && !alerts.some((alert) => alert.name === staff.name)) {
+        alerts.push({
+          name: staff.name,
+          message: "CRITICAL: Employee absent for >7 days due to workplace injury/illness. Evaluate if a RIDDOR notification to the HSE is required."
+        });
+      }
+    });
+  });
+  return alerts;
 }
 
 function trainingDaysForYear(name, year = String(new Date().getFullYear())) {
@@ -2652,6 +3270,154 @@ function trainingDaysForYear(name, year = String(new Date().getFullYear())) {
     .filter((record) => record.name === name && record.status === "Training" && attendanceYear(record) === year)
     .map((record) => record.date)
   ).size;
+}
+
+function staffAttendanceHistory(name, limit = 10) {
+  return attendanceRecords
+    .filter((record) => record.name === name)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .slice(0, limit);
+}
+
+function openStaffDetail(index) {
+  const staff = staffProfiles[Number(index)];
+  if (!staff || !staffDetailDialog || !staffDetailTitle || !staffDetailBody) return;
+
+  const currentYear = String(new Date().getFullYear());
+  const attendance = attendanceFor(staff.name, today);
+  const restriction = activeSicknessRestrictionFor(staff.name, today);
+  const holidayAllowance = Number(staff.holidayAllowance || 28);
+  const leaveSummary = staffLeaveSummary(staff, currentYear);
+  const holidayUsed = leaveSummary.holidayTaken;
+  const holidayRemaining = leaveSummary.holidayRemaining;
+  const sicknessDays = leaveSummary.sickDays;
+  const trainingDays = trainingDaysForYear(staff.name, currentYear);
+  const companyHolidayDays = companyHolidayDaysForYear(currentYear);
+  const history = staffAttendanceHistory(staff.name);
+  const incidents = incidentHistoryForStaff(staff);
+
+  staffDetailTitle.textContent = staff.name;
+  staffDetailBody.innerHTML = `
+    <section class="staff-profile-hero">
+      <div>
+        <span class="profile-kicker">${escapeHtml(staff.role || "Staff member")}</span>
+        <h3>${escapeHtml(staff.name)}</h3>
+        <p>${escapeHtml(staff.email || "No email")} | ${escapeHtml(staff.phone || "No phone")}</p>
+      </div>
+      <span class="status ${staffStatusClass(attendance.status)}">${escapeHtml(publicStaffStatus(staff.name, today))}</span>
+      ${restriction ? `<p class="staff-restriction-note">${escapeHtml(restriction.message)}</p>` : ""}
+    </section>
+
+    <section class="staff-detail-grid">
+      <article class="staff-detail-card">
+        <span>Holiday used ${currentYear}</span>
+        <strong>${holidayUsed}</strong>
+        <p>${holidayRemaining} remaining from ${holidayAllowance} days</p>
+      </article>
+      <article class="staff-detail-card">
+        <span>Company / bank holidays</span>
+        <strong>${companyHolidayDays}</strong>
+        <p>Included in the holiday balance</p>
+      </article>
+      <article class="staff-detail-card">
+        <span>Sick days ${currentYear}</span>
+        <strong>${sicknessDays}</strong>
+        <p>General and occupational sickness records</p>
+      </article>
+      <article class="staff-detail-card">
+        <span>Training days ${currentYear}</span>
+        <strong>${trainingDays}</strong>
+        <p>Training attendance logged in the Hub</p>
+      </article>
+      <article class="staff-detail-card">
+        <span>Assigned van</span>
+        <strong>${escapeHtml(staff.assignedVan || "Not set")}</strong>
+        <p>Used for dispatch and availability checks</p>
+      </article>
+      <article class="staff-detail-card">
+        <span>Emergency contact</span>
+        <strong>${escapeHtml(staff.emergencyContact || "Not set")}</strong>
+        <p>Keep this up to date</p>
+      </article>
+    </section>
+
+    <section class="staff-passport">
+      <div class="panel-heading">
+        <h3>Health & Safety Passport</h3>
+      </div>
+      <div class="staff-detail-grid">
+        <article class="staff-detail-card">
+          <span>RPE mask</span>
+          <strong>${escapeHtml(staff.rpeMaskType || "Not set")}</strong>
+          <p>Size: ${escapeHtml(staff.rpeMaskSize || "Not set")}</p>
+        </article>
+        <article class="staff-detail-card">
+          <span>Last face-fit</span>
+          <strong>${escapeHtml(staff.faceFitDate ? formatDateUk(staff.faceFitDate) : "Not set")}</strong>
+          <p>Successful tight-fitting RPE check</p>
+        </article>
+        <article class="staff-detail-card">
+          <span>Emergency / next of kin</span>
+          <strong>${escapeHtml(staff.emergencyContact || "Not set")}</strong>
+          <p>${escapeHtml(staff.nextOfKin ? `Next of kin: ${staff.nextOfKin}` : "Next of kin not set")}</p>
+        </article>
+        <article class="staff-detail-card">
+          <span>Total holidays taken</span>
+          <strong>${leaveSummary.holidayTaken}</strong>
+          <p>Working weekdays only</p>
+        </article>
+        <article class="staff-detail-card">
+          <span>Remaining leave</span>
+          <strong>${leaveSummary.holidayRemaining}</strong>
+          <p>Allowance ${leaveSummary.holidayAllowance}, bank/company ${leaveSummary.companyBankDeductions}</p>
+        </article>
+        <article class="staff-detail-card">
+          <span>Total sick days</span>
+          <strong>${leaveSummary.sickDays}</strong>
+          <p>Registered in ${currentYear}</p>
+        </article>
+      </div>
+      <div class="staff-incident-log">
+        <span>Internal Accident / Incident Log</span>
+        ${incidents.length ? incidents.map((incident) => `<p>${escapeHtml(incident)}</p>`).join("") : '<p>No internal accident or incident records logged.</p>'}
+      </div>
+    </section>
+
+    <section class="staff-detail-grid">
+      <article class="staff-detail-card staff-detail-wide">
+        <span>Training and qualifications</span>
+        <div class="staff-detail-lines">
+          <p><strong>Training:</strong> ${escapeHtml(staff.trainingRecords || "Not set")}</p>
+          <p><strong>Qualifications:</strong> ${escapeHtml(staff.qualifications || "Not set")}</p>
+          <p><strong>Driving licence:</strong> ${escapeHtml(staff.drivingLicence || "Not set")}</p>
+          <p><strong>PPE issued:</strong> ${escapeHtml(staff.ppeIssued || "Not set")}</p>
+          <p><strong>Notes:</strong> ${escapeHtml(staff.notes || "No notes")}</p>
+        </div>
+      </article>
+    </section>
+
+    <section class="staff-detail-history">
+      <div class="panel-heading">
+        <h3>Recent Attendance</h3>
+      </div>
+      <div class="staff-history-list">
+        ${history.length ? history.map((record) => `
+          <div class="staff-history-row">
+            <span>${formatDateUk(record.date)}</span>
+            <strong>${escapeHtml(record.status)}</strong>
+            <em>${escapeHtml(record.category || record.returnToWorkNotes || record.notes || "No notes")}</em>
+          </div>
+        `).join("") : '<p class="empty-state">No attendance history logged yet.</p>'}
+      </div>
+    </section>
+
+    <div class="staff-detail-actions">
+      <button class="primary-button" type="button" data-staff-detail-edit="${index}">Edit Staff Member</button>
+      <button class="secondary-button" type="button" data-staff-detail-attendance="${escapeHtml(staff.name)}">Log Sick / Late / Absent</button>
+      <button class="secondary-button" type="button" data-staff-detail-holiday="${escapeHtml(staff.name)}">Book Holiday</button>
+    </div>
+  `;
+  staffDetailDialog.showModal();
 }
 
 function trainingStatus(record) {
@@ -2777,6 +3543,7 @@ function renderSummary() {
 function renderDashboard() {
   enhanceDashboardCards();
   const valuationTotals = monthlyValuationTotals();
+  const gateJobs = reportGateJobs();
   document.querySelector("#jobsTodayCount").textContent = jobs.filter((job) => job.date === today).length;
   document.querySelector("#jobsTomorrowCount").textContent = jobs.filter((job) => job.date === tomorrow).length;
   document.querySelector("#reportsDueCount").textContent = jobs.filter((job) => job.report === "Awaiting").length;
@@ -2807,6 +3574,17 @@ function renderDashboard() {
     .map((tech) => listRow(tech.name, `${tech.location} | ${tech.van}`, "Last update today"))
     .join("");
 
+  document.querySelector("#reportGateList").innerHTML = gateJobs.length
+    ? gateJobs
+      .slice(0, 8)
+      .map((job) => listRow(
+        `${job.technician || "Unassigned"} - report needed`,
+        `${formatDateUk(job.date)} | ${job.number || "No ref"} | ${job.address || job.title || "Job"}`,
+        "Blocks next work"
+      ))
+      .join("")
+    : '<p class="empty-state">No report blocks. Tomorrow\'s work can be released.</p>';
+
   document.querySelector("#dashboardCompliance").innerHTML = compliance
     .filter((item) => item.status.className !== "green")
     .sort((a, b) => a.status.days - b.status.days)
@@ -2815,6 +3593,14 @@ function renderDashboard() {
     .join("");
 
   updateDashboardBadges();
+}
+
+function reportGateJobs() {
+  const yesterday = isoDaysAgo(1);
+  return jobs
+    .filter((job) => String(job.date || "") <= yesterday)
+    .filter((job) => !jobReportReceived(job))
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
 }
 
 function jobsWithUnavailableTechnicians() {
@@ -2833,7 +3619,7 @@ function adminRamsStatus(job) {
 
 function normaliseRamsStatus(item) {
   const status = item?.status || "draft";
-  if (status === "sent") return "sent-client";
+  if (["sent", "sent-tech", "read"].includes(status)) return "sent-client";
   return status;
 }
 
@@ -2845,7 +3631,7 @@ function ramsReviewDays(item) {
 function ramsNeedsAction(item) {
   const status = normaliseRamsStatus(item);
   const reviewDays = ramsReviewDays(item);
-  return status === "draft" || status === "attached" || status === "review" || !item.sentDate || !item.techReadDate || (reviewDays !== null && reviewDays <= 30);
+  return status === "draft" || status === "attached" || status === "review" || !item.sentDate || (reviewDays !== null && reviewDays <= 30);
 }
 
 function ramsReviewBadge(item) {
@@ -2866,31 +3652,20 @@ function renderRamsQueue(selector, items, emptyText, badgeBuilder) {
 
 function renderRamsActionQueues() {
   renderRamsQueue(
-    "#ramsClientQueue",
-    ramsItems.filter((item) => !item.sentDate && normaliseRamsStatus(item) !== "draft"),
-    "No client RAMS waiting to send.",
-    () => "Send"
-  );
-  renderRamsQueue(
-    "#ramsTechQueue",
-    ramsItems.filter((item) => item.technician && !item.techReadDate),
-    "No technician read confirmations outstanding.",
-    (item) => item.techSentDate ? "Awaiting read" : "Send to tech"
-  );
-  renderRamsQueue(
-    "#ramsReviewQueue",
+    "#ramsDocumentQueue",
     ramsItems
-      .filter((item) => {
-        const days = ramsReviewDays(item);
-        return normaliseRamsStatus(item) === "review" || days === null || days <= 30;
-      })
+      .filter(ramsNeedsAction)
       .sort((a, b) => (ramsReviewDays(a) ?? 9999) - (ramsReviewDays(b) ?? 9999)),
-    "No RAMS currently due for review.",
+    "No RAMS actions outstanding.",
     (item) => {
+      const status = normaliseRamsStatus(item);
+      if (status === "draft") return "Draft";
+      if (!item.sentDate) return "Mark sent";
       const days = ramsReviewDays(item);
       if (days === null) return "No date";
       if (days < 0) return "Overdue";
-      return `${days} days`;
+      if (days <= 30) return "Review due";
+      return statusLabel(status);
     }
   );
 }
@@ -2929,9 +3704,15 @@ function classifyRamsLine(line) {
 function buildRamsData() {
   const job = selectedRamsBuildJob() || {};
   const lines = extractRamsLines();
+  const rawText = `${ramsBuildSource.value} ${ramsBuildScope.value} ${ramsBuildPpe.value} ${ramsBuildEquipment.value}`.toLowerCase();
+  const hasCosHH = /coshh|chemical|rodenticide|insecticide|biocide|bait|sds/.test(rawText);
+  const hasBio = /guano|dropping|droppings|bird|rodent|weils|weil|psittacosis|biological/.test(rawText);
+  const hasHeight = /ladder|tower|mewp|height|roof|access/.test(rawText);
   const title = ramsBuildTitle.value.trim() || `${job.address || "Job"} RAMS`;
   const scope = ramsBuildScope.value.trim() || `Carry out ${job.jobTitle || job.title || "planned works"} at ${job.address || "the job address"}.`;
-  const ppe = (ramsBuildPpe.value.trim() || "Safety boots, gloves, hi-vis, eye protection as required").split(",").map((item) => item.trim()).filter(Boolean);
+  const ppe = (ramsBuildPpe.value.trim() || (hasCosHH
+    ? "Safety boots, hi-vis, eye protection, nitrile gloves minimum 0.4mm thickness, FFP3 disposable mask or half-mask with ABEK1 filters"
+    : "Safety boots, gloves, hi-vis, eye protection as required")).split(",").map((item) => item.trim()).filter(Boolean);
   const equipment = (ramsBuildEquipment.value.trim() || "Hand tools, access equipment, proofing materials, waste bags").split(",").map((item) => item.trim()).filter(Boolean);
   const hazards = (lines.length ? lines : [
     "Access to work area and changing site conditions",
@@ -2945,12 +3726,45 @@ function buildRamsData() {
     owner: job.technician || "Assigned technician",
     due: job.date || today
   }));
+
+  if (hasCosHH) {
+    hazards.unshift({
+      hazard: "COSHH / chemical exposure",
+      who: "Technicians, site staff, residents and members of the public through contact, inhalation or accidental exposure.",
+      controls: "Relevant Safety Data Sheet (SDS) is to be attached. Minimum PPE: nitrile gloves, minimum 0.4mm thickness, and suitable RPE such as FFP3 disposable mask or half-mask with ABEK1 filters.",
+      further: "Confirm product label, COSHH assessment, application area and exclusion arrangements before use.",
+      owner: job.technician || "Assigned technician",
+      due: job.date || today
+    });
+  }
+
+  if (hasBio) {
+    hazards.unshift({
+      hazard: "Biological hazards from bird guano or rodent droppings",
+      who: "Technicians and others nearby through airborne dust, pathogens, Weil's disease or Psittacosis.",
+      controls: "Guano or droppings will be thoroughly treated with a professional biocide spray before disturbance to suppress airborne dust and pathogens.",
+      further: "Segregate the area, use suitable PPE/RPE and double-bag contaminated waste for controlled disposal.",
+      owner: job.technician || "Assigned technician",
+      due: job.date || today
+    });
+  }
+
+  if (hasHeight) {
+    hazards.unshift({
+      hazard: "Working at height",
+      who: "Technicians through falls from ladders, towers or access equipment; others from falling tools or materials.",
+      controls: "Ladders to be used for short-duration, low-risk tasks only, fully secured on level ground, maintaining 3 points of contact at all times.",
+      further: "Inspect access equipment before use and stop work if conditions are unsuitable.",
+      owner: job.technician || "Assigned technician",
+      due: job.date || today
+    });
+  }
+
   const method = [
-    "Attend site, sign in where required and confirm access arrangements.",
-    "Review the work area and confirm the RAMS match the actual site conditions.",
-    "Set up the work area, keep routes clear and protect residents / public from the works.",
-    "Carry out the works using the agreed tools, PPE and controls.",
-    "Remove waste, check the area is safe, take completion photos and report any changes."
+    "Step 1: Arrival & Induction - Operative reports to the principal contractor's site office, presents RAMS, signs in and completes mandatory site safety inductions.",
+    "Step 2: Area Segregation - Set up physical barriers, warning signs or lockable bait stations to exclude other trades and members of the public from the work zone.",
+    "Step 3: Execution & Control - Complete the specific pest control or proofing works using the agreed tools, PPE and controls, with spill kit active and available where substances are used.",
+    "Step 4: Waste Mitigation - Spent chemical containers, contaminated PPE and biological debris such as bird guano will be double-bagged, removed from site and disposed of under hazardous waste consignment procedures."
   ];
   return { title, scope, ppe, equipment, hazards, method, job };
 }
@@ -3051,25 +3865,37 @@ function ramsDocumentHtml(data) {
 
   return `
     <article class="rams-print-document">
-      <header>
+      <div class="report-masthead">
+        <img class="report-logo" src="assets/kingswood-silver-logo.png" alt="">
         <div>
-          <p>Kingswood London Ltd</p>
-          <h1>${escapeHtml(data.title)}</h1>
-          <span>Structured RAMS document for review before issue</span>
+          <p class="brand-name">Kingswood (London) Ltd</p>
+          <p class="brand-services">Pest Control | Bird Management | Property Maintenance</p>
         </div>
-        <strong>RAMS</strong>
-      </header>
-      <section class="rams-print-grid">
-        <div><span>Client</span><strong>${escapeHtml(job.client || "Not set")}</strong></div>
-        <div><span>Address</span><strong>${escapeHtml(job.address || "Not set")}</strong></div>
-        <div><span>Postcode</span><strong>${escapeHtml(job.postcode || job.title || "Not set")}</strong></div>
-        <div><span>Job Ref</span><strong>${escapeHtml(job.number || "Not set")}</strong></div>
-        <div><span>Technician</span><strong>${escapeHtml(job.technician || "Not assigned")}</strong></div>
-        <div><span>Date</span><strong>${formatDateUk(job.date || today)}</strong></div>
+      </div>
+      <h1>Risk Assessment & Method Statement</h1>
+      <p class="subtitle">${escapeHtml(data.title)} - ${escapeHtml(job.address || "Site-specific works")}</p>
+      <section class="metadata rams-metadata">
+        <strong>Client:</strong><div>${escapeHtml(job.client || "Not set")}</div>
+        <strong>Site Address:</strong><div>${escapeHtml(job.address || "Not set")}</div>
+        <strong>Postcode:</strong><div>${escapeHtml(job.postcode || job.title || "Not set")}</div>
+        <strong>Job Reference:</strong><div>${escapeHtml(job.number || "Not set")}</div>
+        <strong>Lead Technician:</strong><div>${escapeHtml(job.technician || "Not assigned")}</div>
+        <strong>Competency:</strong><div>RSPH Level 2 / BASIS PROMPT where applicable</div>
+        <strong>Date of Works:</strong><div>${formatDateUk(job.date || today)}</div>
+        <strong>Date Generated:</strong><div>${formatDateUk(today)}</div>
+      </section>
+      <section class="area-box">
+        <span>Scope of Works</span>
+        <strong>${escapeHtml(data.scope)}</strong>
       </section>
       <section>
-        <h2>Scope of Works</h2>
-        <p>${escapeHtml(data.scope)}</p>
+        <h2>Regulatory References</h2>
+        <ul class="rams-reference-list">
+          <li>The Management of Health and Safety at Work Regulations 1999, Regulation 3: site-specific risk assessments.</li>
+          <li>The Control of Substances Hazardous to Health Regulations 2002 for all biocide, rodenticide and insecticide applications.</li>
+          <li>The Work at Height Regulations 2005 for ladder, tower or MEWP work during proofing installations.</li>
+          <li>The Personal Protective Equipment at Work (Amendment) Regulations 2022, including identical PPE duties for core employees and limb (b) contract workers on site.</li>
+        </ul>
       </section>
       <section>
         <h2>Risk Assessment</h2>
@@ -3091,13 +3917,18 @@ function ramsDocumentHtml(data) {
         <h2>Method Statement</h2>
         <ol>${data.method.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
       </section>
-      <section class="rams-print-grid">
-        <div><span>PPE</span><strong>${data.ppe.map(escapeHtml).join(", ")}</strong></div>
-        <div><span>Tools / Equipment</span><strong>${data.equipment.map(escapeHtml).join(", ")}</strong></div>
+      <section class="status-table rams-resource-table">
+        <div><strong>PPE</strong>${data.ppe.map(escapeHtml).join(", ")}</div>
+        <div><strong>Tools / Equipment</strong>${data.equipment.map(escapeHtml).join(", ")}</div>
+        <div><strong>Document Status</strong>Pre-start review required before works commence</div>
       </section>
       <section>
         <h2>Emergency / Change Control</h2>
         <p>If site conditions change or the method needs to change, stop work and contact the office before continuing. This RAMS must be reviewed if the site no longer matches the document.</p>
+      </section>
+      <section class="rams-signoff-box">
+        <h2>Proof of Communication & Audit Trail</h2>
+        <p><strong>Digital Verification:</strong> This Site-Specific RAMS has been digitally reviewed, communicated, and signed off by the attending technician via Kingswood Connect prior to the commencement of any onsite works.</p>
       </section>
       <footer>
         <span>Prepared by Kingswood Connect</span>
@@ -3109,18 +3940,17 @@ function ramsDocumentHtml(data) {
 
 function ramsPrintCss() {
   return `
-    body{font-family:Arial,sans-serif;background:#f4f7fb;color:#111827;margin:0;padding:24px}
-    .rams-print-document{background:#fff;max-width:1100px;margin:0 auto;padding:34px;border:1px solid #d9e2ec}
-    header{align-items:center;background:#06122f;color:#fff;display:flex;justify-content:space-between;margin:-34px -34px 28px;padding:28px 34px}
-    header p{color:#31c1ad;font-weight:700;margin:0 0 8px;text-transform:uppercase} h1{font-size:30px;margin:0} header span{color:#dbe7f2}
-    header strong{border:2px solid #31c1ad;border-radius:999px;padding:18px}
-    h2{color:#06122f;font-size:18px;margin:26px 0 10px}
-    .rams-print-grid{display:grid;gap:10px;grid-template-columns:repeat(3,1fr);margin-bottom:18px}
-    .rams-print-grid div{border:1px solid #dbe5ee;border-radius:8px;padding:12px}
-    .rams-print-grid span{color:#64748b;display:block;font-size:12px;font-weight:700;text-transform:uppercase}
-    .rams-print-grid strong{display:block;margin-top:4px}
-    table{border-collapse:collapse;width:100%} th{background:#0b1835;color:#fff;text-align:left} th,td{border:1px solid #dbe5ee;font-size:12px;padding:9px;vertical-align:top}
-    ol{padding-left:22px} li{margin:8px 0} footer{border-top:1px solid #dbe5ee;color:#64748b;display:flex;justify-content:space-between;margin-top:28px;padding-top:14px}
+    @page{size:A4;margin:16mm 22mm 18mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#222;font-size:9.8pt;line-height:1.32;margin:0;padding:0}
+    .rams-print-document{background:#fff;margin:0 auto;max-width:180mm;padding:0}.report-masthead{align-items:center;border-bottom:1px solid #18384e;display:flex;gap:7mm;margin:0 0 9mm;padding-bottom:6mm}
+    .report-logo{display:block;height:31mm;object-fit:contain;width:31mm}.brand-name{color:#18384e;font-family:Georgia,'Times New Roman',serif;font-size:18pt;font-weight:700;line-height:1.1;margin:0}
+    .brand-services{color:#666;font-family:Georgia,'Times New Roman',serif;font-size:10pt;line-height:1.1;margin:.8mm 0 0}h1{color:#18384e;font-family:Georgia,'Times New Roman',serif;font-size:24pt;font-weight:700;margin:0 0 2mm}
+    h2{border-bottom:1px solid #18384e;color:#070746;font-size:12.5pt;font-weight:700;margin:6mm 0 2.5mm;padding-bottom:1.4mm}.subtitle{color:#555;font-size:10.8pt;margin:0 0 5mm}
+    .metadata{display:grid;gap:1.2mm 3mm;grid-template-columns:34mm 1fr;margin-bottom:6mm}.metadata strong,.status-table strong,.area-box span{color:#555;font-weight:700}.metadata div{margin:0}
+    .area-box{background:#fbfbfc;border:1px solid #cfcfcf;margin:5mm 0 5.5mm;padding:3mm 3.5mm}.area-box span{display:block;font-size:8.5pt;margin-bottom:1.2mm}.area-box strong{color:#070746;font-size:12pt}
+    .status-table{border:1px solid #cfcfcf;display:grid;grid-template-columns:repeat(3,1fr);margin:5mm 0 5.5mm}.status-table div{border-right:1px solid #cfcfcf;color:#070746;font-size:10pt;font-weight:700;min-height:13mm;padding:2.2mm 3mm}.status-table div:last-child{border-right:0}.status-table strong{display:block;font-size:8.5pt;margin-bottom:2mm}
+    .rams-reference-list{margin:0;padding-left:5mm}.rams-reference-list li{margin:1.5mm 0}p{margin:0 0 2.6mm}ol{padding-left:6mm}li{margin:1.6mm 0}
+    table{border-collapse:collapse;margin:3mm 0 5mm;width:100%}th{background:#0b1835;color:#fff;text-align:left;text-transform:uppercase}th,td{border:1px solid #cfd3dc;font-size:8.3pt;padding:1.8mm;vertical-align:top}
+    .rams-signoff-box{background:#fbfbfc;border:1px solid #cfcfcf;margin-top:6mm;padding:3mm 3.5mm}.rams-signoff-box h2{margin-top:0}footer{border-top:1px solid #dbe5ee;color:#64748b;display:flex;justify-content:space-between;margin-top:7mm;padding-top:3mm}
     @media print{body{background:#fff;padding:0}.rams-print-document{border:0;max-width:none}button{display:none}}
   `;
 }
@@ -3131,9 +3961,32 @@ function generateRamsPreview() {
   return data;
 }
 
+function hasRamsBuilderContent() {
+  return [
+    ramsBuildClient,
+    ramsBuildJobRef,
+    ramsBuildAddress,
+    ramsBuildPostcode,
+    ramsBuildTitle,
+    ramsBuildScope,
+    ramsBuildSource,
+    ramsBuildPpe,
+    ramsBuildEquipment
+  ].some((field) => field?.value?.trim());
+}
+
+function refreshRamsLivePreview() {
+  if (!ramsBuilderPreview) return;
+  if (!hasRamsBuilderContent()) {
+    ramsBuilderPreview.innerHTML = '<p class="empty-state">Paste or type the job information on the left. The preview will update here automatically.</p>';
+    return;
+  }
+  generateRamsPreview();
+}
+
 function openRamsPrintView() {
   const data = generateRamsPreview();
-  const html = `<!doctype html><html><head><title>${escapeHtml(data.title)}</title><style>${ramsPrintCss()}</style></head><body>${ramsDocumentHtml(data)}<script>window.addEventListener("load",()=>setTimeout(()=>window.print(),300));<\/script></body></html>`;
+  const html = ramsFullDocumentHtml(data, true);
   const printWindow = window.open("about:blank", "_blank");
   if (!printWindow) {
     aiRamsStatus.textContent = "The browser blocked the PDF window. Allow pop-ups for this Hub, then press Open PDF View again.";
@@ -3145,30 +3998,96 @@ function openRamsPrintView() {
   printWindow.focus();
 }
 
-function saveBuiltRams() {
+function ramsFullDocumentHtml(data, autoPrint = false) {
+  return `<!doctype html><html><head><meta charset="utf-8"><base href="${location.origin}/"><title>${escapeHtml(data.title)}</title><style>${ramsPrintCss()}</style></head><body>${ramsDocumentHtml(data)}${autoPrint ? '<script>window.addEventListener("load",()=>setTimeout(()=>window.print(),300));<\\/script>' : ""}</body></html>`;
+}
+
+async function saveBuiltRams() {
   const data = generateRamsPreview();
   const job = data.job || {};
   const safeClient = (job.client || "Client").replace(/[\\/:*?"<>|]/g, "-");
   const safeTitle = data.title.replace(/[\\/:*?"<>|]/g, "-");
+  const jobRef = job.number || "Job";
+  const html = ramsFullDocumentHtml(data);
+  let fileLocation = `RAMS/${new Date().getFullYear()}/${safeClient}/${jobRef} - ${safeTitle}.pdf`;
+  let saveMessage = "Built in the RAMS Builder and saved to the RAMS folder.";
+
+  saveBuiltRamsButton.disabled = true;
+  aiRamsStatus.textContent = "Saving RAMS document to the OneDrive RAMS folder...";
+
+  try {
+    const response = await fetch("/api/save-rams-pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: data.title,
+        client: job.client || "Client",
+        jobRef,
+        year: new Date().getFullYear(),
+        html
+      })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.saved) {
+      throw new Error(result.message || "RAMS document could not be saved.");
+    }
+    fileLocation = result.relativePath || fileLocation;
+    saveMessage = result.fileType === "pdf"
+      ? "Built in the RAMS Builder and saved as a PDF in the RAMS folder."
+      : `Built in the RAMS Builder and saved as HTML in the RAMS folder. ${result.message || ""}`.trim();
+  } catch (error) {
+    saveMessage = `${error.message} The RAMS record has still been saved in the Hub data.`;
+    aiRamsStatus.textContent = saveMessage;
+  }
+
+  const existingIndex = activeBuiltRamsId ? ramsItems.findIndex((rams) => rams.id === activeBuiltRamsId) : -1;
+  const existing = existingIndex >= 0 ? ramsItems[existingIndex] : {};
   const item = {
-    id: crypto.randomUUID(),
+    id: existing.id || crypto.randomUUID(),
     title: data.title,
     client: job.client || "",
     job: [job.address, job.postcode || job.title, job.number].filter(Boolean).join(" | "),
     technician: job.technician || "",
-    status: "draft",
-    sentDate: "",
-    techSentDate: "",
-    techReadDate: "",
-    reviewDate: "",
-    fileLocation: `Kingswood Hub/RAMS/${new Date().getFullYear()}/${safeClient}/${safeTitle}.pdf`,
-    notes: "Built in the RAMS Builder. Use Open PDF View to save as PDF.",
-    generatedHtml: ramsDocumentHtml(data)
+    status: existing.status || "draft",
+    sentDate: existing.sentDate || "",
+    techSentDate: existing.techSentDate || "",
+    techReadDate: existing.techReadDate || "",
+    reviewDate: existing.reviewDate || "",
+    fileLocation,
+    notes: saveMessage,
+    generatedHtml: html,
+    builderSource: {
+      client: job.client || "",
+      jobRef,
+      address: job.address || "",
+      postcode: job.postcode || "",
+      technician: job.technician || "N/A",
+      date: job.date || today,
+      title: data.title,
+      scope: ramsBuildScope.value.trim(),
+      source: ramsBuildSource.value.trim(),
+      ppe: ramsBuildPpe.value.trim(),
+      equipment: ramsBuildEquipment.value.trim()
+    },
+    revisionHistory: [
+      ...(existing.revisionHistory || []),
+      {
+        date: new Date().toISOString(),
+        note: existing.id ? "Revised in RAMS Builder" : "Created in RAMS Builder",
+        fileLocation
+      }
+    ]
   };
-  ramsItems.unshift(item);
-  saveRams();
+  if (existingIndex >= 0) {
+    ramsItems[existingIndex] = item;
+  } else {
+    ramsItems.unshift(item);
+  }
+  await saveCommandData();
   render();
   ramsBuilderDialog.close();
+  activeBuiltRamsId = "";
+  saveBuiltRamsButton.disabled = false;
 }
 
 function proofingLines(value = "") {
@@ -3608,13 +4527,12 @@ function renderRamsTable() {
       <td>${escapeHtml(item.technician || "-")}</td>
       <td><span class="status ${status}">${statusLabel(status)}</span></td>
       <td>${item.sentDate || "-"}</td>
-      <td>${item.techReadDate ? `<span class="status ok">Yes</span><div class="table-subtext">${escapeHtml(item.techReadDate)}</div>` : '<span class="status warning">No</span>'}</td>
       <td>${ramsReviewBadge(item)}</td>
       <td>
         <div class="row-actions">
+          ${item.builderSource || item.generatedHtml ? `<button class="secondary-button" type="button" data-action="revise" data-id="${item.id}">Revise</button>` : ""}
           <button class="secondary-button" type="button" data-action="edit" data-id="${item.id}">Edit</button>
           <button class="secondary-button" type="button" data-action="markSent" data-id="${item.id}">Mark sent</button>
-          <button class="secondary-button" type="button" data-action="markRead" data-id="${item.id}">Read</button>
           <button class="danger-button" type="button" data-action="delete" data-id="${item.id}">Delete</button>
         </div>
       </td>
@@ -3782,8 +4700,18 @@ function renderValuations() {
 
 function renderPlanner() {
   syncPlannerWeeks();
-  const rows = filteredPlannerItems();
   const selectedWeek = activePlannerWeek || plannerCurrentWeek();
+  const board = plannerBoardHtml(selectedWeek, filteredPlannerItems(), true);
+
+  document.querySelector("#plannerItemCount").textContent = board.weekItems.length;
+  document.querySelector("#plannerTechnicianCount").textContent = board.technicians.length;
+  document.querySelector("#plannerUnavailableCount").textContent = `${plannerUnavailableSlotCount(board.weekItems)} / ${board.technicians.length * board.days.length * 2}`;
+  document.querySelector("#plannerWeekLabel").textContent = selectedWeek === "all" ? "All" : selectedWeek.replace("WC ", "");
+  document.querySelector("#plannerBoard").innerHTML = board.html;
+}
+
+function plannerBoardHtml(selectedWeek = plannerCurrentWeek(), rows = null, editable = true) {
+  const sourceRows = rows || weeklyPlanner.filter((item) => selectedWeek === "all" || item.week === selectedWeek);
   const weekItems = weeklyPlanner.filter((item) => selectedWeek === "all" || item.week === selectedWeek);
   const selectedWeekStart = plannerWeekStartFromLabel(selectedWeek);
   const techniciansForWeek = [...new Set([
@@ -3794,18 +4722,17 @@ function renderPlanner() {
     .sort((a, b) => a.localeCompare(b));
   const days = plannerWeekDays(selectedWeekStart);
 
-  document.querySelector("#plannerItemCount").textContent = weekItems.length;
-  document.querySelector("#plannerTechnicianCount").textContent = techniciansForWeek.length;
-  document.querySelector("#plannerUnavailableCount").textContent = `${plannerUnavailableSlotCount(weekItems)} / ${techniciansForWeek.length * days.length * 2}`;
-  document.querySelector("#plannerWeekLabel").textContent = selectedWeek === "all" ? "All" : selectedWeek.replace("WC ", "");
-
   if (!techniciansForWeek.length || !days.length) {
-    document.querySelector("#plannerBoard").innerHTML = '<p class="empty-state">No planner items found.</p>';
-    return;
+    return {
+      days,
+      technicians: techniciansForWeek,
+      weekItems,
+      html: '<p class="empty-state">No planner items found.</p>'
+    };
   }
 
-  const itemLookup = new Map(rows.map((item) => [`${item.technician}|${item.date}|${item.session}`, item]));
-  document.querySelector("#plannerBoard").innerHTML = `
+  const itemLookup = new Map(sourceRows.map((item) => [`${item.technician}|${item.date}|${item.session}`, item]));
+  const html = `
     <div class="planner-screen">
       <div class="planner-spreadsheet" style="--planner-days:${days.length}">
         <div class="planner-head planner-name-head">Name</div>
@@ -3822,20 +4749,24 @@ function renderPlanner() {
               day: day.label,
               session,
               week: selectedWeek,
-              weekStart: selectedWeekStart
-            })).join("")}
+              weekStart: selectedWeekStart,
+              editable
+            }, editable)).join("")}
           `;
         }).join("")).join("")}
       </div>
       ${plannerKey()}
     </div>
   `;
+
+  return { days, technicians: techniciansForWeek, weekItems, html };
 }
 
-function plannerSheetCell(item, breakClass = "", seed = {}) {
+function plannerSheetCell(item, breakClass = "", seed = {}, editable = true) {
+  const editableClass = editable ? " planner-cell-editable" : "";
   if (!item) {
     return `
-      <div class="planner-cell planner-cell-editable planner-empty-cell${breakClass}"
+      <div class="planner-cell${editableClass} planner-empty-cell${breakClass}"
         data-planner-create="true"
         data-date="${escapeHtml(seed.date || "")}"
         data-day="${escapeHtml(seed.day || "")}"
@@ -3848,9 +4779,9 @@ function plannerSheetCell(item, breakClass = "", seed = {}) {
   }
   const index = weeklyPlanner.indexOf(item);
   return `
-    <div class="planner-cell planner-cell-editable ${plannerSlotClass(item)}${breakClass}" data-planner-index="${index}">
+    <div class="planner-cell${editableClass} ${plannerSlotClass(item)}${breakClass}" data-planner-index="${index}">
       <strong>${escapeHtml(plannerText(item))}</strong>
-      <div class="record-actions">${recordButtons("planner", index)}</div>
+      ${editable ? `<div class="record-actions">${recordButtons("planner", index)}</div>` : ""}
     </div>
   `;
 }
@@ -4330,9 +5261,56 @@ function renderStaff() {
   document.querySelector("#staffUnavailableTodayCount").textContent = todayAttendance.filter((record) => isUnavailableStatus(record.status)).length;
   document.querySelector("#holidayRequestCount").textContent = holidayRequests.filter((request) => request.status === "Pending").length;
   document.querySelector("#trainingDayCount").textContent = trainingDays;
+  const holidayTaken = totalHolidayUsedForYear(currentYear);
+  const holidayRemaining = totalHolidayAllowanceForYear(currentYear) - holidayTaken;
+  const sickDays = totalSickDaysForYear(currentYear);
+  const companyHolidayDays = companyHolidayDaysForYear(currentYear);
+  const safetyAlerts = occupationalRiddorAlerts();
 
-  document.querySelector("#staffGrid").innerHTML = filteredStaff().map((staff) => {
+  const staffYearSummary = document.querySelector("#staffYearSummary");
+  if (staffYearSummary) {
+    const companyHolidayList = companyHolidays
+      .filter((holiday) => dateRangeValues(holiday.from, holiday.to).some((date) => date.startsWith(currentYear)))
+      .map((holiday) => `<div class="staff-company-holiday"><strong>${escapeHtml(holiday.title || holiday.type || "Company holiday")}</strong><span>${formatDateUk(holiday.from)} to ${formatDateUk(holiday.to)}</span></div>`)
+      .join("");
+    staffYearSummary.innerHTML = `
+      <div class="staff-year-stat"><span>Total holidays taken</span><strong>${holidayTaken}</strong></div>
+      <div class="staff-year-stat"><span>Remaining holiday balance</span><strong>${holidayRemaining}</strong></div>
+      <div class="staff-year-stat"><span>Company/bank holidays deducted</span><strong>${companyHolidayDays}</strong></div>
+      <div class="staff-year-stat"><span>Total sick days</span><strong>${sickDays}</strong></div>
+      ${companyHolidayList ? `<div class="staff-company-holidays">${companyHolidayList}</div>` : ""}
+    `;
+  }
+
+  const staffSafetyAlerts = document.querySelector("#staffSafetyAlerts");
+  if (staffSafetyAlerts) {
+    staffSafetyAlerts.innerHTML = safetyAlerts.length
+      ? safetyAlerts.map((alert) => `<div class="staff-safety-alert"><strong>${escapeHtml(alert.name)}</strong><br>${escapeHtml(alert.message)}</div>`).join("")
+      : '<p class="empty-state">No RIDDOR sickness flags.</p>';
+  }
+
+  const staffHolidayCalendar = document.querySelector("#staffHolidayCalendar");
+  if (staffHolidayCalendar) {
+    const entries = holidayCalendarEntriesForYear(currentYear);
+    staffHolidayCalendar.innerHTML = `
+      <h3>${currentYear} Bank, Public & Company Holidays</h3>
+      <div class="staff-holiday-calendar-list">
+        ${entries.map((entry) => `
+          <div class="staff-holiday-row">
+            <span>${formatDateUk(entry.date)}</span>
+            <strong>${escapeHtml(entry.title)}</strong>
+            <em>${escapeHtml(entry.type)}</em>
+          </div>
+        `).join("") || '<p class="empty-state">No bank or company holidays set for this year.</p>'}
+      </div>
+      <p class="staff-calendar-source">England & Wales bank holidays seeded from GOV.UK. Add company shutdown days here when Kingswood closes.</p>
+    `;
+  }
+
+  const visibleStaff = filteredStaff();
+  document.querySelector("#staffGrid").innerHTML = visibleStaff.map((staff) => {
     const attendance = attendanceFor(staff.name, today);
+    const restriction = activeSicknessRestrictionFor(staff.name, today);
     const holidayUsed = holidayUsedForYear(staff.name, currentYear);
     const holidayRemaining = staff.holidayAllowance - holidayUsed;
     const index = staffProfiles.indexOf(staff);
@@ -4351,21 +5329,36 @@ function renderStaff() {
         <p>PPE: ${escapeHtml(staff.ppeIssued)}</p>
         <p>Holiday ${currentYear}: ${holidayUsed} used, ${holidayRemaining} remaining</p>
         <p>${escapeHtml(staff.notes)}</p>
-        <span class="status ${staffStatusClass(attendance.status)}">${attendance.status}</span>
-        <div class="record-actions">${recordButtons("staff", index)}</div>
+        <span class="status ${staffStatusClass(attendance.status)}">${escapeHtml(publicStaffStatus(staff.name, today))}</span>
+        ${restriction ? `<p class="staff-restriction-note">${escapeHtml(restriction.message)}</p>` : ""}
+        <div class="record-actions">
+          <button class="secondary-button" type="button" data-view-staff="${index}">View</button>
+          ${recordButtons("staff", index)}
+        </div>
       </article>
     `;
-  }).join("");
+  }).join("") || `
+    <article class="module-card staff-empty-card">
+      <strong>No staff profiles yet</strong>
+      <p>Add Kevin, Alex, Jodie and each technician here. Once a staff member is added, use View to examine their profile, holiday balance, sick days, training and attendance history.</p>
+      <div class="record-actions">
+        <button class="primary-button" type="button" data-manage="staff">Add Staff Member</button>
+      </div>
+    </article>
+  `;
 
   document.querySelector("#attendanceList").innerHTML = todayAttendance.map((record) => {
     const index = attendanceRecords.indexOf(record);
-    const buttons = index >= 0 ? `<div class="record-actions">${recordButtons("attendance", index)}</div>` : "";
+    const buttons = index >= 0 ? recordButtons("attendance", index) : "";
+    const callInButton = record.status === "Present" || record.status === "Late"
+      ? `<button class="secondary-button" type="button" data-sick-call="${escapeHtml(record.name)}">Sick call-in</button>`
+      : "";
     return `
       <article class="list-row">
         <div>
           <strong>${escapeHtml(record.name)}</strong>
-          <p>${escapeHtml(`${record.date} | ${record.returnToWorkNotes || "No return to work notes"} | ${record.fitNote || "No fit note uploaded"}`)}</p>
-          ${buttons}
+          <p>${escapeHtml(`${formatDateUk(record.date)} | ${record.category || record.status} | ${record.recoveryDate ? `Recovery/return ${formatDateUk(record.recoveryDate)}` : "No recovery date logged"}`)}</p>
+          <div class="record-actions">${callInButton}${buttons}</div>
         </div>
         <span class="status ${staffStatusClass(record.status)}">${escapeHtml(record.status)}</span>
       </article>
@@ -4381,7 +5374,7 @@ function renderStaff() {
 
     return listRow(
       staff.name,
-      `${currentYear}: Sick ${sicknessDays} | Holiday used ${holidayUsed} | Remaining ${holidayRemaining} | Training ${training} | ${history || "No attendance history"}`,
+      `${currentYear}: Sick ${sicknessDays} | Holiday used ${holidayUsed} incl. company/bank holidays | Remaining ${holidayRemaining} | Training ${training} | ${history || "No attendance history"}`,
       "Report"
     );
   }).join("");
@@ -4631,6 +5624,24 @@ function renderTracking() {
   }).join("");
 }
 
+function renderSplitScreen() {
+  const trackingList = document.querySelector("#splitTrackingList");
+  const plannerBoard = document.querySelector("#splitPlannerBoard");
+  const plannerTitle = document.querySelector("#splitPlannerWeekTitle");
+  if (!trackingList || !plannerBoard || !plannerTitle) return;
+
+  trackingList.innerHTML = vehicles.map((vehicle) => {
+    const tech = technicians.find((person) => person.van === vehicle.registration);
+    const status = vehicle.tracker === "Active" ? "Live" : vehicle.tracker || "Pending";
+    return listRow(vehicle.registration, `${vehicle.vehicle} | ${tech?.name || "Unassigned"} | ${tech?.location || "No location"}`, status);
+  }).join("") || '<p class="empty-state">No vehicles have been added yet.</p>';
+
+  const week = plannerCurrentWeek();
+  const board = plannerBoardHtml(week, weeklyPlanner.filter((item) => item.week === week), false);
+  plannerTitle.textContent = week.replace("WC ", "Week commencing ");
+  plannerBoard.innerHTML = board.html;
+}
+
 function renderHistory() {
   document.querySelector("#historyList").innerHTML = jobs.map((job) => (
     listRow(job.address, `${job.number} | ${job.client} | ${job.title}`, `Technician: ${job.technician}`)
@@ -4690,6 +5701,7 @@ function render() {
   renderSetupActions();
   renderTechnicians();
   renderTracking();
+  renderSplitScreen();
   renderHistory();
   renderNotifications();
   renderProofingReports();
@@ -4713,20 +5725,25 @@ function openDialog(item = null) {
   dialog.showModal();
 }
 
-function openRamsBuilder() {
-  ramsBuildClient.value = "";
-  ramsBuildJobRef.value = "";
-  ramsBuildAddress.value = "";
-  ramsBuildPostcode.value = "";
-  populateTechnicianSelect(ramsBuildTechnician, "N/A");
-  ramsBuildDate.value = today;
-  ramsBuildTitle.value = "";
-  ramsBuildScope.value = "";
-  ramsBuildSource.value = "";
-  ramsBuildPpe.value = "";
-  ramsBuildEquipment.value = "";
-  aiRamsStatus.textContent = "";
-  ramsBuilderPreview.innerHTML = '<p class="empty-state">Enter the job details and paste the information, then generate the preview.</p>';
+function openRamsBuilder(item = null) {
+  const source = item?.builderSource || {};
+  activeBuiltRamsId = item?.id || "";
+  ramsBuildClient.value = source.client || "";
+  ramsBuildJobRef.value = source.jobRef || "";
+  ramsBuildAddress.value = source.address || "";
+  ramsBuildPostcode.value = source.postcode || "";
+  populateTechnicianSelect(ramsBuildTechnician, source.technician || "N/A");
+  ramsBuildDate.value = source.date || today;
+  ramsBuildTitle.value = source.title || "";
+  ramsBuildScope.value = source.scope || "";
+  ramsBuildSource.value = source.source || "";
+  ramsBuildPpe.value = source.ppe || "";
+  ramsBuildEquipment.value = source.equipment || "";
+  aiRamsStatus.textContent = item ? "Editing existing RAMS. Review, regenerate and save the revised version." : "";
+  ramsBuilderPreview.innerHTML = item?.generatedHtml
+    ? item.generatedHtml
+    : '<p class="empty-state">Paste or type the job information on the left. The preview will update here automatically.</p>';
+  if (!item) refreshRamsLivePreview();
   ramsBuilderDialog.showModal();
 }
 
@@ -4749,13 +5766,6 @@ function saveFromForm() {
   if ((item.status === "sent" || item.status === "sent-client") && !item.sentDate) {
     item.sentDate = new Date().toISOString().slice(0, 10);
   }
-  if ((item.status === "sent-tech" || item.status === "read") && !item.techSentDate) {
-    item.techSentDate = new Date().toISOString().slice(0, 10);
-  }
-  if (item.status === "read" && !item.techReadDate) {
-    item.techReadDate = new Date().toISOString().slice(0, 10);
-  }
-
   const existingIndex = ramsItems.findIndex((rams) => rams.id === item.id);
   if (existingIndex >= 0) {
     ramsItems[existingIndex] = item;
@@ -4822,9 +5832,10 @@ document.addEventListener("keydown", (event) => {
   location.href = sectionUrl(activeSection);
 });
 
-addButton.addEventListener("click", () => openDialog());
+addButton?.addEventListener("click", () => openDialog());
+document.querySelector("#addRamsButtonMirror")?.addEventListener("click", () => openDialog());
 buildRamsButton?.addEventListener("click", openRamsBuilder);
-generateRamsPreviewButton?.addEventListener("click", generateRamsPreview);
+document.querySelector("#buildRamsButtonMirror")?.addEventListener("click", openRamsBuilder);
 aiRamsDraftButton?.addEventListener("click", requestAiRamsDraft);
 openRamsPrintButton?.addEventListener("click", openRamsPrintView);
 saveBuiltRamsButton?.addEventListener("click", saveBuiltRams);
@@ -4873,21 +5884,6 @@ Object.values(proofingFields).forEach((field) => {
   field?.addEventListener("change", updateProofingPreview);
 });
 proofingRawNotes?.addEventListener("input", () => proofingSetStatus(""));
-pasteRamsSourceButton?.addEventListener("click", async () => {
-  try {
-    const text = await navigator.clipboard.readText();
-    if (!text.trim()) {
-      aiRamsStatus.textContent = "Clipboard is empty. Copy the job notes first, then press Paste from clipboard.";
-      return;
-    }
-    ramsBuildSource.value = [ramsBuildSource.value, text].filter(Boolean).join("\n");
-    ramsBuildSource.focus();
-    aiRamsStatus.textContent = "Pasted into the RAMS notes box.";
-  } catch {
-    aiRamsStatus.textContent = "Browser blocked clipboard access. Click inside the notes box and press Ctrl+V.";
-    ramsBuildSource.focus();
-  }
-});
 ramsBuildSource?.addEventListener("dragover", (event) => {
   event.preventDefault();
   ramsBuildSource.classList.add("drag-over");
@@ -4900,6 +5896,23 @@ ramsBuildSource?.addEventListener("drop", async (event) => {
   if (!file) return;
   const text = await file.text();
   ramsBuildSource.value = [ramsBuildSource.value, text].filter(Boolean).join("\n");
+  refreshRamsLivePreview();
+});
+[
+  ramsBuildClient,
+  ramsBuildJobRef,
+  ramsBuildAddress,
+  ramsBuildPostcode,
+  ramsBuildTechnician,
+  ramsBuildDate,
+  ramsBuildTitle,
+  ramsBuildScope,
+  ramsBuildSource,
+  ramsBuildPpe,
+  ramsBuildEquipment
+].forEach((field) => {
+  field?.addEventListener("input", refreshRamsLivePreview);
+  field?.addEventListener("change", refreshRamsLivePreview);
 });
 searchInput.addEventListener("input", renderRamsTable);
 statusFilter.addEventListener("change", renderRamsTable);
@@ -4916,6 +5929,19 @@ document.querySelector("#jobsTableBody").addEventListener("click", (event) => {
   }
 });
 closeJobDetailButton.addEventListener("click", () => jobDetailDialog.close());
+closeStaffDetailButton?.addEventListener("click", () => staffDetailDialog.close());
+sickCallCategory?.addEventListener("change", refreshSickCallDialog);
+sickCallWorkInjury?.addEventListener("change", refreshSickCallDialog);
+sickCallForm?.addEventListener("submit", async (event) => {
+  if (event.submitter?.value === "cancel") {
+    return;
+  }
+  event.preventDefault();
+  const saved = await saveSickCallIn();
+  if (saved !== false) {
+    sickCallDialog.close();
+  }
+});
 document.querySelector("#plannerBoard").addEventListener("click", (event) => {
   if (event.target.closest("button")) {
     return;
@@ -5011,6 +6037,51 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const viewStaffButton = event.target.closest("[data-view-staff]");
+  if (viewStaffButton) {
+    openStaffDetail(viewStaffButton.dataset.viewStaff);
+    return;
+  }
+
+  const sickCallButton = event.target.closest("[data-sick-call]");
+  if (sickCallButton) {
+    openSickCallDialog(sickCallButton.dataset.sickCall);
+    return;
+  }
+
+  const staffEditButton = event.target.closest("[data-staff-detail-edit]");
+  if (staffEditButton) {
+    staffDetailDialog?.close();
+    openDataDialog("staff", staffEditButton.dataset.staffDetailEdit);
+    return;
+  }
+
+  const staffAttendanceButton = event.target.closest("[data-staff-detail-attendance]");
+  if (staffAttendanceButton) {
+    staffDetailDialog?.close();
+    openDataDialog("attendance", "", {
+      date: today,
+      name: staffAttendanceButton.dataset.staffDetailAttendance,
+      status: "Absent - Called in Sick",
+      category: "General Illness",
+      returnToWorkCompleted: false
+    });
+    return;
+  }
+
+  const staffHolidayButton = event.target.closest("[data-staff-detail-holiday]");
+  if (staffHolidayButton) {
+    staffDetailDialog?.close();
+    openDataDialog("holidays", "", {
+      name: staffHolidayButton.dataset.staffDetailHoliday,
+      from: today,
+      to: today,
+      days: 1,
+      status: "Pending"
+    });
+    return;
+  }
+
   const manageButton = event.target.closest("[data-manage]");
   if (manageButton?.dataset.manage) {
     openDataDialog(manageButton.dataset.manage);
@@ -5066,6 +6137,10 @@ tableBody.addEventListener("click", (event) => {
   const item = ramsItems.find((rams) => rams.id === button.dataset.id);
   if (!item) {
     return;
+  }
+
+  if (button.dataset.action === "revise") {
+    openRamsBuilder(item);
   }
 
   if (button.dataset.action === "edit") {

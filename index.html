@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Kingswood Command Centre</title>
-    <link rel="stylesheet" href="styles.css?v=professional-system-111">
+    <link rel="stylesheet" href="styles.css?v=140">
   </head>
   <body class="locked">
     <section class="auth-screen" id="authScreen" aria-label="Command Centre PIN">
@@ -35,42 +35,44 @@
       </div>
     </section>
 
-    <div class="app-shell">
-      <aside class="sidebar">
+    <div class="app-shell kw-dashboard-layout">
+      <aside class="sidebar kw-sidebar">
         <div class="brand-block">
-          <div class="brand-wordmark" aria-label="Kingswood Connect">
-            <img src="assets/kingswood-k-emblem.png" alt="">
-            <div>
+          <div class="brand-reference-lockup" aria-label="Kingswood Connect">
+            <div class="brand-reference-emblem">
+              <img src="assets/kingswood-k-emblem.png" alt="">
+            </div>
+            <div class="brand-reference-copy">
               <span>Kingswood</span>
               <strong>Connect</strong>
             </div>
           </div>
         </div>
-        <nav class="main-nav" aria-label="Hub sections">
-          <button class="nav-button active" type="button" data-section="dashboard" data-icon="dashboard">Dashboard</button>
-          <button class="nav-button" type="button" data-section="admin-centre" data-icon="briefcase">Job Dispatch</button>
-          <button class="nav-button" type="button" data-section="diary" data-icon="calendar">Job Diary</button>
-          <button class="nav-button" type="button" data-section="weekly-planner" data-icon="screen">Weekly Planner</button>
-          <button class="nav-button" type="button" data-section="valuations" data-icon="pound">Valuations</button>
-          <button class="nav-button" type="button" data-section="tracking" data-icon="map">Live Tracking</button>
-          <button class="nav-button" type="button" data-section="rams" data-icon="file-check">RAMS Centre</button>
-          <button class="nav-button" type="button" data-section="proofing-reports" data-icon="file-text">Proofing Reports</button>
-          <button class="nav-button" type="button" data-section="compliance" data-icon="shield">Compliance Centre</button>
-          <button class="nav-button" type="button" data-section="documents" data-icon="folder">Company Documents</button>
-          <button class="nav-button" type="button" data-section="vehicles" data-icon="truck">Vehicles</button>
-          <button class="nav-button" type="button" data-section="fines" data-icon="receipt">Fines and Charges</button>
-          <button class="nav-button" type="button" data-section="staff" data-icon="users">Staff Management</button>
-          <button class="nav-button" type="button" data-section="training" data-icon="clipboard">Training Matrix</button>
-          <button class="nav-button" type="button" data-section="technicians" data-icon="user-check">Technicians</button>
-          <button class="nav-button" type="button" data-section="assets" data-icon="package">Assets</button>
-          <button class="nav-button" type="button" data-section="clients" data-icon="building">Clients</button>
-          <button class="nav-button" type="button" data-section="history" data-icon="history">Job History</button>
-          <button class="nav-button" type="button" data-section="notifications" data-icon="bell">Notifications</button>
-          <button class="nav-button" type="button" data-section="settings" data-icon="settings">Settings</button>
+        <nav class="main-nav kw-sidebar-nav" aria-label="Hub sections">
+          <button class="nav-button kw-nav-item active" type="button" data-section="dashboard" data-icon="dashboard">Dashboard</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="admin-centre" data-icon="briefcase">Job Dispatch</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="diary" data-icon="calendar">Job Diary</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="weekly-planner" data-icon="screen">Weekly Planner</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="valuations" data-icon="pound">Valuations</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="tracking" data-icon="map">Live Tracking</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="rams" data-icon="file-check">RAMS Centre</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="proofing-reports" data-icon="file-text">Proofing Reports</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="compliance" data-icon="shield">Compliance Centre</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="documents" data-icon="folder">Company Documents</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="vehicles" data-icon="truck">Vehicles</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="fines" data-icon="receipt">Fines and Charges</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="staff" data-icon="users">Staff Management</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="training" data-icon="clipboard">Training Matrix</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="technicians" data-icon="user-check">Technicians</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="assets" data-icon="package">Assets</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="clients" data-icon="building">Clients</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="history" data-icon="history">Job History</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="notifications" data-icon="bell">Notifications</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="settings" data-icon="settings">Settings</button>
         </nav>
       </aside>
 
-      <div class="workspace">
+      <div class="workspace kw-main-content">
         <header class="topbar">
           <div>
             <p class="eyebrow">Central command centre</p>
@@ -99,33 +101,36 @@
 
         <main>
           <section class="section-panel active" id="dashboard" data-title="Dashboard">
+            <div class="dashboard-action-bar">
+              <button class="primary-button split-screen-button" type="button" data-jump-section="split-screen">Split Screen</button>
+            </div>
             <div class="dashboard-layout">
               <div>
-                <div class="dashboard-grid metric-grid-primary" aria-label="Main dashboard priorities">
-                  <article class="metric primary normal">
+                <div class="dashboard-grid metric-grid-primary kw-grid-3" aria-label="Main dashboard priorities">
+                  <article class="metric primary normal kw-card">
                     <span>Jobs Today</span>
                     <strong id="jobsTodayCount">0</strong>
                   </article>
-                  <article class="metric primary overdue">
+                  <article class="metric primary overdue kw-card">
                     <span>Compliance Overdue</span>
                     <strong id="complianceOverdueCount">0</strong>
                   </article>
                 </div>
 
-                <div class="dashboard-grid metric-grid-secondary" aria-label="Secondary dashboard alerts">
-                  <article class="metric compact warning">
+                <div class="dashboard-grid metric-grid-secondary kw-grid-3" aria-label="Secondary dashboard alerts">
+                  <article class="metric compact warning kw-card">
                     <span>Vehicle Alerts</span>
                     <strong id="vehicleAlertCount">0</strong>
                   </article>
-                  <article class="metric compact">
+                  <article class="metric compact kw-card">
                     <span>MOT Reminders</span>
                     <strong id="motReminderCount">0</strong>
                   </article>
-                  <article class="metric compact">
+                  <article class="metric compact kw-card">
                     <span>Staff Available</span>
                     <strong id="staffAvailableCount">0</strong>
                   </article>
-                  <article class="metric compact warning">
+                  <article class="metric compact warning kw-card">
                     <span>Staff Unavailable</span>
                     <strong id="staffUnavailableCount">0</strong>
                   </article>
@@ -208,6 +213,16 @@
               </section>
             </div>
 
+            <section class="work-panel report-gate-panel">
+              <div class="panel-heading">
+                <div>
+                  <h2>Report Gate</h2>
+                  <p class="panel-note">Reports due before the next day's work is released to technicians.</p>
+                </div>
+              </div>
+              <div id="reportGateList" class="stack-list"></div>
+            </section>
+
             <section class="work-panel dashboard-compliance">
               <div class="panel-heading">
                 <h2>Compliance Watch</h2>
@@ -223,6 +238,36 @@
               </div>
               <div id="setupGrid" class="setup-grid"></div>
             </section>
+          </section>
+
+          <section class="section-panel" id="split-screen" data-title="Split Screen">
+            <div class="split-screen-command">
+              <section class="split-pane tracking-pane">
+                <div class="split-pane-heading">
+                  <div>
+                    <span>Live vehicle tracking</span>
+                    <h2>Vehicles & Technicians</h2>
+                  </div>
+                  <button class="secondary-button" type="button" data-jump-section="tracking">Open Tracking</button>
+                </div>
+                <div class="split-map">
+                  <strong>Live map</strong>
+                  <span>Tracker map will show here once the vehicle system is connected.</span>
+                </div>
+                <div id="splitTrackingList" class="stack-list"></div>
+              </section>
+
+              <section class="split-pane planner-pane">
+                <div class="split-pane-heading">
+                  <div>
+                    <span>Current week schedule</span>
+                    <h2 id="splitPlannerWeekTitle">Weekly Planner</h2>
+                  </div>
+                  <button class="secondary-button" type="button" data-jump-section="weekly-planner">Open Planner</button>
+                </div>
+                <div id="splitPlannerBoard" class="split-planner-board"></div>
+              </section>
+            </div>
           </section>
 
           <section class="section-panel" id="admin-centre" data-title="Job Dispatch">
@@ -428,65 +473,59 @@
             <div class="panel-heading">
               <div>
                 <h2>RAMS Centre</h2>
-                <p class="panel-note">Store RAMS, attach them to jobs, send them to clients and technicians, and track review/read status.</p>
+                <p class="panel-note">Create site-specific RAMS, mark up and revise them, save the issued file, and track sent and review dates.</p>
               </div>
-              <div class="button-row">
-                <button class="primary-button" id="buildRamsButton" type="button">Build RAMS</button>
-                <button class="secondary-button" id="addRamsButton" type="button">Add existing RAMS</button>
-              </div>
+              <button class="visually-hidden" id="buildRamsButton" type="button" tabindex="-1">Build RAMS</button>
             </div>
-            <section class="rams-process-strip" aria-label="RAMS workflow">
-              <article>
-                <span>1</span>
-                <strong>Store RAMS</strong>
-                <p>Keep the latest company RAMS and OneDrive file location.</p>
-              </article>
-              <article>
-                <span>2</span>
-                <strong>Attach to Job</strong>
-                <p>Link the RAMS to a job, client and technician.</p>
-              </article>
-              <article>
-                <span>3</span>
-                <strong>Send Out</strong>
-                <p>Record when RAMS are sent to client or technician.</p>
-              </article>
-              <article>
-                <span>4</span>
-                <strong>Read / Review</strong>
-                <p>Track technician read confirmation and review due dates.</p>
-              </article>
-            </section>
-            <div class="summary-grid" aria-label="RAMS summary">
-              <article class="summary-tile">
-                <span class="summary-label">RAMS Records</span>
-                <strong id="totalCount">0</strong>
-              </article>
-              <article class="summary-tile">
-                <span class="summary-label">Assigned to Jobs</span>
-                <strong id="attachedCount">0</strong>
-              </article>
-              <article class="summary-tile">
-                <span class="summary-label">Sent to Clients</span>
-                <strong id="sentCount">0</strong>
-              </article>
-              <article class="summary-tile attention">
-                <span class="summary-label">Needs Action</span>
-                <strong id="needsSendingCount">0</strong>
-              </article>
+
+            <div class="rams-control-panel">
+              <section class="rams-primary-card">
+                <span class="rams-eyebrow">Health & Safety Control</span>
+                <h3>Build a site-specific RAMS</h3>
+                <p>Paste the job information, let the Hub draft the document, then review and save the issued RAMS into the OneDrive RAMS folder.</p>
+                <div class="rams-three-step" aria-label="Development of the RAMS three step process">
+                  <article>
+                    <span>Step 1</span>
+                    <strong>Initial Development</strong>
+                    <p>Develop the RAMS from local site conditions, hazards and job details.</p>
+                  </article>
+                  <article>
+                    <span>Step 2</span>
+                    <strong>Pre-Start Review</strong>
+                    <p>Review, amend and sign off before works start. RAMS can be edited if conditions change.</p>
+                  </article>
+                  <article>
+                    <span>Step 3</span>
+                    <strong>Ongoing Assessment</strong>
+                    <p>Reassess during the job if local issues, new hazards, training or work systems change.</p>
+                  </article>
+                </div>
+                <div class="button-row">
+                  <button class="primary-button" type="button" id="buildRamsButtonMirror">Build RAMS</button>
+                </div>
+              </section>
+
+              <section class="rams-status-card">
+                <div>
+                  <span class="summary-label">Needs Action</span>
+                  <strong id="needsSendingCount">0</strong>
+                </div>
+                <p>Drafts, unsent, unread or review due.</p>
+              </section>
+
+              <section class="rams-status-card quiet">
+                <div>
+                  <span class="summary-label">RAMS Records</span>
+                  <strong id="totalCount">0</strong>
+                </div>
+                <p><span id="attachedCount">0</span> assigned. <span id="sentCount">0</span> sent.</p>
+              </section>
             </div>
+
             <div class="rams-action-grid" aria-label="RAMS action lists">
-              <section class="work-panel rams-action-panel">
-                <h3>Client RAMS to Send</h3>
-                <div id="ramsClientQueue" class="compact-list"></div>
-              </section>
-              <section class="work-panel rams-action-panel">
-                <h3>Technician Read Confirmations</h3>
-                <div id="ramsTechQueue" class="compact-list"></div>
-              </section>
-              <section class="work-panel rams-action-panel">
-                <h3>Review / Expiry Watch</h3>
-                <div id="ramsReviewQueue" class="compact-list"></div>
+              <section class="rams-action-panel">
+                <h3>Action Required</h3>
+                <div id="ramsDocumentQueue" class="compact-list"></div>
               </section>
             </div>
             <div class="toolbar" aria-label="RAMS filters">
@@ -500,9 +539,7 @@
                   <option value="all">All</option>
                   <option value="draft">Draft</option>
                   <option value="attached">Attached</option>
-                  <option value="sent-client">Sent to client</option>
-                  <option value="sent-tech">Sent to technician</option>
-                  <option value="read">Read confirmed</option>
+                  <option value="sent-client">Sent</option>
                   <option value="review">Needs review</option>
                 </select>
               </label>
@@ -516,8 +553,7 @@
                     <th>Job</th>
                     <th>Technician</th>
                     <th>Status</th>
-                    <th>Client Sent</th>
-                    <th>Tech Read</th>
+                    <th>Sent</th>
                     <th>Review Due</th>
                     <th>Actions</th>
                   </tr>
@@ -792,6 +828,7 @@
                   <option value="all">All attendance</option>
                   <option value="Present">Present</option>
                   <option value="Sick">Sick</option>
+                  <option value="Absent - Called in Sick">Absent - Called in Sick</option>
                   <option value="Holiday">Holiday</option>
                   <option value="Training">Training</option>
                   <option value="Unpaid leave">Unpaid leave</option>
@@ -813,6 +850,16 @@
                   <button class="secondary-button" type="button" data-manage="attendance">Record Attendance</button>
                 </div>
                 <div id="attendanceList" class="stack-list"></div>
+              </section>
+
+              <section class="work-panel staff-year-panel">
+                <div class="panel-heading">
+                  <h2>Annual Leave & Absence</h2>
+                  <button class="secondary-button" type="button" data-manage="companyHolidays">Add Company Holiday</button>
+                </div>
+                <div id="staffYearSummary" class="staff-year-summary"></div>
+                <div id="staffHolidayCalendar" class="staff-holiday-calendar"></div>
+                <div id="staffSafetyAlerts" class="staff-safety-alerts"></div>
               </section>
 
               <section class="work-panel">
@@ -990,9 +1037,7 @@
           <select id="statusInput">
             <option value="draft">Draft</option>
             <option value="attached">Attached to job</option>
-            <option value="sent-client">Sent to client</option>
-            <option value="sent-tech">Sent to technician</option>
-            <option value="read">Read confirmed</option>
+            <option value="sent-client">Sent</option>
             <option value="review">Needs review</option>
           </select>
         </label>
@@ -1002,15 +1047,8 @@
           <input id="sentDateInput" type="date">
         </label>
 
-        <label>
-          Technician sent date
-          <input id="techSentDateInput" type="date">
-        </label>
-
-        <label>
-          Technician read date
-          <input id="techReadDateInput" type="date">
-        </label>
+        <input id="techSentDateInput" type="hidden">
+        <input id="techReadDateInput" type="hidden">
 
         <label>
           Review due date
@@ -1079,11 +1117,13 @@
               Scope of works
               <textarea id="ramsBuildScope" rows="3" placeholder="Briefly describe the works"></textarea>
             </label>
-            <label>
-              Paste or drag job information
-              <button class="inline-paste-button" id="pasteRamsSourceButton" type="button">Paste from clipboard</button>
-              <textarea id="ramsBuildSource" class="snippet-target" rows="8" placeholder="Paste Ark notes, job details, hazards, method notes, PPE, tools or site-specific risks here. You can also drag a text file into this box."></textarea>
-            </label>
+            <div class="paste-field">
+              <div class="paste-field-header">
+                <label for="ramsBuildSource">Paste or drag job information</label>
+              </div>
+              <textarea id="ramsBuildSource" class="snippet-target rams-paste-box" rows="10" placeholder="Click here, then press Ctrl+V to paste Ark notes, job details, hazards, method notes, PPE, tools or site-specific risks. You can also drag a text file into this box."></textarea>
+              <span class="field-hint">Click inside the box and paste normally. The preview updates automatically as you add information.</span>
+            </div>
             <label>
               PPE
               <input id="ramsBuildPpe" placeholder="Gloves, safety boots, hi-vis, eye protection">
@@ -1099,12 +1139,11 @@
               <h3>Professional RAMS Preview</h3>
               <div class="button-row compact-actions">
                 <button class="secondary-button" id="aiRamsDraftButton" type="button">AI Draft RAMS</button>
-                <button class="secondary-button" id="generateRamsPreviewButton" type="button">Generate Preview</button>
               </div>
             </div>
             <p id="aiRamsStatus" class="ai-status" aria-live="polite"></p>
             <div id="ramsBuilderPreview" class="rams-document-preview">
-              <p class="empty-state">Enter the job details and paste the information, then generate the preview.</p>
+              <p class="empty-state">Paste or type the job information on the left. The preview will update here automatically.</p>
             </div>
           </div>
         </section>
@@ -1145,6 +1184,55 @@
       </div>
     </dialog>
 
+    <dialog id="staffDetailDialog">
+      <div class="staff-detail-dialog">
+        <div class="dialog-header">
+          <h2 id="staffDetailTitle">Staff Profile</h2>
+          <button class="icon-button" id="closeStaffDetailButton" aria-label="Close" type="button">x</button>
+        </div>
+        <div id="staffDetailBody"></div>
+      </div>
+    </dialog>
+
+    <dialog id="sickCallDialog">
+      <form method="dialog" id="sickCallForm">
+        <div class="dialog-header">
+          <h2 id="sickCallTitle">Sick Call-In</h2>
+          <button class="icon-button" value="cancel" aria-label="Close" type="submit" formnovalidate>x</button>
+        </div>
+        <input id="sickCallName" type="hidden">
+        <div class="data-fields">
+          <label class="full-width">
+            Symptom Category
+            <select id="sickCallCategory" required>
+              <option value="">-- Select --</option>
+              <option value="Respiratory / Chest">Respiratory</option>
+              <option value="Gastrointestinal (Vomiting/Diarrhoea)">Gastrointestinal</option>
+              <option value="Musculoskeletal / Physical Injury">Injury</option>
+              <option value="General Illness">General Illness</option>
+            </select>
+          </label>
+          <label id="sickCallInjuryWrap" class="full-width hidden">
+            Was this injury sustained during an onsite work activity for Kingswood?
+            <select id="sickCallWorkInjury">
+              <option value="">-- Select --</option>
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+          </label>
+          <label id="sickCallIncidentWrap" class="full-width hidden">
+            Incident log / management note
+            <textarea id="sickCallIncidentNote" rows="3" placeholder="Internal incident log reference only. Do not record private medical details."></textarea>
+          </label>
+          <p class="field-hint full-width">Use this for operational fitness only. Do not record detailed medical history.</p>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel" type="submit" formnovalidate>Cancel</button>
+          <button class="primary-button" value="default" type="submit">Save Sick Call-In</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="valuationGraphDialog">
       <div class="valuation-graph-dialog">
         <div class="dialog-header">
@@ -1156,6 +1244,6 @@
       </div>
     </dialog>
 
-    <script src="app.js?v=professional-system-111"></script>
+    <script src="app.js?v=140"></script>
   </body>
 </html>
