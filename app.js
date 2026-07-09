@@ -1,7 +1,64 @@
-const storageKey = "kingswood-hub-rams";
+﻿const storageKey = "kingswood-hub-rams";
 const authStorageKey = "kingswood-hub-user";
 const sectionStorageKey = "kingswood-hub-section";
-const appVersion = "140";
+const staffPendingStorageKey = "kingswood-staff-records-pending";
+const staffLastSavedStorageKey = "kingswood-staff-records-last-saved";
+const finesPendingStorageKey = "kingswood-fines-pending";
+const oneDrivePendingStorageKey = "kingswood-hub-onedrive-pending";
+const oneDriveLastSavedStorageKey = "kingswood-hub-onedrive-last-saved";
+const oneDriveAutoSyncIntervalMs = 30000;
+const appVersion = "181";
+let selectedStaffIndex = 0;
+let activeStaffTab = "overview";
+let fineEvidenceDraft = [];
+let trainingDocumentDraft = null;
+let complianceDocumentDraft = null;
+let assetDocumentDraft = [];
+let activeTrainingFilter = "all";
+let activeTrainingYear = String(new Date().getFullYear());
+let activeComplianceFilter = "all";
+let oneDriveLiveDataLoaded = false;
+let oneDriveAutoSyncTimer = null;
+let oneDriveAutoSyncRunning = false;
+let trackingMode = "test";
+let trackingMapViews = new Map();
+let trackingMoveTimer = null;
+let selectedTrackingVehicleId = "kw-test-1";
+let technicianGeofenceTestMode = true;
+let technicianGeofenceTestLocations = {};
+const technicianGeofenceRadiusMiles = 0.5;
+let testTrackingVehicles = [
+  {
+    id: "kw-test-1",
+    technician: "Dave",
+    registration: "KW21 HUB",
+    lat: 51.3741,
+    lng: 0.0972,
+    speed: 18,
+    status: "Driving",
+    routeBearing: 0.00045
+  },
+  {
+    id: "kw-test-2",
+    technician: "Sarah Test",
+    registration: "KW23 VAN",
+    lat: 51.4054,
+    lng: 0.0148,
+    speed: 0,
+    status: "Stopped",
+    routeBearing: -0.00025
+  },
+  {
+    id: "kw-test-3",
+    technician: "Ian D",
+    registration: "KW19 PCO",
+    lat: 51.3254,
+    lng: 0.0335,
+    speed: 0,
+    status: "Offline",
+    routeBearing: 0.0002
+  }
+];
 const authorisedUsers = {
   Kevin: "1969",
   Alex: "1981",
@@ -25,6 +82,84 @@ const today = localIsoDate();
 const tomorrowDate = new Date();
 tomorrowDate.setDate(tomorrowDate.getDate() + 1);
 const tomorrow = localIsoDate(tomorrowDate);
+
+function formatOneDriveSaveTime(value) {
+  if (!value) return "Waiting for first save";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Last saved time unknown";
+  return `Last saved ${date.toLocaleString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit"
+  })}`;
+}
+
+function oneDrivePendingBackup() {
+  return localStorage.getItem(oneDrivePendingStorageKey);
+}
+
+function updateOneDriveHeaderStatus(status, detail = "") {
+  if (!storageStatus) return;
+  const lastSaved = localStorage.getItem(oneDriveLastSavedStorageKey) || "";
+  const safeStatus = status || (oneDrivePendingBackup()
+    ? "Local backup pending"
+    : oneDriveLiveDataLoaded
+      ? "Live OneDrive data loaded"
+      : "OneDrive unavailable");
+  const statusMap = {
+    "Live OneDrive data loaded": { label: "OneDrive Live", state: "synced" },
+    "OneDrive save complete": { label: "OneDrive Live", state: "synced" },
+    "Saving to OneDrive": { label: "Saving", state: "saving" },
+    "Local backup pending": { label: "Save pending", state: "pending" },
+    "OneDrive unavailable": { label: "Offline", state: "offline" }
+  };
+  const display = statusMap[safeStatus] || { label: "Error", state: "error" };
+  const statusDetail = display.state === "synced"
+    ? formatOneDriveSaveTime(lastSaved)
+    : detail || (display.state === "pending"
+      ? "Local backup kept safely"
+      : display.state === "saving"
+        ? "Writing office data"
+        : "OneDrive not connected");
+  storageStatus.innerHTML = `<span class="onedrive-status-line"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(display.label)}</span><span class="last-saved-line">${escapeHtml(statusDetail)}</span>`;
+  storageStatus.dataset.status = display.state;
+}
+
+function keepPendingOneDriveBackup(payload, reason = "OneDrive save failed") {
+  localStorage.setItem(oneDrivePendingStorageKey, JSON.stringify({
+    savedAt: new Date().toISOString(),
+    reason,
+    payload
+  }));
+  updateOneDriveHeaderStatus("Local backup pending", "Data has not been safely saved to OneDrive yet");
+}
+
+function clearPendingOneDriveBackup() {
+  localStorage.removeItem(oneDrivePendingStorageKey);
+}
+
+async function retryPendingOneDriveBackup({ silent = true } = {}) {
+  if (oneDriveAutoSyncRunning || !oneDrivePendingBackup()) return false;
+  oneDriveAutoSyncRunning = true;
+  try {
+    const saved = await saveCommandData();
+    if (!saved && !silent) {
+      await kcInfo("OneDrive is still unavailable. A local backup is pending and will keep retrying automatically.");
+    }
+    return saved;
+  } finally {
+    oneDriveAutoSyncRunning = false;
+  }
+}
+
+function startOneDriveAutoSync() {
+  if (oneDriveAutoSyncTimer) return;
+  oneDriveAutoSyncTimer = window.setInterval(() => {
+    retryPendingOneDriveBackup({ silent: true });
+  }, oneDriveAutoSyncIntervalMs);
+  window.addEventListener("online", () => retryPendingOneDriveBackup({ silent: true }));
+  window.addEventListener("focus", () => retryPendingOneDriveBackup({ silent: true }));
+}
+
 const monthNames = [
   "January",
   "February",
@@ -277,18 +412,46 @@ let trainingMatrix = [
   { employee: "Aiden", course: "Ladder Safety", provider: "Internal", completedDate: "2026-03-05", expiryDate: "2027-03-05", certificate: "On file", notes: "Refresher complete." }
 ];
 
+const companyDocumentCategories = ["Insurance", "Legal", "Policy", "Template", "Correspondence"];
+const criticalDocumentCategories = ["Insurance"];
+const complianceTypes = ["Insurance", "Accreditation", "Policy Review", "Office Compliance", "Certificate", "Other"];
+const accreditationOptions = ["SafeContractor", "Add other accreditation"];
+const assetCategories = ["Machinery", "Power tools", "Hand tools", "Ladders", "Access equipment", "Pest control equipment", "Sprayers", "Testing equipment", "Cameras", "PPE equipment", "Vehicle equipment", "Office equipment", "Other"];
+const assetConditions = ["New", "Good", "Fair", "Poor", "Damaged"];
+const assetStatuses = ["In use", "In storage", "Needs inspection", "Needs repair", "Out of service", "Lost", "Disposed"];
+const assetPowerSources = ["Mains powered", "Battery powered", "Petrol", "Diesel", "Manual", "Not applicable"];
+let activeAssetFilter = "all";
+const allowedComplianceLegacyCategories = ["Company"];
+const disallowedComplianceTerms = ["mot", "vehicle", "van servicing", "technician driving licence", "bpca", "ppe", "ladder", "rams"];
+const documentSecurityUidAllowList = {
+  Kevin: "FIREBASE_UID_TO_ADD",
+  Alex: "FIREBASE_UID_TO_ADD",
+  Jodie: "FIREBASE_UID_TO_ADD"
+};
+
 let companyDocuments = [
-  ["Health & Safety Policy", "Latest version available to technicians"],
-  ["COSHH Assessments", "Store current chemical assessments"],
-  ["General Risk Assessments", "Company-wide risk documents"],
-  ["Method Statements", "Standard method statements"],
-  ["Insurance Certificates", "Client-ready certificate store"],
-  ["Waste Carrier Licence", "Expiry reminders needed"],
-  ["CHAS", "Accreditation documents"],
-  ["SafeContractor", "Accreditation documents"],
-  ["SMAS", "Accreditation documents"],
-  ["Training Certificates", "Technician training records"],
-  ["Toolbox Talks", "Latest talks and read confirmations"]
+  {
+    title: "Public Liability Insurance",
+    category: "Insurance",
+    oneDriveLink: "OneDrive - Kingswood / Company Documents / Insurance / Public Liability",
+    issueDate: "2026-01-01",
+    expiryDate: "2026-12-31",
+    owner: "Kevin",
+    lastUpdatedBy: "Kevin",
+    createdAt: "2026-07-07",
+    updatedAt: "2026-07-07"
+  },
+  {
+    title: "Health & Safety Policy",
+    category: "Policy",
+    oneDriveLink: "OneDrive - Kingswood / Company Documents / Policies / Health and Safety Policy",
+    issueDate: "2026-01-01",
+    expiryDate: "",
+    owner: "Kevin",
+    lastUpdatedBy: "Kevin",
+    createdAt: "2026-07-07",
+    updatedAt: "2026-07-07"
+  }
 ];
 
 let assets = [
@@ -299,19 +462,44 @@ let assets = [
 ];
 
 let complianceItems = [
-  ["MOT", "KW21 HUB", "Vehicle", "Dan", "2026-07-18"],
-  ["Van servicing", "KW21 HUB", "Vehicle", "Dan", "2026-07-26"],
-  ["MOT", "KW19 PCO", "Vehicle", "Mason", "2026-09-12"],
-  ["Van servicing", "KW19 PCO", "Vehicle", "Mason", "2026-06-20"],
-  ["Vehicle insurance", "KW19 PCO", "Vehicle", "Mason", "2026-07-20"],
-  ["Technician driving licence", "Dan", "Technician", "Dan", "2026-08-28"],
-  ["BPCA qualification", "Mason", "Technician", "Mason", "2026-07-22"],
-  ["PPE inspection", "Aiden", "Technician", "Aiden", "2026-07-08"],
-  ["Ladder inspection", "Roof ladder", "Equipment", "Dan", "2026-07-05"],
-  ["Fire extinguisher servicing", "Office extinguishers", "Company", "Office", "2026-06-15"],
-  ["PAT testing", "Office and workshop", "Company", "Office", "2026-07-29"],
-  ["First aid expiry", "First aid certificate", "Company", "Office", "2026-10-18"],
-  ["Company insurance renewal", "Public liability", "Company", "Office", "2026-08-02"]
+  {
+    id: "COMP-PL-2026",
+    complianceType: "Insurance",
+    title: "Public liability insurance",
+    provider: "Kingswood insurer",
+    certificateNumber: "To be added",
+    startDate: "2026-01-01",
+    expiryDate: "2026-08-02",
+    noExpiry: false,
+    responsiblePerson: "Kevin",
+    reminderDays: 60,
+    notes: "Company-level insurance renewal tracker.",
+    documentFileName: "",
+    oneDriveLocation: "",
+    history: [],
+    audit: [{ action: "created", by: "System", at: "2026-07-09T00:00:00.000Z" }],
+    createdAt: "2026-07-09T00:00:00.000Z",
+    updatedAt: "2026-07-09T00:00:00.000Z"
+  },
+  {
+    id: "COMP-FIRE-2026",
+    complianceType: "Office Compliance",
+    title: "Fire extinguisher inspections",
+    provider: "Service contractor",
+    certificateNumber: "To be added",
+    startDate: "2026-01-01",
+    expiryDate: "2026-06-15",
+    noExpiry: false,
+    responsiblePerson: "Kevin",
+    reminderDays: 60,
+    notes: "Office compliance check.",
+    documentFileName: "",
+    oneDriveLocation: "",
+    history: [],
+    audit: [{ action: "created", by: "System", at: "2026-07-09T00:00:00.000Z" }],
+    createdAt: "2026-07-09T00:00:00.000Z",
+    updatedAt: "2026-07-09T00:00:00.000Z"
+  }
 ];
 
 let fines = [
@@ -478,6 +666,16 @@ const dataForm = document.querySelector("#dataForm");
 const dataFields = document.querySelector("#dataFields");
 const dataDialogTitle = document.querySelector("#dataDialogTitle");
 const dataSaveButton = document.querySelector("#dataSaveButton");
+const dataSaveSystemButton = document.querySelector("#dataSaveSystemButton");
+const dataDialogStatus = document.querySelector("#dataDialogStatus");
+const kcDialog = document.querySelector("#kcDialog");
+const kcDialogTitle = document.querySelector("#kcDialogTitle");
+const kcDialogMessage = document.querySelector("#kcDialogMessage");
+const kcDialogActions = document.querySelector("#kcDialogActions");
+const kcDialogClose = document.querySelector("#kcDialogClose");
+const kcDialogInputWrap = document.querySelector("#kcDialogInputWrap");
+const kcDialogInput = document.querySelector("#kcDialogInput");
+const kcDialogInputLabel = document.querySelector("#kcDialogInputLabel");
 const dataCollectionInput = document.querySelector("#dataCollectionInput");
 const dataIndexInput = document.querySelector("#dataIndexInput");
 const jobDetailDialog = document.querySelector("#jobDetailDialog");
@@ -501,6 +699,10 @@ const valuationGraphDialog = document.querySelector("#valuationGraphDialog");
 const valuationGraphContent = document.querySelector("#valuationGraphContent");
 const valuationGraphSubtitle = document.querySelector("#valuationGraphSubtitle");
 const closeValuationGraphButton = document.querySelector("#closeValuationGraphButton");
+const certificateViewerDialog = document.querySelector("#certificateViewerDialog");
+const certificateViewerTitle = document.querySelector("#certificateViewerTitle");
+const certificateViewerPreview = document.querySelector("#certificateViewerPreview");
+let activeCertificateRecord = null;
 const addButton = document.querySelector("#addRamsButton");
 const buildRamsButton = document.querySelector("#buildRamsButton");
 const ramsBuilderDialog = document.querySelector("#ramsBuilderDialog");
@@ -552,6 +754,8 @@ const searchInput = document.querySelector("#searchInput");
 const statusFilter = document.querySelector("#statusFilter");
 const globalSearch = document.querySelector("#globalSearch");
 const storageStatus = document.querySelector("#storageStatus");
+const syncNowButton = document.querySelector("#syncNowButton");
+const staffOneDriveStatus = document.querySelector("#staffOneDriveStatus");
 const liveDateTime = document.querySelector("#liveDateTime");
 const weatherCurrent = document.querySelector("#weatherCurrent");
 const weatherSummary = document.querySelector("#weatherSummary");
@@ -582,6 +786,104 @@ const fields = {
   fileLocation: document.querySelector("#ramsFileInput"),
   notes: document.querySelector("#notesInput")
 };
+
+function kcAsk({ message, buttons = [{ label: "OK", value: "ok", style: "primary" }], input = null } = {}) {
+  if (!kcDialog || !kcDialogMessage || !kcDialogActions) {
+    return Promise.resolve(buttons[buttons.length - 1]?.value || "ok");
+  }
+  const previousFocus = document.activeElement;
+  kcDialogMessage.textContent = message || "";
+  kcDialogActions.innerHTML = "";
+  kcDialog.returnValue = "";
+  if (kcDialogTitle) kcDialogTitle.textContent = "Kingswood Connect says";
+  if (input) {
+    kcDialogInputWrap?.classList.remove("hidden");
+    if (kcDialogInputLabel) kcDialogInputLabel.textContent = input.label || "Response";
+    if (kcDialogInput) {
+      kcDialogInput.value = input.value || "";
+      kcDialogInput.placeholder = input.placeholder || "";
+    }
+  } else {
+    kcDialogInputWrap?.classList.add("hidden");
+    if (kcDialogInput) kcDialogInput.value = "";
+  }
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      if (kcDialog.open) kcDialog.close(value);
+      kcDialog.removeEventListener("cancel", onCancel);
+      kcDialog.removeEventListener("close", onClose);
+      kcDialogClose?.removeEventListener("click", onCloseClick);
+      if (previousFocus && typeof previousFocus.focus === "function") {
+        window.setTimeout(() => previousFocus.focus(), 0);
+      }
+      resolve(input && value === "submit" ? (kcDialogInput?.value || "") : value);
+    };
+    const onCancel = (event) => {
+      event.preventDefault();
+      finish("cancel");
+    };
+    const onClose = () => {
+      finish(kcDialog.returnValue || "cancel");
+    };
+    const onCloseClick = (event) => {
+      event.preventDefault();
+      finish("cancel");
+    };
+    kcDialog.addEventListener("cancel", onCancel);
+    kcDialog.addEventListener("close", onClose);
+    kcDialogClose?.addEventListener("click", onCloseClick);
+    kcDialogActions.append(...buttons.map((buttonConfig) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = buttonConfig.label;
+      button.className = buttonConfig.style === "danger" ? "kc-danger" : buttonConfig.style === "secondary" ? "kc-secondary" : "kc-primary";
+      button.addEventListener("click", () => finish(buttonConfig.value));
+      return button;
+    }));
+    kcDialog.showModal();
+    window.setTimeout(() => (input ? kcDialogInput : kcDialogActions.querySelector("button"))?.focus(), 0);
+  });
+}
+
+function kcInfo(message) {
+  return kcAsk({ message });
+}
+
+async function kcYesNo(message) {
+  const result = await kcAsk({
+    message,
+    buttons: [
+      { label: "No", value: "no", style: "secondary" },
+      { label: "Yes", value: "yes", style: "primary" }
+    ]
+  });
+  return result === "yes";
+}
+
+async function kcConfirmAction(message, continueLabel = "Continue", danger = false) {
+  const result = await kcAsk({
+    message,
+    buttons: [
+      { label: "Cancel", value: "cancel", style: "secondary" },
+      { label: continueLabel, value: "continue", style: danger ? "danger" : "primary" }
+    ]
+  });
+  return result === "continue";
+}
+
+function kcInput(message, label = "Reason", value = "") {
+  return kcAsk({
+    message,
+    input: { label, value },
+    buttons: [
+      { label: "Cancel", value: "cancel", style: "secondary" },
+      { label: "Continue", value: "submit", style: "primary" }
+    ]
+  });
+}
 
 const dataModels = {
   jobs: {
@@ -638,13 +940,24 @@ const dataModels = {
   compliance: {
     title: "Compliance Item",
     get: () => complianceRecords(),
-    set: (items) => { complianceItems = items; },
+    set: (items) => {
+      const outsideComplianceCentre = complianceItems.filter((item) => !isCompanyLevelCompliance(item));
+      complianceItems = [...outsideComplianceCentre, ...items];
+    },
     fields: [
-      ["type", "Item"],
-      ["name", "Name / reference"],
-      ["category", "Category"],
-      ["owner", "Owner"],
-      ["dueDate", "Due date", "date"]
+      ["complianceType", "Compliance type", "compliance-type-select"],
+      ["accreditationName", "Accreditation", "accreditation-select"],
+      ["customAccreditationName", "Accreditation name"],
+      ["title", "Title"],
+      ["provider", "Provider or issuing body"],
+      ["certificateNumber", "Policy or certificate number"],
+      ["startDate", "Start date", "date"],
+      ["expiryDate", "Expiry or review date", "date"],
+      ["noExpiry", "No expiry", "checkbox"],
+      ["responsiblePerson", "Responsible person", "office-owner-select"],
+      ["reminderDays", "Reminder period", "number"],
+      ["supportingDocument", "Supporting document", "compliance-document"],
+      ["notes", "Notes", "textarea"]
     ]
   },
   fines: {
@@ -653,14 +966,16 @@ const dataModels = {
     set: (items) => { fines = items; },
     fields: [
       ["date", "Date", "date"],
-      ["registration", "Vehicle registration"],
+      ["registration", "Vehicle registration", "vehicle-registration-select"],
       ["driver", "Driver", "staff-select"],
       ["location", "Location"],
-      ["type", "Fine type"],
+      ["type", "Fine type", "fine-type-select"],
+      ["customType", "Custom fine description"],
       ["amount", "Amount", "number"],
       ["deadline", "Deadline", "date"],
-      ["status", "Status"],
-      ["evidence", "Evidence / ticket photo"],
+      ["status", "Status", "fine-status-select"],
+      ["reference", "Fine reference number"],
+      ["evidenceItems", "Evidence", "fine-evidence"],
       ["notes", "Notes", "textarea"]
     ]
   },
@@ -695,14 +1010,10 @@ const dataModels = {
       ["emergencyContact", "Emergency contact"],
       ["nextOfKin", "Next of kin"],
       ["assignedVan", "Assigned van"],
-      ["rpeMaskType", "RPE mask type"],
-      ["rpeMaskSize", "RPE mask size"],
-      ["faceFitDate", "Last successful face-fit date", "date"],
       ["incidentHistory", "Internal accident / incident log history", "textarea"],
       ["trainingRecords", "Training records", "textarea"],
       ["qualifications", "Qualifications", "textarea"],
       ["drivingLicence", "Driving licence details", "textarea"],
-      ["ppeIssued", "PPE issued", "textarea"],
       ["holidayAllowance", "Holiday allowance", "number"],
       ["holidayUsed", "Holiday used", "number"],
       ["notes", "Notes", "textarea"]
@@ -733,8 +1044,11 @@ const dataModels = {
       ["name", "Staff member", "staff-select"],
       ["from", "From", "date"],
       ["to", "To", "date"],
-      ["days", "Days", "number"],
-      ["status", "Status"]
+      ["dayType", "Day Type", "holiday-day-type-select"],
+      ["dayPart", "AM / PM", "holiday-day-part-select"],
+      ["days", "Days", "holiday-days-number"],
+      ["status", "Status"],
+      ["notes", "Notes", "textarea"]
     ]
   },
   companyHolidays: {
@@ -757,9 +1071,11 @@ const dataModels = {
       ["employee", "Employee", "staff-select"],
       ["course", "Training / qualification"],
       ["provider", "Provider"],
+      ["certificateNumber", "Certificate / licence number"],
       ["completedDate", "Completed date", "date"],
       ["expiryDate", "Expiry date", "date"],
-      ["certificate", "Certificate / file note"],
+      ["noExpiry", "No expiry", "checkbox"],
+      ["trainingDocument", "Certificate / document", "training-document"],
       ["notes", "Notes", "textarea"]
     ]
   },
@@ -787,11 +1103,15 @@ const dataModels = {
   },
   documents: {
     title: "Company Document",
-    get: () => companyDocuments.map(asCardObject),
+    get: () => companyDocuments.map(asCompanyDocument),
     set: (items) => { companyDocuments = items; },
     fields: [
-      ["title", "Document"],
-      ["description", "Details", "textarea"]
+      ["title", "Document title"],
+      ["category", "Category", "company-document-category-select"],
+      ["oneDriveLink", "OneDrive link / file path"],
+      ["issueDate", "Issue date", "date"],
+      ["expiryDate", "Expiry date", "date"],
+      ["owner", "Owner", "office-owner-select"]
     ]
   },
   assets: {
@@ -799,11 +1119,42 @@ const dataModels = {
     get: () => assets.map(asAssetObject),
     set: (items) => { assets = items; },
     fields: [
-      ["asset", "Asset"],
-      ["category", "Category"],
-      ["heldBy", "Held by"],
-      ["inspectionDue", "Inspection due", "date"],
-      ["status", "Status"]
+      ["assetSectionDetails", "Asset Details", "section-heading"],
+      ["asset", "Asset name"],
+      ["assetId", "Asset ID", "readonly-text"],
+      ["category", "Category", "asset-category-select"],
+      ["make", "Make"],
+      ["model", "Model"],
+      ["serialNumber", "Serial number"],
+      ["description", "Description", "textarea"],
+      ["assetSectionOwnership", "Ownership", "section-heading"],
+      ["purchaseDate", "Purchase date", "date"],
+      ["purchaseCost", "Purchase cost", "number"],
+      ["supplier", "Supplier"],
+      ["warrantyExpiry", "Warranty expiry", "date"],
+      ["assetSectionLocation", "Location and Responsibility", "section-heading"],
+      ["assignedStaffId", "Assigned to employee", "asset-employee-select"],
+      ["vehicleId", "Stored in vehicle", "asset-vehicle-select"],
+      ["otherLocation", "Other location"],
+      ["assetSectionCondition", "Condition and Status", "section-heading"],
+      ["condition", "Condition", "asset-condition-select"],
+      ["status", "Status", "asset-status-select"],
+      ["powerSource", "Power source", "asset-power-source-select"],
+      ["assetSectionMaintenance", "Inspection and Maintenance", "section-heading"],
+      ["inspectionRequired", "Inspection required", "yes-no-select"],
+      ["inspectionFrequency", "Inspection frequency"],
+      ["lastInspectionDate", "Last inspection date", "date"],
+      ["nextInspectionDue", "Next inspection due", "date"],
+      ["serviceRequired", "Service required", "yes-no-select"],
+      ["serviceFrequency", "Service frequency"],
+      ["lastServiceDate", "Last service date", "date"],
+      ["nextServiceDue", "Next service due", "date"],
+      ["patTestingRequired", "PAT testing required", "yes-no-select"],
+      ["lastPatDate", "Last PAT test date", "date"],
+      ["nextPatDue", "Next PAT test due", "date"],
+      ["patResult", "PAT test result", "asset-pat-result-select"],
+      ["assetSectionDocuments", "Photos and Documents", "section-heading"],
+      ["assetDocuments", "Photos and documents", "asset-documents"]
     ]
   },
   emailTemplates: {
@@ -851,22 +1202,221 @@ function asCardObject(item) {
   return Array.isArray(item) ? { title: item[0], description: item[1] } : item;
 }
 
+function asCompanyDocument(item) {
+  if (Array.isArray(item)) {
+    return {
+      title: item[0] || "Company document",
+      category: "Policy",
+      oneDriveLink: item[1] || "",
+      issueDate: "",
+      expiryDate: "",
+      owner: "Kevin",
+      lastUpdatedBy: "Kevin",
+      createdAt: today,
+      updatedAt: today
+    };
+  }
+  return {
+    title: item.title || "Company document",
+    category: companyDocumentCategories.includes(item.category) ? item.category : "Policy",
+    oneDriveLink: item.oneDriveLink || item.description || item.fileLocation || "",
+    issueDate: item.issueDate || "",
+    expiryDate: item.expiryDate || "",
+    owner: item.owner || "Kevin",
+    lastUpdatedBy: item.lastUpdatedBy || item.owner || "Kevin",
+    createdAt: item.createdAt || today,
+    updatedAt: item.updatedAt || today
+  };
+}
+
 function asAssetObject(item) {
-  return Array.isArray(item) ? { asset: item[0], category: item[1], heldBy: item[2], inspectionDue: item[3], status: item[4] } : item;
+  const source = Array.isArray(item)
+    ? { asset: item[0], category: item[1], heldBy: item[2], inspectionDue: item[3], status: item[4] }
+    : { ...item };
+  const assetName = source.asset || source.name || "Asset";
+  const assetId = source.assetId || source.id || generateAssetId(assetName);
+  const legacyStatus = source.status === "OK" ? "In use" : source.status || "In use";
+  const legacyCondition = source.condition || (legacyStatus === "Needs repair" || legacyStatus === "Out of service" ? "Poor" : "Good");
+  return {
+    ...source,
+    id: source.id || assetId,
+    assetId,
+    asset: assetName,
+    category: assetCategories.includes(source.category) ? source.category : (source.category || "Other"),
+    make: source.make || "",
+    model: source.model || "",
+    serialNumber: source.serialNumber || "",
+    description: source.description || "",
+    purchaseDate: source.purchaseDate || "",
+    purchaseCost: Number(source.purchaseCost || 0),
+    supplier: source.supplier || "",
+    warrantyExpiry: source.warrantyExpiry || "",
+    assignedStaffId: source.assignedStaffId || staffIdFromName(source.heldBy) || "",
+    vehicleId: source.vehicleId || vehicleIdFromRegistration(source.vehicle || source.registration) || "",
+    otherLocation: source.otherLocation || (!staffIdFromName(source.heldBy) && source.heldBy ? source.heldBy : ""),
+    condition: assetConditions.includes(source.condition) ? source.condition : legacyCondition,
+    status: assetStatuses.includes(legacyStatus) ? legacyStatus : "In use",
+    powerSource: assetPowerSources.includes(source.powerSource) ? source.powerSource : "Not applicable",
+    inspectionRequired: source.inspectionRequired || (source.inspectionDue ? "Yes" : "No"),
+    inspectionFrequency: source.inspectionFrequency || "",
+    lastInspectionDate: source.lastInspectionDate || "",
+    nextInspectionDue: source.nextInspectionDue || source.inspectionDue || "",
+    serviceRequired: source.serviceRequired || "No",
+    serviceFrequency: source.serviceFrequency || "",
+    lastServiceDate: source.lastServiceDate || "",
+    nextServiceDue: source.nextServiceDue || "",
+    patTestingRequired: source.patTestingRequired || "No",
+    lastPatDate: source.lastPatDate || "",
+    nextPatDue: source.nextPatDue || "",
+    patResult: source.patResult || "",
+    documents: Array.isArray(source.documents) ? source.documents : [],
+    history: Array.isArray(source.history) ? source.history : [{
+      action: "Imported / normalised",
+      by: currentUserName(),
+      at: new Date().toISOString(),
+      notes: "Existing asset record preserved in the upgraded register."
+    }],
+    createdAt: source.createdAt || today,
+    updatedAt: source.updatedAt || today
+  };
+}
+
+function generateAssetId(name = "Asset") {
+  const prefix = String(name || "Asset").replace(/[^A-Za-z0-9]/g, "").slice(0, 3).toUpperCase() || "AST";
+  const existing = assets.map((item) => asRawAssetId(item)).filter(Boolean);
+  let counter = existing.length + 1;
+  let next = `AST-${prefix}-${String(counter).padStart(4, "0")}`;
+  while (existing.includes(next)) {
+    counter += 1;
+    next = `AST-${prefix}-${String(counter).padStart(4, "0")}`;
+  }
+  return next;
+}
+
+function asRawAssetId(item) {
+  if (Array.isArray(item)) return "";
+  return item.assetId || item.id || "";
+}
+
+function staffIdFromName(name = "") {
+  if (!name) return "";
+  const match = staffProfiles.find((staff) => staff.name === name);
+  return match?.staffId || "";
+}
+
+function vehicleIdFromRegistration(registration = "") {
+  if (!registration) return "";
+  const match = vehicles.map(asVehicleObject).find((vehicle) => vehicle.registration === registration);
+  return match?.vehicleId || match?.registration || "";
+}
+
+function staffNameFromId(staffId = "") {
+  if (!staffId) return "";
+  return staffProfiles.find((staff) => staff.staffId === staffId)?.name || "";
+}
+
+function vehicleFromId(vehicleId = "") {
+  if (!vehicleId) return null;
+  return vehicles.map(asVehicleObject).find((vehicle) => (vehicle.vehicleId || vehicle.registration) === vehicleId) || null;
+}
+
+function assetHolderLabel(item) {
+  const staffName = staffNameFromId(item.assignedStaffId);
+  if (staffName) return staffName;
+  const vehicle = vehicleFromId(item.vehicleId);
+  if (vehicle) return `Vehicle: ${vehicle.registration}`;
+  return item.otherLocation || "Office / storage";
+}
+
+function assetVehicleOrLocationLabel(item) {
+  const vehicle = vehicleFromId(item.vehicleId);
+  if (vehicle) return vehicle.registration;
+  return item.otherLocation || (item.assignedStaffId ? "With employee" : "Office / storage");
+}
+
+function assetDueState(dateValue, warningDays = 30) {
+  if (!dateValue) return { label: "Not set", className: "draft", days: Infinity };
+  const days = daysUntil(dateValue);
+  if (days < 0) return { label: "Overdue", className: "urgent", days };
+  if (days <= warningDays) return { label: "Due soon", className: "warning", days };
+  return { label: "Current", className: "ok", days };
+}
+
+function assetNeedsInspection(item) {
+  const asset = asAssetObject(item);
+  return asset.inspectionRequired === "Yes" && assetDueState(asset.nextInspectionDue).className !== "ok";
+}
+
+function assetNeedsService(item) {
+  const asset = asAssetObject(item);
+  return asset.serviceRequired === "Yes" && assetDueState(asset.nextServiceDue).className !== "ok";
+}
+
+function assetPatOverdue(item) {
+  const asset = asAssetObject(item);
+  if (asset.powerSource !== "Mains powered" || asset.patTestingRequired !== "Yes") return false;
+  return assetDueState(asset.nextPatDue).className === "urgent";
+}
+
+function isCriticalCompanyDocument(documentRecord) {
+  const title = String(documentRecord.title || "").toLowerCase();
+  return criticalDocumentCategories.includes(documentRecord.category)
+    || title.includes("safecontractor")
+    || title.includes("public liability")
+    || title.includes("employers liability")
+    || title.includes("employer liability");
+}
+
+function companyDocumentStatus(documentRecord) {
+  const item = asCompanyDocument(documentRecord);
+  if (!item.expiryDate) {
+    return { label: "Active", value: "active", days: Infinity, tier: "No expiry", className: "ok" };
+  }
+  const days = daysUntil(item.expiryDate);
+  const critical = isCriticalCompanyDocument(item);
+  if (days < 0) {
+    return { label: "Expired", value: "expired", days, tier: critical ? "Critical" : "Standard", className: "danger" };
+  }
+  const threshold = critical ? 90 : 30;
+  if (days <= threshold) {
+    return { label: "Expiring", value: "expiring", days, tier: critical ? "Critical" : "Standard", className: critical ? "danger" : "warning" };
+  }
+  return { label: "Active", value: "active", days, tier: critical ? "Critical" : "Standard", className: "ok" };
+}
+
+function companyDocumentAlerts() {
+  return companyDocuments.map(asCompanyDocument)
+    .map((item) => ({ item, status: companyDocumentStatus(item) }))
+    .filter(({ status }) => status.value !== "active")
+    .sort((a, b) => a.status.days - b.status.days);
+}
+
+function companyDocumentReminderSummary() {
+  const docs = companyDocuments.map(asCompanyDocument);
+  const alerts = docs.map((item) => ({ item, status: companyDocumentStatus(item) }));
+  return {
+    total: docs.length,
+    criticalExpiring: alerts.filter(({ status }) => status.value === "expiring" && status.tier === "Critical").length,
+    standardExpiring: alerts.filter(({ status }) => status.value === "expiring" && status.tier === "Standard").length,
+    expired: alerts.filter(({ status }) => status.value === "expired").length,
+    within90: alerts.filter(({ status }) => Number.isFinite(status.days) && status.days >= 0 && status.days <= 90).length,
+    within60: alerts.filter(({ status }) => Number.isFinite(status.days) && status.days >= 0 && status.days <= 60).length,
+    within30: alerts.filter(({ status }) => Number.isFinite(status.days) && status.days >= 0 && status.days <= 30).length
+  };
 }
 
 function staffNames() {
   return [...new Set(staffProfiles.map((staff) => staff.name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
-function renderSelectField(key, label, value, options) {
+function renderSelectField(key, label, value, options, displayLabel = (option) => option) {
   const optionValues = [...new Set([value, ...options].filter(Boolean))];
   return `
     <label>
       ${label}
       <select data-field="${key}">
         <option value="">-- Select --</option>
-        ${optionValues.map((option) => `<option value="${escapeHtml(option)}" ${option === value ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+        ${optionValues.map((option) => `<option value="${escapeHtml(option)}" ${option === value ? "selected" : ""}>${escapeHtml(displayLabel(option))}</option>`).join("")}
       </select>
     </label>
   `;
@@ -1042,6 +1592,10 @@ function lockHub() {
   }
 }
 
+function currentUserName() {
+  return localStorage.getItem(authStorageKey) || "Kevin";
+}
+
 function initialiseAuth() {
   const rememberedUser = localStorage.getItem(authStorageKey);
   if (rememberedUser) {
@@ -1126,23 +1680,40 @@ function technicianJob(job) {
 
 function buildTechnicianFeed() {
   const currentYear = String(new Date().getFullYear());
+  const sentJobs = jobs.filter((job) => job.status === "Sent to Tech");
   const individualTechnicianApps = staffProfiles.map((staff) => {
     const summary = staffLeaveSummary(staff, currentYear);
+    const staffHolidayRequests = holidayRequests
+      .filter((request) => request.staffId === staff.staffId || request.name === staff.name)
+      .map((request) => ({
+        id: request.id || "",
+        from: request.from || "",
+        to: request.to || "",
+        days: request.days || 0,
+        status: request.status || "Pending",
+        notes: request.notes || "",
+        submittedDate: request.submittedDate || "",
+        approvedDate: request.approvedDate || "",
+        declinedDate: request.declinedDate || "",
+        declineReason: request.declineReason || ""
+      }));
     return {
+      staffId: staff.staffId,
       name: staff.name,
       activeStatus: publicStaffStatus(staff.name, today),
       holidayAllowance: `${summary.holidayAllowance} days entitlement`,
       personalHolidaysApprovedAndTaken: `${summary.holidayTaken} days approved/taken`,
       companyBankHolidayDeductions: `${summary.companyBankDeductions} company/bank holiday days deducted`,
       remainingHolidayBalance: `${summary.holidayRemaining} days remaining`,
-      totalSickDaysRegistered: `${summary.sickDays} sick days registered in ${currentYear}`
+      totalSickDaysRegistered: `${summary.sickDays} sick days registered in ${currentYear}`,
+      holidayRequests: staffHolidayRequests
     };
   });
   return {
     app: "Kingswood Technician App",
     source: "Kingswood Command Centre",
     publishedAt: new Date().toISOString(),
-    jobs: jobs.map(technicianJob),
+    jobs: sentJobs.map(technicianJob),
     individualTechnicianApps,
     staffAvailability: staffProfiles.map((staff) => {
       const attendance = attendanceFor(staff.name, today);
@@ -1150,6 +1721,7 @@ function buildTechnicianFeed() {
       const summary = staffLeaveSummary(staff, currentYear);
       return {
         name: staff.name,
+        staffId: staff.staffId,
         role: staff.role,
         phone: staff.phone,
         assignedVan: staff.assignedVan,
@@ -1180,7 +1752,7 @@ function buildTechnicianFeed() {
     documents: companyDocuments.map(asCardObject),
     alerts: [
       ...ramsItems.filter((item) => item.status !== "sent").map((item) => `RAMS to send: ${item.title} for ${item.client}`),
-      ...jobs.filter((job) => job.status === "Urgent").map((job) => `Urgent job: ${job.number} - ${job.title}`)
+      ...sentJobs.filter((job) => job.status === "Urgent").map((job) => `Urgent job: ${job.number} - ${job.title}`)
     ]
   };
 }
@@ -1218,6 +1790,7 @@ function buildAdminFeed() {
 }
 
 function buildConnectV12Feed() {
+  const sentJobs = jobs.filter((job) => job.status === "Sent to Tech");
   const clientNames = [...new Set([
     ...clients.map((client) => asCardObject(client).title),
     ...jobs.map((job) => job.client)
@@ -1264,7 +1837,7 @@ function buildConnectV12Feed() {
       compliance: complianceRecords().map((item) => ({ ...item, status: complianceStatus(item) }))
     },
     tech: {
-      jobs: jobs.map((job) => {
+      jobs: sentJobs.map((job) => {
         const tech = techniciansByName[job.technician] || {};
         const assignedRams = ramsItems.filter((item) => item.job.includes(job.number) || item.job.includes(job.title) || item.client === job.client);
         return {
@@ -1369,7 +1942,7 @@ async function publishIntegrationFeeds() {
   };
 
   if (integrationStatus) integrationStatus.textContent = "Publishing shared feeds to OneDrive data...";
-  await saveCommandData();
+  const saved = await saveCommandData();
 
   try {
     const response = await fetch("/api/publish-feeds", {
@@ -1390,6 +1963,63 @@ async function publishIntegrationFeeds() {
 
   renderIntegrationFeeds();
   renderConnectedApps();
+  return saved;
+}
+
+function buildStaffRecordsPayload() {
+  ensureStaffRecordIds();
+  const currentYear = String(new Date().getFullYear());
+  return {
+    source: "Kingswood Connect Command Centre",
+    generatedAt: new Date().toISOString(),
+    currentYear,
+    staffProfiles,
+    holidayRequests,
+    approvedHolidays: holidayRequests.filter((request) => request.status === "Approved"),
+    sicknessAbsence: attendanceRecords.filter((record) => isSickCallStatus(record.status) || ["Sick", "Absent", "Absent - Called in Sick"].includes(record.status)),
+    attendanceRecords,
+    trainingRecords: trainingMatrix,
+    companyHolidays
+  };
+}
+
+function updateStaffOneDriveStatus(message = "") {
+  const lastSaved = localStorage.getItem(staffLastSavedStorageKey) || "";
+  const pending = localStorage.getItem(staffPendingStorageKey);
+  const text = message || (pending
+    ? "Staff records not safely saved to OneDrive yet"
+    : lastSaved
+      ? `Last saved to OneDrive: ${new Date(lastSaved).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`
+      : "Staff records waiting for first OneDrive save");
+  if (staffOneDriveStatus) staffOneDriveStatus.textContent = text;
+}
+
+async function warnStaffOneDriveSaveFailed() {
+  updateStaffOneDriveStatus("Staff records not safely saved to OneDrive yet");
+  await kcInfo("Staff Management data has not been safely saved to OneDrive yet. A local backup has been kept in this browser. Please start Kingswood Hub with the launcher and check OneDrive sync before relying on this as the live office record.");
+}
+
+async function syncStaffRecordsFolder({ warnOnFailure = false } = {}) {
+  const payload = buildStaffRecordsPayload();
+  localStorage.setItem(staffPendingStorageKey, JSON.stringify(payload));
+  updateStaffOneDriveStatus("Saving staff records to OneDrive...");
+  try {
+    const response = await fetch("/api/staff-records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload, null, 2)
+    });
+    if (!response.ok) throw new Error("Staff records endpoint failed");
+    const savedAt = new Date().toISOString();
+    localStorage.removeItem(staffPendingStorageKey);
+    localStorage.setItem(staffLastSavedStorageKey, savedAt);
+    updateStaffOneDriveStatus();
+    return true;
+  } catch (error) {
+    if (warnOnFailure) await warnStaffOneDriveSaveFailed();
+    else updateStaffOneDriveStatus();
+    return false;
+  }
 }
 
 function blankIntegrationFeeds() {
@@ -1469,7 +2099,7 @@ async function clearStarterData(collection) {
     all: "all starter data"
   };
 
-  const confirmed = window.confirm(`Clear ${labels[collection]}? This cannot be undone from inside the Hub.`);
+  const confirmed = await kcConfirmAction(`Clear ${labels[collection]}? This cannot be undone from inside the Hub.`, "Continue", true);
   if (!confirmed) {
     return;
   }
@@ -1485,12 +2115,64 @@ function fieldValue(item, key) {
   return item?.[key] ?? "";
 }
 
+function staffSlug(value) {
+  return String(value || "staff")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 36) || "staff";
+}
+
+function ensureStaffRecordIds() {
+  const used = new Set();
+  staffProfiles = staffProfiles.map((staff, index) => {
+    let staffId = staff.staffId || `KW-${staffSlug(staff.name)}-${String(index + 1).padStart(3, "0")}`;
+    while (used.has(staffId)) staffId = `${staffId}-${index + 1}`;
+    used.add(staffId);
+    return { ...staff, staffId };
+  });
+  const idByName = new Map(staffProfiles.map((staff) => [staff.name, staff.staffId]));
+  holidayRequests = holidayRequests.map((request) => ({
+    ...request,
+    staffId: request.staffId || idByName.get(request.name) || "",
+    year: request.year || String(new Date(request.from || today).getFullYear()),
+    submittedDate: request.submittedDate || today,
+    status: request.status || "Pending"
+  }));
+  attendanceRecords = attendanceRecords.map((record) => ({
+    ...record,
+    staffId: record.staffId || idByName.get(record.name) || "",
+    year: record.year || String(new Date(record.date || today).getFullYear())
+  }));
+  trainingMatrix = trainingMatrix.map((record) => {
+    const id = record.id || record.trainingRecordId || `TRN-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return {
+      ...record,
+      id,
+      trainingRecordId: id,
+      staffId: record.staffId || idByName.get(record.employee) || "",
+      employee: record.employee || staffProfiles.find((staff) => staff.staffId === record.staffId)?.name || "",
+      course: record.course || record.training || record.name || "",
+      provider: record.provider || "",
+      certificateNumber: record.certificateNumber || record.licenceNumber || "",
+      noExpiry: Boolean(record.noExpiry || record.expiryDate === "No Expiry"),
+      certificate: record.certificate || record.documentFileName || "",
+      documentFileName: record.documentFileName || record.certificate || "",
+      oneDriveLocation: record.oneDriveLocation || record.documentLocation || "",
+      createdAt: record.createdAt || new Date().toISOString(),
+      updatedAt: record.updatedAt || record.createdAt || new Date().toISOString(),
+      year: record.year || String(new Date(record.completedDate || record.expiryDate || today).getFullYear())
+    };
+  });
+}
+
 let ramsItems = loadRams();
 let activeBuiltRamsId = "";
 let proofingReports = [];
 let proofingPhotos = { before: [], after: [] };
 
 function commandData() {
+  ensureStaffRecordIds();
   normalisePlannerItems();
   syncStaffTrainingFromMatrix();
   syncTechniciansFromStaff();
@@ -1547,6 +2229,7 @@ function applyCommandData(data) {
   if (Array.isArray(data.clients)) clients = data.clients;
   if (data.integrationFeeds && typeof data.integrationFeeds === "object") integrationFeeds = data.integrationFeeds;
   if (data.leaveAllowanceResetYear) leaveAllowanceResetYear = String(data.leaveAllowanceResetYear);
+  ensureStaffRecordIds();
 }
 
 function enforceAnnualLeaveRenewal() {
@@ -1596,6 +2279,8 @@ function redirectFileViewToHub(apiUrl) {
 
 async function loadCommandData() {
   let leaveResetChanged = false;
+  startOneDriveAutoSync();
+  updateOneDriveHeaderStatus("OneDrive unavailable", "Checking OneDrive storage");
   if (location.protocol === "file:") {
     try {
       const serverResponse = await fetchFirstHubApi("/api/data", { cache: "no-store" });
@@ -1606,19 +2291,26 @@ async function loadCommandData() {
         if (Object.keys(data).length > 0) {
           applyCommandData(data);
           leaveResetChanged = enforceAnnualLeaveRenewal();
-          storageStatus.textContent = serverResponse ? "OneDrive data loaded" : "OneDrive file data loaded";
+          oneDriveLiveDataLoaded = Boolean(serverResponse);
+          updateOneDriveHeaderStatus(
+            serverResponse ? "Live OneDrive data loaded" : "OneDrive unavailable",
+            serverResponse ? "" : "Loaded local file only"
+          );
           if (leaveResetChanged) {
             await saveCommandData();
           }
         } else {
-          storageStatus.textContent = "Start Kingswood Hub to save to OneDrive";
+          oneDriveLiveDataLoaded = false;
+          updateOneDriveHeaderStatus("OneDrive unavailable", "Start Kingswood Hub to save to OneDrive");
           enforceAnnualLeaveRenewal();
         }
       } else {
-        storageStatus.textContent = "Start Kingswood Hub to save to OneDrive";
+        oneDriveLiveDataLoaded = false;
+        updateOneDriveHeaderStatus("OneDrive unavailable", "Start Kingswood Hub to save to OneDrive");
       }
     } catch {
-      storageStatus.textContent = "Start Kingswood Hub to save to OneDrive";
+      oneDriveLiveDataLoaded = false;
+      updateOneDriveHeaderStatus("OneDrive unavailable", "Start Kingswood Hub to save to OneDrive");
     }
     render();
     applyInitialSectionFromUrl();
@@ -1633,17 +2325,20 @@ async function loadCommandData() {
       applyCommandData(data);
       leaveResetChanged = enforceAnnualLeaveRenewal();
       const valuationSyncChanged = syncValuationsFromJobs();
-      storageStatus.textContent = "OneDrive data loaded";
+      oneDriveLiveDataLoaded = true;
+      updateOneDriveHeaderStatus(oneDrivePendingBackup() ? "Local backup pending" : "Live OneDrive data loaded");
       if (valuationSyncChanged || leaveResetChanged) {
         await saveCommandData();
       }
     } else {
-      storageStatus.textContent = "Creating OneDrive data file";
+      oneDriveLiveDataLoaded = true;
+      updateOneDriveHeaderStatus("Saving to OneDrive", "Creating live OneDrive data file");
       enforceAnnualLeaveRenewal();
       await saveCommandData();
     }
   } catch {
-    storageStatus.textContent = "Storage unavailable: browser fallback";
+    oneDriveLiveDataLoaded = false;
+    updateOneDriveHeaderStatus(oneDrivePendingBackup() ? "Local backup pending" : "OneDrive unavailable", "Using local browser backup only");
   }
 
   render();
@@ -1662,7 +2357,9 @@ function applyInitialSectionFromUrl() {
 }
 
 async function saveCommandData() {
+  const payload = commandData();
   localStorage.setItem(storageKey, JSON.stringify(ramsItems));
+  updateOneDriveHeaderStatus("Saving to OneDrive", "Writing live office data");
 
   if (location.protocol === "file:") {
     const response = await fetchFirstHubApi("/api/data", {
@@ -1670,10 +2367,24 @@ async function saveCommandData() {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(commandData(), null, 2)
+      body: JSON.stringify(payload, null, 2)
     });
-    storageStatus.textContent = response ? "Saved to OneDrive folder" : "Start Kingswood Hub to save to OneDrive";
-    return;
+    if (!response) {
+      keepPendingOneDriveBackup(payload, "OneDrive helper unavailable");
+      await syncStaffRecordsFolder({ warnOnFailure: true });
+      return false;
+    }
+    const staffSaved = await syncStaffRecordsFolder({ warnOnFailure: true });
+    if (!staffSaved) {
+      keepPendingOneDriveBackup(payload, "Staff records did not save to OneDrive");
+      return false;
+    }
+    const savedAt = new Date().toISOString();
+    clearPendingOneDriveBackup();
+    localStorage.setItem(oneDriveLastSavedStorageKey, savedAt);
+    oneDriveLiveDataLoaded = true;
+    updateOneDriveHeaderStatus("OneDrive save complete", formatOneDriveSaveTime(savedAt));
+    return true;
   }
 
   try {
@@ -1682,13 +2393,47 @@ async function saveCommandData() {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(commandData(), null, 2)
+      body: JSON.stringify(payload, null, 2)
     });
 
-    storageStatus.textContent = response.ok ? "Saved to OneDrive folder" : "Save failed";
+    if (!response.ok) {
+      keepPendingOneDriveBackup(payload, "OneDrive data save failed");
+      return false;
+    }
+    const staffSaved = await syncStaffRecordsFolder({ warnOnFailure: true });
+    if (!staffSaved) {
+      keepPendingOneDriveBackup(payload, "Staff records did not save to OneDrive");
+      return false;
+    }
+    const savedAt = new Date().toISOString();
+    clearPendingOneDriveBackup();
+    localStorage.setItem(oneDriveLastSavedStorageKey, savedAt);
+    oneDriveLiveDataLoaded = true;
+    updateOneDriveHeaderStatus("OneDrive save complete", formatOneDriveSaveTime(savedAt));
+    return true;
   } catch {
-    storageStatus.textContent = "Save failed: browser fallback";
+    keepPendingOneDriveBackup(payload, "OneDrive unavailable");
+    await syncStaffRecordsFolder({ warnOnFailure: true });
+    return false;
   }
+}
+
+async function syncNow() {
+  if (oneDrivePendingBackup()) {
+    const confirmed = await kcConfirmAction(
+      "A local backup is pending. Sync now will write this Hub data back to OneDrive. Continue only if this is the latest office record.",
+      "Continue"
+    );
+    if (!confirmed) return false;
+  }
+  const saved = await publishIntegrationFeeds();
+  if (saved) {
+    await kcInfo("OneDrive save complete.");
+  } else {
+    updateOneDriveHeaderStatus("Local backup pending", "Data has not been safely saved to OneDrive yet");
+    await kcInfo("OneDrive is unavailable or did not confirm the save. A local backup is pending and the Hub has not marked this as safely saved.");
+  }
+  return saved;
 }
 
 function loadRams() {
@@ -1708,6 +2453,154 @@ function saveRams() {
   saveCommandData();
 }
 
+function asVehicleObject(vehicle) {
+  if (Array.isArray(vehicle)) {
+    return {
+      registration: vehicle[0] || "",
+      vehicle: vehicle[1] || "",
+      driver: vehicle[2] || "",
+      mot: vehicle[3] || "",
+      service: vehicle[4] || "",
+      insurance: vehicle[5] || "",
+      tracker: vehicle[6] || ""
+    };
+  }
+  return vehicle || {};
+}
+
+async function saveFineToOneDrive(item) {
+  const evidenceToSave = fineEvidenceDraft.map((entry) => ({ ...entry }));
+  const payload = {
+    fine: {
+      ...item,
+      type: item.type === "Other" && item.customType ? item.customType : item.type,
+      evidenceFileNames: evidenceToSave.map((entry) => entry.name).filter(Boolean)
+    },
+    evidence: evidenceToSave.filter((entry) => entry.dataUrl)
+  };
+
+  try {
+    const response = await fetch("/api/save-fine-record", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.message || "OneDrive helper did not confirm the save.");
+    if (!result.saved) throw new Error(result.message || "OneDrive helper did not confirm the save.");
+    item.oneDriveFolder = result.folder;
+    item.evidenceItems = result.evidenceItems || evidenceToSave.map(({ dataUrl, ...entry }) => entry);
+    item.evidenceFileNames = item.evidenceItems.map((entry) => entry.name).filter(Boolean);
+    item.evidence = item.evidenceFileNames.join(", ");
+    fineEvidenceDraft = item.evidenceItems.map((entry) => ({ ...entry, saved: true }));
+    localStorage.removeItem(finesPendingStorageKey);
+    return true;
+  } catch (error) {
+    localStorage.setItem(finesPendingStorageKey, JSON.stringify({ savedAt: new Date().toISOString(), payload }));
+    await kcInfo(`Fine data has not been safely saved to OneDrive yet. A pending local copy has been kept. ${error.message || "Please start Kingswood Hub with the launcher and try saving again."}`);
+    return false;
+  }
+}
+
+async function saveTrainingDocumentToOneDrive(item) {
+  const staff = staffProfiles.find((profile) => profile.staffId === item.staffId || profile.name === item.employee);
+  const payload = {
+    record: {
+      ...item,
+      employee: item.employee || staff?.name || "",
+      staffId: item.staffId || staff?.staffId || ""
+    },
+    document: trainingDocumentDraft?.dataUrl ? trainingDocumentDraft : null
+  };
+
+  try {
+    const response = await fetch("/api/save-training-record", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.saved) throw new Error(result.message || "OneDrive helper did not confirm the training save.");
+    item.oneDriveLocation = result.document?.filePath || result.record?.oneDriveLocation || item.oneDriveLocation || "";
+    item.documentFileName = result.document?.name || item.documentFileName || item.certificate || "";
+    item.certificate = item.documentFileName || item.certificate || "";
+    item.updatedAt = new Date().toISOString();
+    trainingDocumentDraft = result.document ? { ...result.document, saved: true } : trainingDocumentDraft;
+    return true;
+  } catch (error) {
+    keepPendingOneDriveBackup(commandData(), "Training document save failed");
+    await kcInfo(`Training record has not been safely saved to OneDrive yet. A local backup has been kept. ${error.message || "Please start Kingswood Hub with the launcher and try saving again."}`);
+    return false;
+  }
+}
+
+async function saveComplianceDocumentToOneDrive(item, { renewal = false } = {}) {
+  const payload = {
+    record: item,
+    document: complianceDocumentDraft?.dataUrl ? complianceDocumentDraft : null,
+    renewal
+  };
+
+  try {
+    const response = await fetch("/api/save-compliance-record", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.saved) throw new Error(result.message || "OneDrive helper did not confirm the compliance save.");
+    item.oneDriveLocation = result.document?.filePath || result.record?.oneDriveLocation || item.oneDriveLocation || "";
+    item.documentFileName = result.document?.name || item.documentFileName || "";
+    item.supportingDocumentName = item.documentFileName;
+    item.updatedAt = new Date().toISOString();
+    complianceDocumentDraft = result.document ? { ...result.document, saved: true } : complianceDocumentDraft;
+    return true;
+  } catch (error) {
+    keepPendingOneDriveBackup(commandData(), "Compliance document save failed");
+    await kcInfo(`Compliance record has not been safely saved to OneDrive yet. A local backup has been kept. ${error.message || "Please start Kingswood Hub with the launcher and try saving again."}`);
+    return false;
+  }
+}
+
+async function saveAssetToOneDrive(item) {
+  const documentsToSave = assetDocumentDraft.filter((entry) => entry.dataUrl && !entry.saved).map((entry) => ({ ...entry }));
+  const payload = {
+    asset: {
+      ...item,
+      documents: assetDocumentDraft.map((entry) => ({ ...entry }))
+    },
+    documents: documentsToSave,
+    user: currentUserName()
+  };
+  updateOneDriveHeaderStatus("Saving to OneDrive", "Saving asset register");
+  try {
+    const response = await fetch("/api/save-asset-record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+    if (!response.ok || !result.saved) throw new Error(result.message || "OneDrive helper did not confirm the asset save.");
+    item.documents = result.documents || item.documents || [];
+    item.oneDriveFolder = result.folder || item.oneDriveFolder || "";
+    item.updatedAt = new Date().toISOString();
+    assetDocumentDraft = item.documents.map((entry) => ({ ...entry, saved: true }));
+    updateOneDriveHeaderStatus("OneDrive save complete", formatOneDriveSaveTime(new Date().toISOString()));
+    return true;
+  } catch (error) {
+    keepPendingOneDriveBackup(commandData(), "Asset record failed to save");
+    updateOneDriveHeaderStatus("Local backup pending", "Asset not saved to OneDrive");
+    await kcInfo(`Asset data has not been safely saved to OneDrive yet. A local backup has been kept. ${error.message || "Please start Kingswood Hub with the launcher and try saving again."}`);
+    return false;
+  }
+}
+
 function openDataDialog(collection, index = "", seed = {}) {
   const model = dataModels[collection];
   if (!model) return;
@@ -1716,10 +2609,21 @@ function openDataDialog(collection, index = "", seed = {}) {
   dataCollectionInput.value = collection;
   dataIndexInput.value = index;
   dataDialogTitle.textContent = `${index === "" ? "Add" : "Edit"} ${model.title}`;
+  dataDialog.classList.toggle("fines-dialog", collection === "fines");
+  setDataDialogStatus("");
   if (dataSaveButton) {
     dataSaveButton.textContent = collection === "jobs" ? "Send to Tech App" : "Save";
+    dataSaveButton.value = collection === "jobs" ? "send-tech" : "default";
+    dataSaveButton.disabled = false;
+  }
+  if (dataSaveSystemButton) {
+    dataSaveSystemButton.hidden = collection !== "jobs";
+    dataSaveSystemButton.disabled = false;
   }
   dataFields.innerHTML = model.fields.map(([key, label, type = "text"]) => {
+    if (type === "section-heading") {
+      return `<div class="form-section-heading full-width">${escapeHtml(label)}</div>`;
+    }
     const value = escapeHtml(fieldValue(item, key));
     const full = type === "textarea" ? " full-width" : "";
     if (type === "checkbox") {
@@ -1727,6 +2631,129 @@ function openDataDialog(collection, index = "", seed = {}) {
     }
     if (type === "staff-select") {
       return renderSelectField(key, label, fieldValue(item, key), staffNames());
+    }
+    if (type === "vehicle-registration-select") {
+      const options = vehicles.map((vehicle) => asVehicleObject(vehicle).registration).filter(Boolean);
+      if (options.length) {
+        return renderSelectField(key, label, fieldValue(item, key), options);
+      }
+      return `
+        <label class="${full}">
+          ${label}
+          <input data-field="${key}" type="text" value="${value}" placeholder="Enter vehicle registration">
+        </label>
+      `;
+    }
+    if (type === "readonly-text") {
+      return `
+        <label>
+          ${label}
+          <input data-field="${key}" type="text" value="${value || escapeHtml(generateAssetId(fieldValue(item, "asset") || "Asset"))}" readonly>
+        </label>
+      `;
+    }
+    if (type === "asset-category-select") {
+      return renderSelectField(key, label, fieldValue(item, key) || "Power tools", assetCategories);
+    }
+    if (type === "asset-condition-select") {
+      return renderSelectField(key, label, fieldValue(item, key) || "Good", assetConditions);
+    }
+    if (type === "asset-status-select") {
+      return renderSelectField(key, label, fieldValue(item, key) || "In use", assetStatuses);
+    }
+    if (type === "asset-power-source-select") {
+      return renderSelectField(key, label, fieldValue(item, key) || "Not applicable", assetPowerSources);
+    }
+    if (type === "asset-pat-result-select") {
+      return renderSelectField(key, label, fieldValue(item, key), ["Pass", "Fail", "Advisory", "Not tested"]);
+    }
+    if (type === "asset-employee-select") {
+      const staffOptions = staffProfiles.filter((staff) => staff.status !== "Left");
+      const options = ["", ...staffOptions.map((staff) => staff.staffId || staff.name)];
+      return renderSelectField(key, label, fieldValue(item, key), options, (option) => staffOptions.find((staff) => (staff.staffId || staff.name) === option)?.name || option || "Not assigned");
+    }
+    if (type === "asset-vehicle-select") {
+      const vehicleOptions = vehicles.map(asVehicleObject);
+      const options = ["", ...vehicleOptions.map((vehicle) => vehicle.vehicleId || vehicle.registration)];
+      return renderSelectField(key, label, fieldValue(item, key), options, (option) => {
+        const vehicle = vehicleOptions.find((item) => (item.vehicleId || item.registration) === option);
+        return vehicle ? `${vehicle.registration || vehicle.vehicle}` : option || "Not stored in vehicle";
+      });
+    }
+    if (type === "fine-type-select") {
+      return renderSelectField(key, label, fieldValue(item, key), ["Parking", "Congestion Charge", "ULEZ", "Speeding", "Bus Lane", "Moving Traffic", "Dart Charge", "Other"]);
+    }
+    if (type === "fine-status-select") {
+      return renderSelectField(key, label, fieldValue(item, key) || "New", ["New", "Awaiting Driver", "Under Review", "Appealed", "Awaiting Payment", "Paid", "Cancelled"]);
+    }
+    if (type === "holiday-day-type-select") {
+      return renderSelectField(key, label, fieldValue(item, key) || "Full day", ["Full day", "Half day"]);
+    }
+    if (type === "holiday-day-part-select") {
+      return renderSelectField(key, label, fieldValue(item, key), ["AM", "PM"]);
+    }
+    if (type === "holiday-days-number") {
+      return `
+        <label>
+          ${label}
+          <span class="inline-field-action">
+            <input data-field="${key}" type="number" step="0.5" value="${value}" readonly>
+            <button class="secondary-button compact-button" type="button" data-holiday-days-override>Override</button>
+          </span>
+        </label>
+      `;
+    }
+    if (type === "fine-evidence") {
+      const existingEvidence = normaliseFineEvidence(item);
+      fineEvidenceDraft = existingEvidence.map((entry) => ({ ...entry, saved: true }));
+      return `
+        <section class="full-width fine-evidence-field">
+          <div class="fine-evidence-drop" tabindex="0" role="button" aria-label="Paste or drag fine evidence here">
+            <strong>Paste or drag fine evidence here</strong>
+            <span>Accepts Snipping Tool screenshots, images and PDF documents.</span>
+          </div>
+          <div id="fineEvidencePreview" class="fine-evidence-preview"></div>
+        </section>
+      `;
+    }
+    if (type === "training-document") {
+      trainingDocumentDraft = normaliseTrainingDocument(item);
+      return `
+        <section class="full-width training-document-field">
+          <div class="training-document-drop" tabindex="0" role="button" aria-label="Add training certificate or document">
+            <strong>Paste, select or drag certificate here</strong>
+            <span>Accepts PDF, JPG, JPEG and PNG documents.</span>
+            <input id="trainingDocumentInput" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" hidden>
+          </div>
+          <div id="trainingDocumentPreview" class="training-document-preview"></div>
+        </section>
+      `;
+    }
+    if (type === "compliance-document") {
+      complianceDocumentDraft = normaliseComplianceDocument(item);
+      return `
+        <section class="full-width training-document-field compliance-document-field">
+          <div class="training-document-drop compliance-document-drop" tabindex="0" role="button" aria-label="Add compliance supporting document">
+            <strong>Paste, select or drag supporting document here</strong>
+            <span>Accepts PDF, images, Word and Excel documents.</span>
+            <input id="complianceDocumentInput" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+          </div>
+          <div id="complianceDocumentPreview" class="training-document-preview"></div>
+        </section>
+      `;
+    }
+    if (type === "asset-documents") {
+      assetDocumentDraft = normaliseAssetDocuments(item);
+      return `
+        <section class="full-width training-document-field asset-document-field">
+          <div class="training-document-drop asset-document-drop" tabindex="0" role="button" aria-label="Add asset photos or documents">
+            <strong>Paste, select or drag asset photos and documents here</strong>
+            <span>Accepts Snipping Tool screenshots, PDF, images, Word and Excel documents.</span>
+            <input id="assetDocumentInput" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+          </div>
+          <div id="assetDocumentPreview" class="training-document-preview"></div>
+        </section>
+      `;
     }
     if (type === "job-technician-select") {
       return renderJobTechnicianField(key, label, fieldValue(item, key), fieldValue(item, "date") || today);
@@ -1742,6 +2769,18 @@ function openDataDialog(collection, index = "", seed = {}) {
     }
     if (type === "role-select") {
       return renderSelectField(key, label, fieldValue(item, key), ["Technician", "Senior Technician", "Trainee Technician", "Admin", "Manager", "Director"]);
+    }
+    if (type === "company-document-category-select") {
+      return renderSelectField(key, label, fieldValue(item, key), companyDocumentCategories);
+    }
+    if (type === "compliance-type-select") {
+      return renderSelectField(key, label, fieldValue(item, key), complianceTypes);
+    }
+    if (type === "accreditation-select") {
+      return renderSelectField(key, label, fieldValue(item, key), accreditationOptions);
+    }
+    if (type === "office-owner-select") {
+      return renderSelectField(key, label, fieldValue(item, key), ["Kevin", "Alex", "Jodie"]);
     }
     if (type === "session-select") {
       return renderSelectField(key, label, fieldValue(item, key), ["AM", "PM"]);
@@ -1789,8 +2828,41 @@ function openDataDialog(collection, index = "", seed = {}) {
     `;
   }).join("");
   setupSnippetFields();
+  setupFineEvidenceField(collection);
+  setupTrainingDocumentField(collection);
+  setupComplianceDocumentField(collection);
+  setupTrainingExpiryFields(collection);
+  setupComplianceExpiryFields(collection);
+  setupComplianceAccreditationFields(collection);
+  setupAssetDocumentField(collection);
+  setupAssetConditionalFields(collection);
   setupSmartDataDialog(collection);
   dataDialog.showModal();
+  if (collection === "fines") {
+    renderFineEvidencePreview();
+  }
+  if (collection === "training") {
+    renderTrainingDocumentPreview();
+  }
+  if (collection === "compliance") {
+    renderComplianceDocumentPreview();
+  }
+  if (collection === "assets") {
+    renderAssetDocumentPreview();
+  }
+}
+
+function setupTrainingExpiryFields(collection) {
+  if (collection !== "training") return;
+  const noExpiryField = dataFields.querySelector('[data-field="noExpiry"]');
+  const expiryField = dataFields.querySelector('[data-field="expiryDate"]');
+  const refresh = () => {
+    if (!noExpiryField || !expiryField) return;
+    expiryField.disabled = noExpiryField.checked;
+    if (noExpiryField.checked) expiryField.value = "";
+  };
+  noExpiryField?.addEventListener("change", refresh);
+  refresh();
 }
 
 function appendSnippetToField(textarea, file) {
@@ -1826,6 +2898,460 @@ function setupSnippetFields() {
   });
 }
 
+function normaliseFineEvidence(fine = {}) {
+  if (Array.isArray(fine.evidenceItems)) return fine.evidenceItems;
+  if (Array.isArray(fine.evidenceFiles)) return fine.evidenceFiles;
+  if (typeof fine.evidence === "string" && fine.evidence.trim()) {
+    return [{ name: fine.evidence.trim(), type: "note", saved: true }];
+  }
+  return [];
+}
+
+function normaliseTrainingDocument(record = {}) {
+  const name = record.documentFileName || record.certificate || "";
+  if (!name && !record.oneDriveLocation) return null;
+  return {
+    id: record.documentId || record.id || crypto.randomUUID(),
+    name,
+    type: /\.(png|jpe?g)$/i.test(name) ? "image" : /\.pdf$/i.test(name) ? "pdf" : "document",
+    filePath: record.oneDriveLocation || "",
+    saved: true
+  };
+}
+
+function trainingDocumentType(file) {
+  const type = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+  if (type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (type.startsWith("image/") || /\.(png|jpe?g)$/i.test(name)) return "image";
+  return "";
+}
+
+function readTrainingDocumentFile(file) {
+  return new Promise((resolve) => {
+    const kind = trainingDocumentType(file);
+    if (!kind) {
+      resolve(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      resolve({
+        id: crypto.randomUUID(),
+        name: file.name || `training-document-${Date.now()}.${kind === "pdf" ? "pdf" : "png"}`,
+        type: kind,
+        mimeType: file.type || (kind === "pdf" ? "application/pdf" : "image/png"),
+        dataUrl: reader.result,
+        addedAt: new Date().toISOString()
+      });
+    });
+    reader.readAsDataURL(file);
+  });
+}
+
+async function setTrainingDocumentFile(file) {
+  const entry = await readTrainingDocumentFile(file);
+  if (!entry) {
+    await kcInfo("Please add a PDF, JPG, JPEG or PNG training document.");
+    return;
+  }
+  trainingDocumentDraft = entry;
+  renderTrainingDocumentPreview();
+}
+
+function renderTrainingDocumentPreview() {
+  const target = dataFields.querySelector("#trainingDocumentPreview");
+  if (!target) return;
+  if (!trainingDocumentDraft) {
+    target.innerHTML = '<p class="empty-state compact-empty">No certificate selected.</p>';
+    return;
+  }
+  const isImage = trainingDocumentDraft.type === "image" && trainingDocumentDraft.dataUrl;
+  target.innerHTML = `
+    <article class="training-document-item">
+      ${isImage ? `<img src="${trainingDocumentDraft.dataUrl}" alt="">` : `<span class="document-chip">${escapeHtml(trainingDocumentDraft.type === "pdf" ? "PDF" : "DOC")}</span>`}
+      <div>
+        <strong>${escapeHtml(trainingDocumentDraft.name || "Training document")}</strong>
+        <p>${trainingDocumentDraft.saved ? "Saved to OneDrive" : "Certificate attached"}</p>
+      </div>
+      <div class="record-actions">
+        ${trainingDocumentDraft.dataUrl ? '<button class="secondary-button" type="button" data-open-training-document>Open</button>' : ""}
+        <button class="danger-button" type="button" data-remove-training-document>Remove</button>
+      </div>
+    </article>
+  `;
+}
+
+function setupTrainingDocumentField(collection) {
+  if (collection !== "training") return;
+  const drop = dataFields.querySelector(".training-document-drop");
+  const input = dataFields.querySelector("#trainingDocumentInput");
+  if (!drop || !input) return;
+  drop.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (file) setTrainingDocumentFile(file);
+    input.value = "";
+  });
+  drop.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    drop.classList.add("is-over");
+  });
+  drop.addEventListener("dragleave", () => drop.classList.remove("is-over"));
+  drop.addEventListener("drop", (event) => {
+    event.preventDefault();
+    drop.classList.remove("is-over");
+    const file = event.dataTransfer?.files?.[0];
+    if (file) setTrainingDocumentFile(file);
+  });
+  drop.addEventListener("paste", (event) => {
+    const file = Array.from(event.clipboardData?.files || [])[0];
+    if (file) setTrainingDocumentFile(file);
+  });
+}
+
+function setupComplianceExpiryFields(collection) {
+  if (collection !== "compliance") return;
+  const noExpiryField = dataFields.querySelector('[data-field="noExpiry"]');
+  const expiryField = dataFields.querySelector('[data-field="expiryDate"]');
+  const refresh = () => {
+    if (!noExpiryField || !expiryField) return;
+    expiryField.disabled = noExpiryField.checked;
+    if (noExpiryField.checked) expiryField.value = "";
+  };
+  noExpiryField?.addEventListener("change", refresh);
+  refresh();
+}
+
+function setupComplianceAccreditationFields(collection) {
+  if (collection !== "compliance") return;
+  const typeField = dataFields.querySelector('[data-field="complianceType"]');
+  const accreditationField = dataFields.querySelector('[data-field="accreditationName"]');
+  const customField = dataFields.querySelector('[data-field="customAccreditationName"]');
+  const titleField = dataFields.querySelector('[data-field="title"]');
+  const accreditationWrap = accreditationField?.closest("label");
+  const customWrap = customField?.closest("label");
+  const refresh = () => {
+    const isAccreditation = typeField?.value === "Accreditation";
+    if (accreditationWrap) accreditationWrap.hidden = !isAccreditation;
+    if (customWrap) customWrap.hidden = !isAccreditation || accreditationField?.value !== "Add other accreditation";
+    if (isAccreditation && accreditationField?.value === "SafeContractor" && titleField && !titleField.value.trim()) {
+      titleField.value = "SafeContractor accreditation";
+    }
+  };
+  typeField?.addEventListener("change", refresh);
+  accreditationField?.addEventListener("change", () => {
+    if (accreditationField.value === "SafeContractor" && titleField) titleField.value = "SafeContractor accreditation";
+    if (accreditationField.value === "Add other accreditation" && titleField && titleField.value === "SafeContractor accreditation") titleField.value = "";
+    refresh();
+  });
+  refresh();
+}
+
+function normaliseComplianceDocument(record = {}) {
+  const name = record.documentFileName || record.supportingDocumentName || "";
+  if (!name && !record.oneDriveLocation) return null;
+  return {
+    id: record.documentId || record.id || crypto.randomUUID(),
+    name,
+    type: /\.(png|jpe?g)$/i.test(name) ? "image" : /\.pdf$/i.test(name) ? "pdf" : "document",
+    filePath: record.oneDriveLocation || "",
+    saved: true
+  };
+}
+
+function complianceDocumentType(file) {
+  const type = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+  if (type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (type.startsWith("image/") || /\.(png|jpe?g)$/i.test(name)) return "image";
+  if (/\.(doc|docx|xls|xlsx)$/i.test(name)) return "document";
+  return "";
+}
+
+function readComplianceDocumentFile(file) {
+  return new Promise((resolve) => {
+    const kind = complianceDocumentType(file);
+    if (!kind) {
+      resolve(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      resolve({
+        id: crypto.randomUUID(),
+        name: file.name || `compliance-document-${Date.now()}`,
+        type: kind,
+        mimeType: file.type || "application/octet-stream",
+        dataUrl: reader.result,
+        addedAt: new Date().toISOString()
+      });
+    });
+    reader.readAsDataURL(file);
+  });
+}
+
+async function setComplianceDocumentFile(file) {
+  const entry = await readComplianceDocumentFile(file);
+  if (!entry) {
+    await kcInfo("Please add a PDF, JPG, JPEG, PNG, Word or Excel document.");
+    return;
+  }
+  complianceDocumentDraft = entry;
+  renderComplianceDocumentPreview();
+}
+
+function renderComplianceDocumentPreview() {
+  const target = dataFields.querySelector("#complianceDocumentPreview");
+  if (!target) return;
+  if (!complianceDocumentDraft) {
+    target.innerHTML = '<p class="empty-state compact-empty">No supporting document selected.</p>';
+    return;
+  }
+  const isImage = complianceDocumentDraft.type === "image" && complianceDocumentDraft.dataUrl;
+  target.innerHTML = `
+    <article class="training-document-item">
+      ${isImage ? `<img src="${complianceDocumentDraft.dataUrl}" alt="">` : `<span class="document-chip">${escapeHtml(complianceDocumentDraft.type === "pdf" ? "PDF" : "DOC")}</span>`}
+      <div>
+        <strong>${escapeHtml(complianceDocumentDraft.name || "Compliance document")}</strong>
+        <p>${complianceDocumentDraft.saved ? "Saved to OneDrive" : "Supporting document attached"}</p>
+      </div>
+      <div class="record-actions">
+        ${complianceDocumentDraft.dataUrl ? '<button class="secondary-button" type="button" data-open-compliance-document>Open</button>' : ""}
+        <button class="danger-button" type="button" data-remove-compliance-document>Remove</button>
+      </div>
+    </article>
+  `;
+}
+
+function setupComplianceDocumentField(collection) {
+  if (collection !== "compliance") return;
+  const drop = dataFields.querySelector(".compliance-document-drop");
+  const input = dataFields.querySelector("#complianceDocumentInput");
+  if (!drop || !input) return;
+  drop.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (file) setComplianceDocumentFile(file);
+    input.value = "";
+  });
+  drop.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    drop.classList.add("is-over");
+  });
+  drop.addEventListener("dragleave", () => drop.classList.remove("is-over"));
+  drop.addEventListener("drop", (event) => {
+    event.preventDefault();
+    drop.classList.remove("is-over");
+    const file = event.dataTransfer?.files?.[0];
+    if (file) setComplianceDocumentFile(file);
+  });
+  drop.addEventListener("paste", (event) => {
+    const file = Array.from(event.clipboardData?.files || [])[0];
+    if (file) setComplianceDocumentFile(file);
+  });
+}
+
+function assetDocumentType(file) {
+  const type = file.type || "";
+  if (type.startsWith("image/")) return "image";
+  if (type.includes("pdf")) return "pdf";
+  if (type.includes("word") || /\.(doc|docx)$/i.test(file.name || "")) return "word";
+  if (type.includes("excel") || type.includes("spreadsheet") || /\.(xls|xlsx)$/i.test(file.name || "")) return "excel";
+  return "";
+}
+
+function normaliseAssetDocuments(asset = {}) {
+  return Array.isArray(asset.documents) ? asset.documents : [];
+}
+
+function addAssetDocumentFiles(files) {
+  const entries = Array.from(files || []);
+  const allowed = entries.filter((file) => assetDocumentType(file));
+  if (!allowed.length) {
+    kcInfo("Please add PDF, JPG, JPEG, PNG, Word or Excel asset documents.");
+    return;
+  }
+  allowed.forEach((file) => {
+    const kind = assetDocumentType(file);
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      assetDocumentDraft.push({
+        id: crypto.randomUUID(),
+        name: file.name || `asset-document-${Date.now()}`,
+        type: kind,
+        mimeType: file.type || "",
+        dataUrl: reader.result,
+        saved: false
+      });
+      renderAssetDocumentPreview();
+    });
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderAssetDocumentPreview() {
+  const target = dataFields.querySelector("#assetDocumentPreview");
+  if (!target) return;
+  target.innerHTML = assetDocumentDraft.length
+    ? assetDocumentDraft.map((item, index) => {
+      const isImage = item.type === "image" && item.dataUrl;
+      const label = item.type === "pdf" ? "PDF" : item.type === "word" ? "DOC" : item.type === "excel" ? "XLS" : "IMG";
+      return `
+        <article class="training-document-item">
+          ${isImage ? `<img src="${escapeHtml(item.dataUrl)}" alt="">` : `<span class="document-chip">${label}</span>`}
+          <div>
+            <strong>${escapeHtml(item.name || "Asset document")}</strong>
+            <p>${item.saved ? "Saved to OneDrive" : "Ready to save"}</p>
+            <div class="record-actions">
+              ${item.dataUrl ? `<button class="secondary-button" type="button" data-open-asset-document="${index}">Open</button>` : ""}
+              <button class="danger-button" type="button" data-remove-asset-document="${index}">Remove</button>
+            </div>
+          </div>
+        </article>
+      `;
+    }).join("")
+    : '<p class="empty-state compact-empty">No asset photos or documents attached yet.</p>';
+}
+
+function setupAssetDocumentField(collection) {
+  if (collection !== "assets") return;
+  const drop = dataFields.querySelector(".asset-document-drop");
+  const input = dataFields.querySelector("#assetDocumentInput");
+  if (!drop || !input) return;
+  drop.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => addAssetDocumentFiles(input.files || []));
+  drop.addEventListener("paste", (event) => {
+    const files = Array.from(event.clipboardData?.files || []);
+    if (files.length) {
+      event.preventDefault();
+      addAssetDocumentFiles(files);
+    }
+  });
+  drop.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    drop.classList.add("drag-over");
+  });
+  drop.addEventListener("dragleave", () => drop.classList.remove("drag-over"));
+  drop.addEventListener("drop", (event) => {
+    event.preventDefault();
+    drop.classList.remove("drag-over");
+    addAssetDocumentFiles(event.dataTransfer?.files || []);
+  });
+}
+
+function setupAssetConditionalFields(collection) {
+  if (collection !== "assets") return;
+  const inspectionRequired = dataFields.querySelector('[data-field="inspectionRequired"]');
+  const serviceRequired = dataFields.querySelector('[data-field="serviceRequired"]');
+  const powerSource = dataFields.querySelector('[data-field="powerSource"]');
+  const patRequired = dataFields.querySelector('[data-field="patTestingRequired"]');
+  const toggleField = (key, visible) => {
+    dataFields.querySelector(`[data-field="${key}"]`)?.closest("label")?.classList.toggle("hidden", !visible);
+  };
+  const refresh = () => {
+    const showInspection = inspectionRequired?.value === "Yes";
+    ["inspectionFrequency", "lastInspectionDate", "nextInspectionDue"].forEach((key) => toggleField(key, showInspection));
+    const showService = serviceRequired?.value === "Yes";
+    ["serviceFrequency", "lastServiceDate", "nextServiceDue"].forEach((key) => toggleField(key, showService));
+    const showPat = powerSource?.value === "Mains powered";
+    toggleField("patTestingRequired", showPat);
+    const showPatDetails = showPat && patRequired?.value === "Yes";
+    ["lastPatDate", "nextPatDue", "patResult"].forEach((key) => toggleField(key, showPatDetails));
+    if (!showPat && patRequired) patRequired.value = "No";
+  };
+  [inspectionRequired, serviceRequired, powerSource, patRequired].forEach((field) => field?.addEventListener("change", refresh));
+  refresh();
+}
+
+function fineEvidenceType(file) {
+  const type = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+  if (type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (type.startsWith("image/") || /\.(png|jpe?g)$/i.test(name)) return "image";
+  return "";
+}
+
+function readFineEvidenceFile(file) {
+  return new Promise((resolve) => {
+    const kind = fineEvidenceType(file);
+    if (!kind) {
+      resolve(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      resolve({
+        id: crypto.randomUUID(),
+        name: file.name || `${kind}-evidence-${Date.now()}.${kind === "pdf" ? "pdf" : "png"}`,
+        type: kind,
+        mimeType: file.type || (kind === "pdf" ? "application/pdf" : "image/png"),
+        dataUrl: reader.result,
+        addedAt: new Date().toISOString()
+      });
+    });
+    reader.readAsDataURL(file);
+  });
+}
+
+async function addFineEvidenceFiles(files) {
+  const entries = await Promise.all(Array.from(files || []).map(readFineEvidenceFile));
+  const valid = entries.filter(Boolean);
+  if (!valid.length) {
+    await kcInfo("Please add JPG, JPEG, PNG or PDF evidence files only.");
+    return;
+  }
+  fineEvidenceDraft.push(...valid);
+  renderFineEvidencePreview();
+}
+
+function renderFineEvidencePreview() {
+  const target = dataFields.querySelector("#fineEvidencePreview");
+  if (!target) return;
+  target.innerHTML = fineEvidenceDraft.length
+    ? fineEvidenceDraft.map((item, index) => {
+      const isImage = item.type === "image" && item.dataUrl;
+      const openValue = item.dataUrl ? ` data-open-fine-evidence="${index}"` : "";
+      return `
+        <article class="fine-evidence-item">
+          ${isImage ? `<img src="${escapeHtml(item.dataUrl)}" alt="${escapeHtml(item.name)}">` : `<div class="fine-evidence-file">${item.type === "pdf" ? "PDF" : "FILE"}</div>`}
+          <div>
+            <strong>${escapeHtml(item.name || "Evidence")}</strong>
+            <p>${escapeHtml(item.saved ? "Saved evidence" : "Ready to save")}</p>
+            <div class="record-actions">
+              ${item.dataUrl ? `<button class="secondary-button" type="button"${openValue}>Open</button>` : ""}
+              <button class="danger-button" type="button" data-remove-fine-evidence="${index}">Remove</button>
+            </div>
+          </div>
+        </article>
+      `;
+    }).join("")
+    : '<p class="empty-state compact-empty">No evidence added yet.</p>';
+}
+
+function setupFineEvidenceField(collection) {
+  if (collection !== "fines") return;
+  const drop = dataFields.querySelector(".fine-evidence-drop");
+  if (!drop) return;
+  drop.addEventListener("paste", (event) => {
+    const files = Array.from(event.clipboardData?.files || []);
+    if (files.length) {
+      event.preventDefault();
+      addFineEvidenceFiles(files);
+    }
+  });
+  drop.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    drop.classList.add("drag-over");
+  });
+  drop.addEventListener("dragleave", () => drop.classList.remove("drag-over"));
+  drop.addEventListener("drop", (event) => {
+    event.preventDefault();
+    drop.classList.remove("drag-over");
+    addFineEvidenceFiles(event.dataTransfer?.files || []);
+  });
+}
+
 function setupSmartDataDialog(collection) {
   if (collection === "jobs" || collection === "planner") {
     const dateField = dataFields.querySelector('[data-field="date"]');
@@ -1839,6 +3365,46 @@ function setupSmartDataDialog(collection) {
       if (!wrapper) return;
       wrapper.outerHTML = renderJobTechnicianField(key, label, current, dateField.value || today);
     });
+  }
+
+  if (collection === "holidays") {
+    const fromField = dataFields.querySelector('[data-field="from"]');
+    const toField = dataFields.querySelector('[data-field="to"]');
+    const dayTypeField = dataFields.querySelector('[data-field="dayType"]');
+    const dayPartField = dataFields.querySelector('[data-field="dayPart"]');
+    const dayPartWrap = dayPartField?.closest("label");
+    const daysField = dataFields.querySelector('[data-field="days"]');
+    const refreshHolidayTiming = () => {
+      const sameDay = fromField?.value && toField?.value && fromField.value === toField.value;
+      if (dayTypeField && dayTypeField.value === "Half day" && !sameDay) {
+        dayTypeField.value = "Full day";
+      }
+      if (dayPartWrap) {
+        dayPartWrap.classList.toggle("hidden", dayTypeField?.value !== "Half day");
+      }
+      if (dayPartField && dayTypeField?.value === "Half day" && !dayPartField.value) {
+        dayPartField.value = "AM";
+      }
+      const calculated = holidayCalculatedDays({
+        from: fromField?.value,
+        to: toField?.value,
+        dayType: dayTypeField?.value,
+        dayPart: dayPartField?.value
+      });
+      if (daysField && daysField.dataset.holidayDaysOverride !== "true") {
+        daysField.step = "0.5";
+        daysField.readOnly = true;
+        daysField.value = calculated || "";
+      }
+    };
+    [fromField, toField, dayTypeField, dayPartField].forEach((field) => field?.addEventListener("change", refreshHolidayTiming));
+    dataFields.querySelector("[data-holiday-days-override]")?.addEventListener("click", () => {
+      if (!daysField) return;
+      daysField.dataset.holidayDaysOverride = "true";
+      daysField.readOnly = false;
+      daysField.focus();
+    });
+    refreshHolidayTiming();
   }
 
   if (collection !== "attendance") return;
@@ -1916,6 +3482,29 @@ function workingDateRangeValues(from, to) {
   return dateRangeValues(from, to).filter(isWorkingWeekday);
 }
 
+function holidayCalculatedDays(item = {}) {
+  const dates = workingDateRangeValues(item.from, item.to);
+  if (!dates.length) return 0;
+  return item.dayType === "Half day" && item.from === item.to ? 0.5 : dates.length;
+}
+
+function normaliseHolidayRequestTiming(item = {}) {
+  const sameDay = item.from && item.to && item.from === item.to;
+  if (item.dayType !== "Half day" || !sameDay) {
+    item.dayType = "Full day";
+    item.dayPart = "";
+  } else if (!["AM", "PM"].includes(item.dayPart)) {
+    item.dayPart = "AM";
+  }
+  const calculated = holidayCalculatedDays(item);
+  if (item.dayType === "Half day") {
+    item.days = 0.5;
+  } else if (!Number(item.days)) {
+    item.days = calculated;
+  }
+  return item;
+}
+
 function countConsecutiveOccupationalSickDays(name, dateValue) {
   if (!name || !dateValue) return 0;
   const recordDates = new Set(attendanceRecords
@@ -1941,41 +3530,41 @@ function countConsecutiveOccupationalSickDays(name, dateValue) {
   return count;
 }
 
-function validateAttendanceRecord(item) {
+async function validateAttendanceRecord(item) {
   if (["Holiday", "Sick", "Absent"].includes(item.status) && !item.category) {
-    window.alert("Please choose an absence category before saving this absence.");
+    await kcInfo("Please choose an absence category before saving this absence.");
     return false;
   }
   if (item.status === "Absent - Called in Sick" && !item.category) {
-    window.alert("Please choose a functional H&S category for this sick call-in.");
+    await kcInfo("Please choose a functional H&S category for this sick call-in.");
     return false;
   }
   if (item.category === "Annual Leave" && item.status !== "Holiday") {
-    window.alert("Annual Leave must be recorded with the Holiday status.");
+    await kcInfo("Annual Leave must be recorded with the Holiday status.");
     return false;
   }
   if (isSickCallStatus(item.status) && item.category === "Annual Leave") {
-    window.alert("Please choose one of the four functional H&S sick call-in categories, not Annual Leave.");
+    await kcInfo("Please choose one of the four functional H&S sick call-in categories, not Annual Leave.");
     return false;
   }
   if (isSickCallStatus(item.status) && item.category === "Gastrointestinal (Vomiting/Diarrhoea)" && !item.recoveryDate) {
-    window.alert("Please enter the logged recovery / return date so the 48-hour food premises restriction can be applied.");
+    await kcInfo("Please enter the logged recovery / return date so the 48-hour food premises restriction can be applied.");
     return false;
   }
   if (isSickCallStatus(item.status) && item.category === "Respiratory / Chest" && !item.recoveryDate) {
-    window.alert("Please enter the logged recovery / return date so the RPE fitness warning can be applied.");
+    await kcInfo("Please enter the logged recovery / return date so the fitness-for-duty warning can be applied.");
     return false;
   }
   if (isSickCallStatus(item.status) && item.category === "Musculoskeletal / Physical Injury" && !item.workplaceInjury) {
-    window.alert("Please confirm whether this injury was sustained during an onsite work activity for Kingswood.");
+    await kcInfo("Please confirm whether this injury was sustained during an onsite work activity for Kingswood.");
     return false;
   }
   if (item.category === "Musculoskeletal / Physical Injury" && item.workplaceInjury === "Yes" && !item.workplaceIncident) {
-    window.alert("Please add the internal Incident Log reference for this onsite work injury.");
+    await kcInfo("Please add the internal Incident Log reference for this onsite work injury.");
     return false;
   }
   if (item.category === "Occupational Sick Leave / Industrial Injury" && !item.workplaceIncident) {
-    window.alert("Please confirm whether this illness/injury was caused by an onsite incident or chemical/biological exposure.");
+    await kcInfo("Please confirm whether this illness/injury was caused by an onsite incident or chemical/biological exposure.");
     return false;
   }
   if (item.status === "Present") {
@@ -1983,36 +3572,141 @@ function validateAttendanceRecord(item) {
       .filter((record) => record.name === item.name && record.status === "Sick" && record.date < item.date)
       .sort((a, b) => b.date.localeCompare(a.date))[0];
     if (previousSick && !item.returnToWorkCompleted) {
-      window.alert("Return to Work Health Declaration Completed must be ticked before returning a sick employee to Present Today.");
+      await kcInfo("Return to Work Health Declaration Completed must be ticked before returning a sick employee to Present Today.");
       return false;
     }
   }
   if ((item.category === "Occupational Sick Leave / Industrial Injury" || (item.category === "Musculoskeletal / Physical Injury" && item.workplaceInjury === "Yes")) && countConsecutiveOccupationalSickDays(item.name, item.date) > 7) {
-    window.alert("CRITICAL: Employee absent for >7 days due to workplace injury/illness. Evaluate if a RIDDOR notification to the HSE is required.");
+    await kcInfo("CRITICAL: Employee absent for >7 days due to workplace injury/illness. Evaluate if a RIDDOR notification to the HSE is required.");
   }
   return true;
 }
 
-function validateJobTechnicianAvailability(item) {
+async function validateJobTechnicianAvailability(item) {
   if (!item.technician || !item.date) return true;
   const attendance = attendanceFor(item.technician, item.date);
   if (isUnavailableStatus(attendance.status)) {
-    window.alert(`${item.technician} is marked as ${attendance.status} on ${formatDateUk(item.date)} and cannot be allocated to this job.`);
+    await kcInfo(`${item.technician} is marked as ${attendance.status} on ${formatDateUk(item.date)} and cannot be allocated to this job.`);
     return false;
   }
   const restriction = activeSicknessRestrictionFor(item.technician, item.date);
   if (restriction?.type === "food-premises" && jobIsFoodPremises(item)) {
-    window.alert(`${item.technician} is restricted from Food Premises, Commercial Kitchen and Catering work on ${formatDateUk(item.date)}.`);
+    await kcInfo(`${item.technician} is restricted from Food Premises, Commercial Kitchen and Catering work on ${formatDateUk(item.date)}.`);
     return false;
   }
   if (restriction?.type === "rpe-warning" && jobRequiresRpe(item)) {
-    window.alert("Verify operative is fully fit to wear tight-fitting respiratory protection before work commences.");
+    await kcInfo("Verify the operative is fully fit for the planned task before work commences.");
   }
   return true;
 }
 
+function plannerItemForJob(job) {
+  const item = {
+    date: job.date,
+    technician: job.technician,
+    session: job.slot || "AM",
+    type: "Other",
+    task: job.postcode || job.title || job.client || job.number || "JOB",
+    source: "job-dispatch",
+    jobNumber: job.number || "",
+    jobId: job.id || ""
+  };
+  return applyPlannerMetadata(item);
+}
+
+function findPlannerSlot(item) {
+  return weeklyPlanner.findIndex((slot) =>
+    slot.date === item.date
+    && slot.technician === item.technician
+    && (slot.session || "AM") === (item.session || "AM")
+  );
+}
+
+function setDataDialogStatus(message = "", type = "") {
+  if (!dataDialogStatus) return;
+  dataDialogStatus.textContent = message;
+  dataDialogStatus.className = `dialog-status-message${type ? ` ${type}` : ""}`;
+}
+
+async function validateJobDispatchFields(item, sendingToTech) {
+  const requiredFields = [
+    ["date", "Date"],
+    ["slot", "Job slot"],
+    ["number", "Job reference number"],
+    ["title", "Job title"],
+    ["client", "Client"],
+    ["mainClient", "Main Client"],
+    ["address", "Address"],
+    ["postcode", "Postcode"]
+  ];
+  if (sendingToTech) {
+    requiredFields.push(["technician", "Technician"]);
+  }
+  const missing = requiredFields
+    .filter(([key]) => !String(item[key] || "").trim())
+    .map(([, label]) => label);
+  if (item.slot && !["AM", "PM"].includes(item.slot)) {
+    missing.push("Job slot must be AM or PM");
+  }
+  if (!missing.length) return true;
+  const message = `Please complete before ${sendingToTech ? "sending to the tech app" : "saving"}:\n- ${missing.join("\n- ")}`;
+  setDataDialogStatus(message.replace(/\n/g, " "), "error");
+  await kcInfo(message);
+  return false;
+}
+
+async function confirmSendJobToTech(item) {
+  const lines = [
+    "Send this job to the technician app?",
+    "",
+    `${formatDateUk(item.date)} ${item.slot}`,
+    item.technician,
+    item.address,
+    item.postcode || item.title || item.client,
+    "",
+    "This will also update the Weekly Planner."
+  ].filter((line) => line !== undefined && line !== null);
+  return kcConfirmAction(lines.join("\n"), "Continue");
+}
+
+async function addJobToWeeklyPlanner(job) {
+  if (!job.date || !job.technician || !job.slot) {
+    await kcInfo("Please choose a date, technician and AM/PM job slot before sending to the tech app.");
+    return false;
+  }
+  const plannerItem = plannerItemForJob(job);
+  weeklyPlanner = weeklyPlanner.filter((slot) => !(slot.source === "job-dispatch" && slot.jobNumber && slot.jobNumber === plannerItem.jobNumber));
+  const existingIndex = findPlannerSlot(plannerItem);
+  if (existingIndex >= 0) {
+    const existing = weeklyPlanner[existingIndex];
+    const overwrite = await kcAsk({
+      message: `${job.technician} already has this ${job.slot} slot booked on ${formatDateUk(job.date)}:\n\n${plannerText(existing)}\n\nDo you want to overwrite this planner slot?`,
+      buttons: [
+        { label: "Cancel", value: "cancel", style: "secondary" },
+        { label: "Overwrite", value: "overwrite", style: "danger" }
+      ]
+    });
+    if (overwrite === "overwrite") {
+      weeklyPlanner[existingIndex] = plannerItem;
+    } else {
+      await kcInfo("Job not sent. Choose another date, technician or AM/PM slot, then press Send to Tech App again.");
+      return false;
+    }
+  } else {
+    weeklyPlanner.unshift(plannerItem);
+  }
+  activePlannerWeek = plannerItem.week;
+  return true;
+}
+
+function removeJobFromWeeklyPlanner(job) {
+  if (!job?.number) return;
+  weeklyPlanner = weeklyPlanner.filter((slot) => !(slot.source === "job-dispatch" && slot.jobNumber === job.number));
+}
+
 function applyApprovedHolidayRequest(request) {
   if (request.status !== "Approved") return;
+  normaliseHolidayRequestTiming(request);
   workingDateRangeValues(request.from, request.to).forEach((date) => {
     const existing = attendanceRecords.find((record) => record.name === request.name && record.date === date);
     const holidayRecord = {
@@ -2020,14 +3714,93 @@ function applyApprovedHolidayRequest(request) {
       name: request.name,
       status: "Holiday",
       category: "Annual Leave",
+      dayType: request.dayType || "Full day",
+      dayPart: request.dayPart || "",
+      days: request.dayType === "Half day" ? 0.5 : 1,
       returnToWorkCompleted: false,
       returnToWorkNotes: "Approved annual leave.",
       fitNote: "",
-      source: "holiday"
+      source: "holiday",
+      holidayRequestId: request.id || ""
     };
     if (existing) Object.assign(existing, holidayRecord);
     else attendanceRecords.push(holidayRecord);
   });
+  addApprovedHolidayToPlanner(request);
+}
+
+function addApprovedHolidayToPlanner(request) {
+  if (request.status !== "Approved") return;
+  normaliseHolidayRequestTiming(request);
+  if (request.id) {
+    weeklyPlanner = weeklyPlanner.filter((slot) => slot.holidayRequestId !== request.id);
+  }
+  workingDateRangeValues(request.from, request.to).forEach((date) => {
+    const sessions = request.dayType === "Half day" ? [request.dayPart || "AM"] : ["AM", "PM"];
+    sessions.forEach((session) => {
+      const item = applyPlannerMetadata({
+        date,
+        technician: request.name,
+        session,
+        type: "Holiday / course / training",
+        task: request.dayType === "Half day" ? `HOLIDAY ${session}` : "HOLIDAY",
+        source: "approved-holiday",
+        holidayRequestId: request.id || "",
+        staffId: request.staffId || ""
+      });
+      const existingIndex = weeklyPlanner.findIndex((slot) =>
+        slot.date === date && slot.technician === request.name && (slot.session || "AM") === session
+      );
+      if (existingIndex >= 0) {
+        weeklyPlanner[existingIndex] = { ...weeklyPlanner[existingIndex], ...item };
+      } else {
+        weeklyPlanner.push(item);
+      }
+    });
+  });
+}
+
+async function approveHolidayRequest(index) {
+  const request = holidayRequests[Number(index)];
+  if (!request || request.status !== "Pending") return;
+  const previousRequest = { ...request };
+  const previousAttendance = [...attendanceRecords];
+  const previousPlanner = [...weeklyPlanner];
+  request.status = "Approved";
+  request.approvedDate = today;
+  request.declineReason = "";
+  request.year = request.year || String(new Date(request.from || today).getFullYear());
+  applyApprovedHolidayRequest(request);
+  const saved = await publishIntegrationFeeds();
+  if (!saved) {
+    Object.assign(request, previousRequest);
+    attendanceRecords = previousAttendance;
+    weeklyPlanner = previousPlanner;
+    render();
+    return;
+  }
+  render();
+  await kcInfo("Holiday request approved. Staff records, Weekly Planner and technician feed have been updated.");
+}
+
+async function declineHolidayRequest(index) {
+  const request = holidayRequests[Number(index)];
+  if (!request || request.status !== "Pending") return;
+  const reason = await kcInput("Add an optional reason for declining this holiday request.", "Decline reason");
+  if (reason === "cancel") return;
+  const previousRequest = { ...request };
+  request.status = "Declined";
+  request.declinedDate = today;
+  request.declineReason = reason || "";
+  request.year = request.year || String(new Date(request.from || today).getFullYear());
+  const saved = await publishIntegrationFeeds();
+  if (!saved) {
+    Object.assign(request, previousRequest);
+    render();
+    return;
+  }
+  render();
+  await kcInfo("Holiday request declined. No holiday has been deducted and the Weekly Planner has not been changed.");
 }
 
 function refreshSickCallDialog() {
@@ -2052,15 +3825,15 @@ async function saveSickCallIn() {
   const workplaceInjury = sickCallWorkInjury?.value || "";
   const workplaceIncident = sickCallIncidentNote?.value.trim() || "";
   if (!name || !category) {
-    window.alert("Please choose a symptom category.");
+    await kcInfo("Please choose a symptom category.");
     return false;
   }
   if (category === "Musculoskeletal / Physical Injury" && !workplaceInjury) {
-    window.alert("Please confirm whether this injury was sustained during an onsite work activity for Kingswood.");
+    await kcInfo("Please confirm whether this injury was sustained during an onsite work activity for Kingswood.");
     return false;
   }
   if (category === "Musculoskeletal / Physical Injury" && workplaceInjury === "Yes" && !workplaceIncident) {
-    window.alert("Please add the internal Incident Log reference.");
+    await kcInfo("Please add the internal Incident Log reference.");
     return false;
   }
 
@@ -2078,7 +3851,7 @@ async function saveSickCallIn() {
     source: "attendance-today"
   };
 
-  if (!validateAttendanceRecord(item)) return false;
+  if (!(await validateAttendanceRecord(item))) return false;
   const existingIndex = attendanceRecords.findIndex((record) => record.name === name && record.date === today);
   if (existingIndex >= 0) attendanceRecords[existingIndex] = { ...attendanceRecords[existingIndex], ...item };
   else attendanceRecords.unshift(item);
@@ -2087,7 +3860,7 @@ async function saveSickCallIn() {
   return true;
 }
 
-async function saveDataDialog() {
+async function saveDataDialog(action = "default") {
   const collection = dataCollectionInput.value;
   const index = dataIndexInput.value;
   const model = dataModels[collection];
@@ -2098,38 +3871,213 @@ async function saveDataDialog() {
   model.fields.forEach(([key, , type = "text"]) => {
     const input = dataFields.querySelector(`[data-field="${key}"]`);
     if (!input) return;
-    item[key] = type === "number"
+    item[key] = type === "number" || type === "holiday-days-number"
       ? Number(input.value || 0)
       : type === "checkbox"
         ? input.checked
         : input.value.trim();
   });
   if (collection === "jobs") {
-    item.status = item.status || "Booked";
+    const sendingToTech = action === "send-tech";
+    if (!(await validateJobDispatchFields(item, sendingToTech))) {
+      return false;
+    }
+    item.status = sendingToTech ? "Sent to Tech" : "Draft";
     item.report = item.report || "Not due";
     item.completed = item.completed || "n";
-    if (!validateJobTechnicianAvailability(item)) {
+    item.updatedAt = new Date().toISOString();
+    if (sendingToTech) {
+      item.sentToTechAt = new Date().toISOString();
+    } else {
+      item.savedAt = item.savedAt || new Date().toISOString();
+    }
+    if (!(await validateJobTechnicianAvailability(item))) {
       return false;
+    }
+    if (sendingToTech && !(await confirmSendJobToTech(item))) {
+      setDataDialogStatus("Job not sent. You can keep editing or save it as a draft.", "error");
+      return false;
+    }
+    if (sendingToTech && !(await addJobToWeeklyPlanner(item))) {
+      return false;
+    }
+    if (!sendingToTech) {
+      removeJobFromWeeklyPlanner(item);
     }
   }
   if (collection === "attendance") {
-    if (!validateAttendanceRecord(item)) {
+    if (!(await validateAttendanceRecord(item))) {
       return false;
     }
+  }
+  if (collection === "documents") {
+    if (!companyDocumentCategories.includes(item.category)) {
+      await kcInfo("Please choose a valid Company Documents category.");
+      return false;
+    }
+    if (!item.title || !item.oneDriveLink || !item.issueDate || !item.owner) {
+      await kcInfo("Please complete the title, category, OneDrive link, issue date and owner.");
+      return false;
+    }
+    item.lastUpdatedBy = currentUserName();
+    item.updatedAt = today;
+    item.createdAt = item.createdAt || today;
+    item.status = companyDocumentStatus(item).value;
+  }
+  if (collection === "compliance") {
+    if (!complianceTypes.includes(item.complianceType)) {
+      await kcInfo("Please choose a valid compliance type.");
+      return false;
+    }
+    if (item.complianceType === "Accreditation") {
+      if (!accreditationOptions.includes(item.accreditationName)) {
+        await kcInfo("Please choose SafeContractor or Add other accreditation.");
+        return false;
+      }
+      if (item.accreditationName === "Add other accreditation" && !item.customAccreditationName) {
+        await kcInfo("Please enter the accreditation name.");
+        return false;
+      }
+      const accreditationTitle = item.accreditationName === "SafeContractor" ? "SafeContractor accreditation" : `${item.customAccreditationName} accreditation`;
+      item.title = item.title || accreditationTitle;
+      item.provider = item.provider || (item.accreditationName === "SafeContractor" ? "SafeContractor" : item.customAccreditationName);
+    } else {
+      item.accreditationName = "";
+      item.customAccreditationName = "";
+    }
+    if (!item.title || !item.responsiblePerson || !item.startDate) {
+      await kcInfo("Please complete the compliance type, title, start date and responsible person.");
+      return false;
+    }
+    item.noExpiry = Boolean(item.noExpiry);
+    if (!item.noExpiry && !item.expiryDate) {
+      await kcInfo("Please enter an expiry or review date, or tick No expiry.");
+      return false;
+    }
+    item.id = item.id || item.recordId || `COMP-${Date.now()}`;
+    item.recordId = item.id;
+    item.reminderDays = Number(item.reminderDays || 60);
+    item.createdAt = item.createdAt || new Date().toISOString();
+    item.updatedAt = new Date().toISOString();
+    item.status = complianceStatus(item).label;
+    item.audit = Array.isArray(item.audit) ? item.audit : [];
+    item.audit.push({
+      action: index === "" ? "created" : "edited",
+      by: currentUserName(),
+      at: new Date().toISOString()
+    });
+    setDataDialogStatus("Saving compliance document to OneDrive...", "");
+    const savedComplianceDocument = await saveComplianceDocumentToOneDrive(item);
+    if (!savedComplianceDocument) return false;
+    setDataDialogStatus("Saved to OneDrive", "success");
+  }
+  if (collection === "fines") {
+    if (!item.date || !item.registration || !item.driver || !item.type || !item.deadline) {
+      await kcInfo("Please complete the date, vehicle registration, driver, fine type and deadline.");
+      return false;
+    }
+    if (item.type === "Other" && !item.customType) {
+      await kcInfo("Please enter the custom fine description.");
+      return false;
+    }
+    item.id = item.id || `FINE-${Date.now()}`;
+    item.createdAt = item.createdAt || new Date().toISOString();
+    item.updatedAt = new Date().toISOString();
+    item.createdBy = item.createdBy || currentUserName();
+    item.evidenceItems = normaliseFineEvidence(item);
+  }
+  if (collection === "training") {
+    const staff = staffProfiles.find((profile) => profile.name === item.employee || profile.staffId === item.staffId);
+    if (!staff || !item.course || !item.completedDate) {
+      await kcInfo("Please choose an employee and complete the training name and completed date.");
+      return false;
+    }
+    if (!item.noExpiry && !item.expiryDate) {
+      await kcInfo("Please enter an expiry date, or tick No expiry.");
+      return false;
+    }
+    item.id = item.id || item.trainingRecordId || `TRN-${Date.now()}`;
+    item.trainingRecordId = item.id;
+    item.staffId = staff.staffId;
+    item.employee = staff.name;
+    item.noExpiry = Boolean(item.noExpiry);
+    if (item.noExpiry) item.expiryDate = "";
+    item.year = item.year || String(new Date(item.completedDate || today).getFullYear());
+    item.createdAt = item.createdAt || new Date().toISOString();
+    item.updatedAt = new Date().toISOString();
+    item.status = trainingStatus(item).label;
+    setDataDialogStatus("Saving certificate to OneDrive...", "");
+    const savedTrainingDocument = await saveTrainingDocumentToOneDrive(item);
+    if (!savedTrainingDocument) return false;
+    setDataDialogStatus("Saved to OneDrive", "success");
+  }
+  if (collection === "assets") {
+    if (!item.asset || !item.category || !item.condition || !item.status || !item.powerSource) {
+      await kcInfo("Please complete the asset name, category, condition, status and power source.");
+      return false;
+    }
+    item.id = item.id || item.assetId || generateAssetId(item.asset);
+    item.assetId = item.assetId || item.id;
+    item.purchaseCost = Number(item.purchaseCost || 0);
+    if (item.powerSource !== "Mains powered") {
+      item.patTestingRequired = "No";
+      item.lastPatDate = "";
+      item.nextPatDue = "";
+      item.patResult = "";
+    }
+    if (item.inspectionRequired !== "Yes") {
+      item.inspectionFrequency = "";
+      item.lastInspectionDate = "";
+      item.nextInspectionDue = "";
+    }
+    if (item.serviceRequired !== "Yes") {
+      item.serviceFrequency = "";
+      item.lastServiceDate = "";
+      item.nextServiceDue = "";
+    }
+    item.documents = assetDocumentDraft.map((entry) => ({ ...entry }));
+    item.history = Array.isArray(item.history) ? item.history : [];
+    item.history.push({
+      action: index === "" ? "Asset created" : "Asset updated",
+      by: currentUserName(),
+      at: new Date().toISOString(),
+      holder: assetHolderLabel(item),
+      status: item.status,
+      condition: item.condition
+    });
+    item.createdAt = item.createdAt || new Date().toISOString();
+    item.updatedAt = new Date().toISOString();
+    setDataDialogStatus("Saving asset to OneDrive...", "");
+    const savedAsset = await saveAssetToOneDrive(item);
+    if (!savedAsset) return false;
+    setDataDialogStatus("Asset saved to OneDrive", "success");
   }
   if (collection === "holidays") {
     const dates = workingDateRangeValues(item.from, item.to);
     if (!dates.length) {
-      window.alert("Please enter a valid holiday date range.");
+      await kcInfo("Please enter a valid holiday date range.");
       return false;
     }
-    item.days = item.days || dates.length;
+    normaliseHolidayRequestTiming(item);
+    if (item.dayType === "Half day" && item.from !== item.to) {
+      await kcInfo("Half-day holidays can only be used when From and To are the same date. This request has been changed to Full day.");
+      item.dayType = "Full day";
+      item.dayPart = "";
+      item.days = dates.length;
+    }
+    const staff = staffProfiles.find((profile) => profile.name === item.name || profile.staffId === item.staffId);
+    item.id = item.id || `HOL-${Date.now()}`;
+    item.staffId = item.staffId || staff?.staffId || "";
+    item.name = item.name || staff?.name || "";
+    item.year = item.year || String(new Date(item.from || today).getFullYear());
+    item.submittedDate = item.submittedDate || today;
+    item.days = Number(item.days || holidayCalculatedDays(item) || dates.length);
     if (!item.status) item.status = "Pending";
   }
   if (collection === "companyHolidays") {
     const dates = workingDateRangeValues(item.from, item.to);
     if (!dates.length) {
-      window.alert("Please enter a valid company holiday date range.");
+      await kcInfo("Please enter a valid company holiday date range.");
       return false;
     }
     item.days = item.days || dates.length;
@@ -2139,7 +4087,7 @@ async function saveDataDialog() {
     if (previousItem?.task && !previousItem.originalTask) {
       item.originalTask = previousItem.task;
     }
-    if (!validatePlannerJobDecision(item, previousItem)) {
+    if (!(await validatePlannerJobDecision(item, previousItem))) {
       return false;
     }
     item.task = plannerStatusLabel(item);
@@ -2169,10 +4117,27 @@ async function saveDataDialog() {
   if (collection === "staff" || collection === "training") {
     syncTechniciansFromStaff();
   }
-  if (collection === "jobs" || collection === "planner" || collection === "attendance" || collection === "holidays" || collection === "companyHolidays" || collection === "staff") {
-    await publishIntegrationFeeds();
+  if (collection === "fines") {
+    const savedFine = await saveFineToOneDrive(item);
+    if (!savedFine) return false;
+  }
+  if (collection === "jobs" && action !== "send-tech") {
+    const saved = await saveCommandData();
+    if (!saved) return false;
+    await kcInfo("Job saved to system.");
+  } else if (collection === "jobs" && action === "send-tech") {
+    const saved = await publishIntegrationFeeds();
+    if (!saved) return false;
+    await kcInfo("Job sent to tech app.");
+  } else if (collection === "jobs" || collection === "planner" || collection === "attendance" || collection === "holidays" || collection === "companyHolidays" || collection === "staff") {
+    const saved = await publishIntegrationFeeds();
+    if (!saved) return false;
   } else {
-    await saveCommandData();
+    const saved = await saveCommandData();
+    if (!saved) return false;
+    if (collection === "fines") {
+      await kcInfo("Fine saved to OneDrive.");
+    }
   }
   render();
   if (["emailTemplates", "reportTemplates", "ramsTemplates", "branding"].includes(collection)) {
@@ -2181,10 +4146,11 @@ async function saveDataDialog() {
   return true;
 }
 
-function deleteDataRecord(collection, index) {
+async function deleteDataRecord(collection, index) {
   const model = dataModels[collection];
   if (!model) return;
 
+  const previousItems = [...model.get()];
   const items = model.get().filter((_, itemIndex) => itemIndex !== Number(index));
   model.set(items);
   if (collection === "planner") {
@@ -2196,7 +4162,12 @@ function deleteDataRecord(collection, index) {
   if (collection === "staff" || collection === "training") {
     syncTechniciansFromStaff();
   }
-  saveCommandData();
+  const saved = await saveCommandData();
+  if (!saved) {
+    model.set(previousItems);
+    render();
+    return;
+  }
   render();
 }
 
@@ -2233,50 +4204,118 @@ function isReminderDate(dateValue) {
 }
 
 function complianceStatus(item) {
-  const days = daysUntil(item.dueDate);
+  if (item.noExpiry || !item.expiryDate) {
+    return {
+      label: "No Expiry",
+      className: "neutral",
+      days: Infinity,
+      reminder: "No expiry date"
+    };
+  }
+  const days = daysUntil(item.expiryDate);
   if (days < 0) {
     return {
-      label: "Red",
+      label: "Overdue",
       className: "red",
       days,
       reminder: `${Math.abs(days)} days overdue`
     };
   }
-  if (days <= 30) {
+  const warningDays = Number(item.reminderDays || 60);
+  if (days <= warningDays) {
     return {
-      label: "Amber",
+      label: "Due Soon",
       className: "amber",
       days,
       reminder: `Due in ${days} days`
     };
   }
   return {
-    label: "Green",
+    label: "Current",
     className: "green",
     days,
-    reminder: "More than 30 days remaining"
+    reminder: `More than ${warningDays} days remaining`
   };
 }
 
+function asComplianceRecord(item) {
+  if (Array.isArray(item)) {
+    return {
+      legacy: true,
+      type: item[0] || "",
+      name: item[1] || "",
+      category: item[2] || "",
+      owner: item[3] || "",
+      dueDate: item[4] || "",
+      complianceType: item[2] === "Company" ? "Office Compliance" : item[2] || "Other",
+      title: item[0] || "Compliance item",
+      provider: item[1] || "",
+      certificateNumber: "",
+      startDate: "",
+      expiryDate: item[4] || "",
+      noExpiry: false,
+      responsiblePerson: item[3] || "Kevin",
+      reminderDays: 60,
+      notes: "",
+      documentFileName: "",
+      oneDriveLocation: "",
+      history: [],
+      audit: [],
+      createdAt: "",
+      updatedAt: ""
+    };
+  }
+  return {
+    ...item,
+    id: item.id || item.recordId || `COMP-${Date.now()}`,
+    recordId: item.recordId || item.id || "",
+    complianceType: complianceTypes.includes(item.complianceType) ? item.complianceType : item.category === "Company" ? "Office Compliance" : "Other",
+    title: item.title || item.name || item.type || "Compliance item",
+    provider: item.provider || item.issuingBody || item.name || "",
+    certificateNumber: item.certificateNumber || item.policyNumber || "",
+    startDate: item.startDate || item.issueDate || "",
+    expiryDate: item.expiryDate || item.reviewDate || item.dueDate || "",
+    noExpiry: Boolean(item.noExpiry),
+    responsiblePerson: item.responsiblePerson || item.owner || "Kevin",
+    reminderDays: Number(item.reminderDays || 60),
+    notes: item.notes || "",
+    documentFileName: item.documentFileName || item.supportingDocumentName || "",
+    oneDriveLocation: item.oneDriveLocation || item.documentLocation || "",
+    history: Array.isArray(item.history) ? item.history : [],
+    audit: Array.isArray(item.audit) ? item.audit : [],
+    createdAt: item.createdAt || "",
+    updatedAt: item.updatedAt || ""
+  };
+}
+
+function isCompanyLevelCompliance(item) {
+  const record = asComplianceRecord(item);
+  if (record.legacy && !allowedComplianceLegacyCategories.includes(record.category)) return false;
+  const haystack = `${record.complianceType} ${record.title} ${record.provider} ${record.category || ""}`.toLowerCase();
+  return !disallowedComplianceTerms.some((term) => haystack.includes(term));
+}
+
 function complianceRecords() {
-  return complianceItems.map((item) => ({
-    type: Array.isArray(item) ? item[0] : item.type,
-    name: Array.isArray(item) ? item[1] : item.name,
-    category: Array.isArray(item) ? item[2] : item.category,
-    owner: Array.isArray(item) ? item[3] : item.owner,
-    dueDate: Array.isArray(item) ? item[4] : item.dueDate
-  }));
+  return complianceItems.filter(isCompanyLevelCompliance).map(asComplianceRecord);
 }
 
 function filteredCompliance() {
-  const term = document.querySelector("#complianceSearch").value.trim().toLowerCase();
-  const category = document.querySelector("#complianceCategoryFilter").value;
+  const term = document.querySelector("#complianceSearch")?.value.trim().toLowerCase() || "";
+  const category = document.querySelector("#complianceCategoryFilter")?.value || "all";
+  const status = document.querySelector("#complianceStatusFilter")?.value || "all";
+  const owner = document.querySelector("#complianceOwnerFilter")?.value || "all";
+  const expiry = document.querySelector("#complianceExpiryFilter")?.value || "all";
 
   return complianceRecords().filter((item) => {
-    const searchable = `${item.type} ${item.name} ${item.category} ${item.owner}`.toLowerCase();
+    const itemStatus = complianceStatus(item);
+    const searchable = `${item.complianceType} ${item.title} ${item.provider} ${item.certificateNumber} ${item.responsiblePerson}`.toLowerCase();
     const matchesSearch = !term || searchable.includes(term);
-    const matchesCategory = category === "all" || item.category === category;
-    return matchesSearch && matchesCategory;
+    const matchesCategory = category === "all" || item.complianceType === category;
+    const matchesStatus = (activeComplianceFilter === "all" || itemStatus.label === activeComplianceFilter)
+      && (status === "all" || itemStatus.label === status);
+    const matchesOwner = owner === "all" || item.responsiblePerson === owner;
+    const matchesExpiry = expiry === "all" || (Number.isFinite(itemStatus.days) && itemStatus.days >= 0 && itemStatus.days <= Number(expiry));
+    return matchesSearch && matchesCategory && matchesStatus && matchesOwner && matchesExpiry;
   });
 }
 
@@ -2317,6 +4356,16 @@ function fineStatusClass(fine) {
     return "warning";
   }
   return "attached";
+}
+
+function fineTypeLabel(fine) {
+  return fine.type === "Other" && fine.customType ? fine.customType : fine.type;
+}
+
+function fineEvidenceLabel(fine) {
+  const items = normaliseFineEvidence(fine);
+  if (items.length) return `${items.length} item${items.length === 1 ? "" : "s"}`;
+  return fine.evidence || "No evidence";
 }
 
 function money(value) {
@@ -3016,16 +5065,16 @@ function plannerHasOriginalJob(previousItem, nextItem) {
   return Boolean(originalText) && !isPlannerStatusText(originalText);
 }
 
-function validatePlannerJobDecision(item, previousItem) {
+async function validatePlannerJobDecision(item, previousItem) {
   if (!previousItem || !["Holiday", "Sick"].includes(plannerTypeFromItem(item)) || !plannerHasOriginalJob(previousItem, item)) {
     return true;
   }
   if (!["Reassign job", "Cancel job"].includes(item.jobAction)) {
-    window.alert("This slot has a job booked. Please choose whether to reassign or cancel the job.");
+    await kcInfo("This slot has a job booked. Please choose whether to reassign or cancel the job.");
     return false;
   }
   if (item.jobAction === "Reassign job" && !item.reassignTo) {
-    window.alert("Please choose the technician to reassign this job to.");
+    await kcInfo("Please choose the technician to reassign this job to.");
     return false;
   }
   return true;
@@ -3085,7 +5134,7 @@ function filteredFines() {
   const status = document.querySelector("#fineStatusFilter").value;
 
   return fines.filter((fine) => {
-    const searchable = `${fine.registration} ${fine.driver} ${fine.location} ${fine.type} ${fine.notes}`.toLowerCase();
+    const searchable = `${fine.registration} ${fine.driver} ${fine.location} ${fineTypeLabel(fine)} ${fine.notes} ${fineEvidenceLabel(fine)}`.toLowerCase();
     const matchesSearch = !term || searchable.includes(term);
     const matchesStatus = status === "all" || fine.status === status;
     return matchesSearch && matchesStatus;
@@ -3126,8 +5175,8 @@ function activeSicknessRestrictionFor(name, dateValue = today) {
       if (dateValue >= record.recoveryDate && dateValue <= warningEnd) {
         return {
           type: "rpe-warning",
-          label: "Active - RPE fitness check needed",
-          message: "Verify operative is fully fit to wear tight-fitting respiratory protection before work commences."
+          label: "Active - fitness check needed",
+          message: "Verify the operative is fully fit for the planned task before work commences."
         };
       }
     }
@@ -3157,13 +5206,35 @@ function attendanceYear(record) {
   return String(record.date || "").slice(0, 4);
 }
 
+function holidayRequestDaysForYear(request, year) {
+  const dates = workingDateRangeValues(request.from, request.to).filter((date) => date.startsWith(year));
+  if (!dates.length) return 0;
+  if (request.dayType === "Half day" && request.from === request.to && dates.length === 1) return 0.5;
+  return Number(request.days) && String(request.from || "").startsWith(year) && String(request.to || "").startsWith(year)
+    ? Number(request.days)
+    : dates.length;
+}
+
 function holidayUsedForYear(name, year = String(new Date().getFullYear())) {
-  const personalDays = new Set(attendanceRecords
-    .filter((record) => record.name === name && record.status === "Holiday" && attendanceYear(record) === year && isWorkingWeekday(record.date))
-    .map((record) => record.date)
-  );
-  companyHolidayDatesForYear(year).forEach((date) => personalDays.add(date));
-  return personalDays.size;
+  const approvedRequestIds = new Set();
+  const approvedDays = holidayRequests
+    .filter((request) => request.name === name && request.status === "Approved")
+    .reduce((sum, request) => {
+      if (request.id) approvedRequestIds.add(request.id);
+      return sum + holidayRequestDaysForYear(request, year);
+    }, 0);
+  const legacyDays = attendanceRecords
+    .filter((record) =>
+      record.name === name
+      && record.status === "Holiday"
+      && attendanceYear(record) === year
+      && isWorkingWeekday(record.date)
+      && record.source !== "holiday"
+      && record.source !== "approved-holiday"
+      && (!record.holidayRequestId || !approvedRequestIds.has(record.holidayRequestId))
+    )
+    .reduce((sum, record) => sum + (record.dayType === "Half day" ? 0.5 : 1), 0);
+  return approvedDays + legacyDays + companyHolidayDaysForYear(year);
 }
 
 function companyHolidayDatesForYear(year = String(new Date().getFullYear())) {
@@ -3285,7 +5356,6 @@ function openStaffDetail(index) {
 
   const currentYear = String(new Date().getFullYear());
   const attendance = attendanceFor(staff.name, today);
-  const restriction = activeSicknessRestrictionFor(staff.name, today);
   const holidayAllowance = Number(staff.holidayAllowance || 28);
   const leaveSummary = staffLeaveSummary(staff, currentYear);
   const holidayUsed = leaveSummary.holidayTaken;
@@ -3301,11 +5371,10 @@ function openStaffDetail(index) {
     <section class="staff-profile-hero">
       <div>
         <span class="profile-kicker">${escapeHtml(staff.role || "Staff member")}</span>
-        <h3>${escapeHtml(staff.name)}</h3>
+        <h3>${escapeHtml(staff.name)} ${testRecordBadge(staff)}</h3>
         <p>${escapeHtml(staff.email || "No email")} | ${escapeHtml(staff.phone || "No phone")}</p>
       </div>
-      <span class="status ${staffStatusClass(attendance.status)}">${escapeHtml(publicStaffStatus(staff.name, today))}</span>
-      ${restriction ? `<p class="staff-restriction-note">${escapeHtml(restriction.message)}</p>` : ""}
+      <span class="status ${staffStatusClass(attendance.status)}">${escapeHtml(attendance.status)}</span>
     </section>
 
     <section class="staff-detail-grid">
@@ -3341,26 +5410,11 @@ function openStaffDetail(index) {
       </article>
     </section>
 
-    <section class="staff-passport">
+    <section class="staff-work-records">
       <div class="panel-heading">
-        <h3>Health & Safety Passport</h3>
+        <h3>Employee Records</h3>
       </div>
       <div class="staff-detail-grid">
-        <article class="staff-detail-card">
-          <span>RPE mask</span>
-          <strong>${escapeHtml(staff.rpeMaskType || "Not set")}</strong>
-          <p>Size: ${escapeHtml(staff.rpeMaskSize || "Not set")}</p>
-        </article>
-        <article class="staff-detail-card">
-          <span>Last face-fit</span>
-          <strong>${escapeHtml(staff.faceFitDate ? formatDateUk(staff.faceFitDate) : "Not set")}</strong>
-          <p>Successful tight-fitting RPE check</p>
-        </article>
-        <article class="staff-detail-card">
-          <span>Emergency / next of kin</span>
-          <strong>${escapeHtml(staff.emergencyContact || "Not set")}</strong>
-          <p>${escapeHtml(staff.nextOfKin ? `Next of kin: ${staff.nextOfKin}` : "Next of kin not set")}</p>
-        </article>
         <article class="staff-detail-card">
           <span>Total holidays taken</span>
           <strong>${leaveSummary.holidayTaken}</strong>
@@ -3376,10 +5430,11 @@ function openStaffDetail(index) {
           <strong>${leaveSummary.sickDays}</strong>
           <p>Registered in ${currentYear}</p>
         </article>
-      </div>
-      <div class="staff-incident-log">
-        <span>Internal Accident / Incident Log</span>
-        ${incidents.length ? incidents.map((incident) => `<p>${escapeHtml(incident)}</p>`).join("") : '<p>No internal accident or incident records logged.</p>'}
+        <article class="staff-detail-card">
+          <span>Emergency / next of kin</span>
+          <strong>${escapeHtml(staff.emergencyContact || "Not set")}</strong>
+          <p>${escapeHtml(staff.nextOfKin ? `Next of kin: ${staff.nextOfKin}` : "Next of kin not set")}</p>
+        </article>
       </div>
     </section>
 
@@ -3390,8 +5445,13 @@ function openStaffDetail(index) {
           <p><strong>Training:</strong> ${escapeHtml(staff.trainingRecords || "Not set")}</p>
           <p><strong>Qualifications:</strong> ${escapeHtml(staff.qualifications || "Not set")}</p>
           <p><strong>Driving licence:</strong> ${escapeHtml(staff.drivingLicence || "Not set")}</p>
-          <p><strong>PPE issued:</strong> ${escapeHtml(staff.ppeIssued || "Not set")}</p>
           <p><strong>Notes:</strong> ${escapeHtml(staff.notes || "No notes")}</p>
+        </div>
+      </article>
+      <article class="staff-detail-card staff-detail-wide">
+        <span>Internal Accident / Incident Log</span>
+        <div class="staff-detail-lines">
+          ${incidents.length ? incidents.map((incident) => `<p>${escapeHtml(incident)}</p>`).join("") : '<p>No internal accident or incident records logged.</p>'}
         </div>
       </article>
     </section>
@@ -3421,22 +5481,25 @@ function openStaffDetail(index) {
 }
 
 function trainingStatus(record) {
+  if (record.noExpiry) {
+    return { label: "No Expiry", className: "ok", days: 9999 };
+  }
   const days = daysUntil(record.expiryDate);
   if (!record.expiryDate) {
-    return { label: "No expiry", className: "ok", days: 9999 };
+    return { label: "No Expiry", className: "ok", days: 9999 };
   }
   if (days < 0) {
     return { label: "Expired", className: "urgent", days };
   }
-  if (days <= 30) {
-    return { label: "Expiring soon", className: "warning", days };
+  if (days <= 60) {
+    return { label: "Expiring Soon", className: "warning", days };
   }
   return { label: "Current", className: "ok", days };
 }
 
 function syncStaffTrainingFromMatrix() {
   staffProfiles = staffProfiles.map((staff) => {
-    const records = trainingMatrix.filter((record) => record.employee === staff.name);
+    const records = trainingMatrix.filter((record) => (record.staffId && record.staffId === staff.staffId) || record.employee === staff.name);
     if (records.length === 0) {
       return staff;
     }
@@ -3508,8 +5571,8 @@ function refreshTechnicianDropdowns() {
 }
 
 function filteredStaff() {
-  const term = document.querySelector("#staffSearch").value.trim().toLowerCase();
-  const attendance = document.querySelector("#attendanceStatusFilter").value;
+  const term = (document.querySelector("#staffSearch")?.value || "").trim().toLowerCase();
+  const attendance = document.querySelector("#attendanceStatusFilter")?.value || "all";
 
   return staffProfiles.filter((staff) => {
     const todayRecord = attendanceFor(staff.name, today);
@@ -3555,14 +5618,25 @@ function renderDashboard() {
   document.querySelector("#vehicleAlertCount").textContent = vehicles.filter((vehicle) => vehicle.tracker !== "Active" || isReminderDate(vehicle.mot) || isReminderDate(vehicle.insurance)).length;
   document.querySelector("#motReminderCount").textContent = vehicles.filter((vehicle) => isReminderDate(vehicle.mot)).length;
   document.querySelector("#insuranceReminderCount").textContent = vehicles.filter((vehicle) => isReminderDate(vehicle.insurance)).length;
+  const documentSummary = companyDocumentReminderSummary();
+  const criticalDocumentAlertCount = document.querySelector("#criticalDocumentAlertCount");
+  const expiredDocumentAlertCount = document.querySelector("#expiredDocumentAlertCount");
+  if (criticalDocumentAlertCount) criticalDocumentAlertCount.textContent = documentSummary.criticalExpiring;
+  if (expiredDocumentAlertCount) expiredDocumentAlertCount.textContent = documentSummary.expired;
+  const trainingRows = trainingMatrix.map((record) => ({ ...record, status: trainingStatus(record) }));
+  const trainingExpiredDashboardCount = document.querySelector("#trainingExpiredDashboardCount");
+  const trainingThirtyDayDashboardCount = document.querySelector("#trainingThirtyDayDashboardCount");
+  if (trainingExpiredDashboardCount) trainingExpiredDashboardCount.textContent = trainingRows.filter((record) => record.status.className === "urgent").length;
+  if (trainingThirtyDayDashboardCount) trainingThirtyDayDashboardCount.textContent = trainingRows.filter((record) => !record.noExpiry && record.status.days >= 0 && record.status.days <= 30).length;
   const compliance = complianceRecords().map((item) => ({ ...item, status: complianceStatus(item) }));
-  document.querySelector("#complianceDueCount").textContent = compliance.filter((item) => item.status.className === "amber").length;
+  document.querySelector("#complianceDueCount").textContent = compliance.filter((item) => Number.isFinite(item.status.days) && item.status.days >= 0 && item.status.days <= 30).length;
   document.querySelector("#complianceOverdueCount").textContent = compliance.filter((item) => item.status.className === "red").length;
   document.querySelector("#fineDeadlineCount").textContent = fines.filter(isFineDeadlineSoon).length;
   document.querySelector("#openFineCount").textContent = fines.filter(isFineOpen).length;
   const todayAttendance = staffProfiles.map((staff) => attendanceFor(staff.name, today));
   document.querySelector("#staffAvailableCount").textContent = todayAttendance.filter((record) => !isUnavailableStatus(record.status)).length;
   document.querySelector("#staffUnavailableCount").textContent = todayAttendance.filter((record) => isUnavailableStatus(record.status)).length;
+  renderDashboardHolidayRequests();
 
   const dashboardJobs = jobs
     .filter((job) => job.date === today || job.date === tomorrow)
@@ -3589,10 +5663,49 @@ function renderDashboard() {
     .filter((item) => item.status.className !== "green")
     .sort((a, b) => a.status.days - b.status.days)
     .slice(0, 6)
-    .map((item) => listRow(`${item.type} - ${item.name}`, `${item.owner} | Due ${item.dueDate}`, item.status.label))
+    .map((item) => listRow(`${item.complianceType} - ${item.title}`, `${item.responsiblePerson} | ${item.noExpiry ? "No expiry" : `Due ${formatDateUk(item.expiryDate)}`}`, item.status.label))
     .join("");
 
   updateDashboardBadges();
+}
+
+function renderDashboardHolidayRequests() {
+  const target = document.querySelector("#dashboardHolidayRequests");
+  if (!target) return;
+  const pending = holidayRequests.filter((request) => request.status === "Pending");
+  target.innerHTML = pending.length
+    ? pending.map((request) => holidayRequestRow(request, holidayRequests.indexOf(request), true)).join("")
+    : '<p class="empty-state">No pending holiday requests.</p>';
+}
+
+function holidayRequestRow(request, index, dashboardMode = false) {
+  const staffIndex = staffProfiles.findIndex((staff) => staff.staffId === request.staffId || staff.name === request.name);
+  const dates = `${formatDateUk(request.from)} to ${formatDateUk(request.to)}`;
+  const submitted = request.submittedDate ? formatDateUk(request.submittedDate) : "Not recorded";
+  const days = request.days || holidayCalculatedDays(request) || workingDateRangeValues(request.from, request.to).length || 0;
+  const dayTypeLabel = request.dayType === "Half day" ? ` | ${request.dayPart || "AM"} half day` : "";
+  const status = request.status || "Pending";
+  const actions = status === "Pending"
+    ? `
+      <button class="primary-button" type="button" data-approve-holiday="${index}">Approve</button>
+      <button class="danger-button" type="button" data-decline-holiday="${index}">Decline</button>
+    `
+    : "";
+  return `
+    <article class="list-row holiday-request-row">
+      <div>
+        <strong>${escapeHtml(request.name || "Technician")}</strong>
+        <p>${escapeHtml(`${dates}${dayTypeLabel} | ${days} day${Number(days) === 1 ? "" : "s"} | Submitted ${submitted}`)}</p>
+        ${request.notes ? `<p>${escapeHtml(request.notes)}</p>` : ""}
+        ${status === "Declined" && request.declineReason ? `<p>Reason: ${escapeHtml(request.declineReason)}</p>` : ""}
+        <div class="record-actions">
+          ${actions}
+          ${staffIndex >= 0 ? `<button class="secondary-button" type="button" data-view-staff="${staffIndex}">${dashboardMode ? "Open profile" : "Profile"}</button>` : ""}
+        </div>
+      </div>
+      <span class="status ${status === "Approved" ? "ok" : status === "Declined" ? "urgent" : "warning"}">${escapeHtml(status)}</span>
+    </article>
+  `;
 }
 
 function reportGateJobs() {
@@ -4362,8 +6475,8 @@ async function saveProofingReport() {
   }
 }
 
-function clearProofingReport() {
-  if (!window.confirm("Clear this proofing report and start again?")) return;
+async function clearProofingReport() {
+  if (!(await kcConfirmAction("Clear this proofing report and start again?", "Continue", true))) return;
   proofingRawNotes.value = "";
   Object.values(proofingFields).forEach((field) => { if (field) field.value = ""; });
   proofingPhotos = { before: [], after: [] };
@@ -4594,8 +6707,13 @@ function renderVehicles() {
 }
 
 function renderCompliance() {
-  const records = filteredCompliance().map((item) => ({ ...item, status: complianceStatus(item) }));
-  const allRecords = complianceRecords().map((item) => ({ ...item, status: complianceStatus(item) }));
+  const sourceRecords = complianceRecords();
+  const records = filteredCompliance().map((item) => ({
+    ...item,
+    _index: sourceRecords.findIndex((record) => (record.id || record.recordId || record.title) === (item.id || item.recordId || item.title)),
+    status: complianceStatus(item)
+  }));
+  const allRecords = sourceRecords.map((item) => ({ ...item, status: complianceStatus(item) }));
 
   document.querySelector("#greenComplianceCount").textContent = allRecords.filter((item) => item.status.className === "green").length;
   document.querySelector("#amberComplianceCount").textContent = allRecords.filter((item) => item.status.className === "amber").length;
@@ -4604,18 +6722,19 @@ function renderCompliance() {
 
   document.querySelector("#complianceTableBody").innerHTML = records
     .sort((a, b) => a.status.days - b.status.days)
-    .map((item, index) => `
+    .map((item) => `
       <tr>
-        <td><span class="traffic-light ${item.status.className}">${item.status.label}</span></td>
-        <td><strong>${escapeHtml(item.type)}</strong><br><span class="meta">${escapeHtml(item.name)}</span></td>
-        <td>${escapeHtml(item.category)}</td>
-        <td>${escapeHtml(item.owner)}</td>
-        <td>${item.dueDate}</td>
-        <td>${item.status.days}</td>
-        <td>${escapeHtml(item.status.reminder)}<div class="record-actions">${recordButtons("compliance", index)}</div></td>
+        <td><strong>${escapeHtml(item.title)}</strong><br><span class="meta">${escapeHtml(item.certificateNumber || item.notes || "")}</span></td>
+        <td>${escapeHtml(item.complianceType)}</td>
+        <td>${escapeHtml(item.provider || "-")}</td>
+        <td>${item.noExpiry ? "No expiry" : formatDateUk(item.expiryDate)}</td>
+        <td>${escapeHtml(item.responsiblePerson)}</td>
+        <td><span class="status ${item.status.className === "red" ? "urgent" : item.status.className === "amber" ? "warning" : "ok"}">${escapeHtml(item.status.label)}</span><br><span class="meta">${escapeHtml(item.status.reminder)}</span></td>
+        <td>${item.documentFileName ? `<button class="secondary-button compact-button" type="button" data-open-compliance-document-record="${item._index}">Open</button>` : '<span class="meta">No document</span>'}</td>
+        <td><div class="record-actions">${complianceRecordButtons(item._index)}</div></td>
       </tr>
     `)
-    .join("");
+    .join("") || '<tr><td colspan="8">No company-level compliance records found.</td></tr>';
 }
 
 function renderFines() {
@@ -4631,7 +6750,7 @@ function renderFines() {
   document.querySelector("#finesTableBody").innerHTML = filteredFines()
     .sort((a, b) => daysUntil(a.deadline) - daysUntil(b.deadline))
     .map((fine) => {
-      const vehicle = vehicles.find((item) => item.registration === fine.registration);
+      const vehicle = vehicles.map(asVehicleObject).find((item) => item.registration === fine.registration);
       const driver = technicians.find((item) => item.name === fine.driver);
       const linkedVehicle = vehicle ? `${fine.registration} | ${vehicle.vehicle}` : fine.registration;
       const linkedDriver = driver ? `${fine.driver} | ${driver.role}` : fine.driver;
@@ -4642,11 +6761,11 @@ function renderFines() {
           <td><strong>${escapeHtml(linkedVehicle)}</strong></td>
           <td>${escapeHtml(linkedDriver)}</td>
           <td>${escapeHtml(fine.location)}</td>
-          <td>${escapeHtml(fine.type)}</td>
+          <td>${escapeHtml(fineTypeLabel(fine))}</td>
           <td>GBP ${fine.amount.toFixed(2)}</td>
           <td>${fine.deadline}<br><span class="meta">${escapeHtml(fineDeadlineLabel(fine))}</span></td>
           <td><span class="status ${fineStatusClass(fine)}">${escapeHtml(fine.status)}</span></td>
-          <td>${escapeHtml(fine.evidence)}</td>
+          <td>${escapeHtml(fineEvidenceLabel(fine))}</td>
           <td>${escapeHtml(fine.notes)}<div class="record-actions">${recordButtons("fines", fines.indexOf(fine))}</div></td>
         </tr>
       `;
@@ -4838,7 +6957,7 @@ function downloadValuationCsv(rows, selectedMonth, label) {
   URL.revokeObjectURL(link.href);
 }
 
-function exportValuationGroup(group) {
+async function exportValuationGroup(group) {
   const selectedMonth = selectedValuationMonthKey();
   const groupLabels = {
     ark: "Ark",
@@ -4849,7 +6968,7 @@ function exportValuationGroup(group) {
   const label = groupLabels[group] || "Valuations";
 
   if (!rows.length) {
-    window.alert(`No ${label} valuation records found for ${valuationPeriodName(selectedMonth)}.`);
+    await kcInfo(`No ${label} valuation records found for ${valuationPeriodName(selectedMonth)}.`);
     return;
   }
 
@@ -5189,22 +7308,22 @@ async function reviewZeroValuationRows(rows) {
       continue;
     }
 
-    const removeFromValuation = window.confirm(
-      `${valuationRowDescription(row)} has a valuation cost of £0.00.\n\nPress OK if £0.00 is correct and this line should be removed from the valuation.\nPress Cancel if a value needs to be added.`
+    const removeFromValuation = await kcYesNo(
+      `${valuationRowDescription(row)} has a valuation cost of £0.00.\n\nIs this correct? If yes, this line will be removed from the valuation. If no, you will be asked to add a value.`
     );
 
     if (removeFromValuation) {
       continue;
     }
 
-    const enteredValue = window.prompt(`Enter the valuation value for:\n${valuationRowDescription(row)}`, "");
-    if (enteredValue === null) {
+    const enteredValue = await kcInput(`Enter the valuation value for:\n${valuationRowDescription(row)}`, "Valuation value");
+    if (enteredValue === "cancel") {
       continue;
     }
 
     const amount = Number(String(enteredValue).replace(/[£,\s]/g, ""));
     if (!Number.isFinite(amount) || amount <= 0) {
-      window.alert("That value was not added because it was not a valid amount above £0.");
+      await kcInfo("That value was not added because it was not a valid amount above £0.");
       continue;
     }
 
@@ -5234,7 +7353,7 @@ async function generateValuationWorkbook(group) {
   };
   const rows = await reviewZeroValuationRows(valuationGroupRows(group, selectedMonth));
   if (!rows.length) {
-    window.alert(`No ${groupLabels[group]} valuation rows found for ${valuationPeriodName(selectedMonth)}.`);
+    await kcInfo(`No ${groupLabels[group]} valuation rows found for ${valuationPeriodName(selectedMonth)}.`);
     return;
   }
   const xml = styledValuationWorkbookXml(rows, groupLabels[group], selectedMonth);
@@ -5252,172 +7371,754 @@ async function toggleValuationChecked(index, checked) {
   renderValuations();
 }
 
+function trainingRecordActiveInYear(record, yearValue = activeTrainingYear) {
+  const year = Number(yearValue || new Date().getFullYear());
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year, 11, 31, 23, 59, 59);
+  const completed = record.completedDate ? new Date(record.completedDate) : null;
+  const expires = record.noExpiry || !record.expiryDate ? null : new Date(record.expiryDate);
+  if (completed && completed > yearEnd) return false;
+  if (expires && expires < yearStart) return false;
+  return true;
+}
+
+function availableTrainingYears() {
+  const currentYear = new Date().getFullYear();
+  const years = new Set([currentYear, currentYear + 1, currentYear + 2]);
+  trainingMatrix.forEach((record) => {
+    const completedYear = record.completedDate ? Number(String(record.completedDate).slice(0, 4)) : 0;
+    const expiryYear = record.expiryDate ? Number(String(record.expiryDate).slice(0, 4)) : 0;
+    if (completedYear) years.add(completedYear);
+    if (expiryYear) years.add(expiryYear);
+  });
+  return [...years].filter(Boolean).sort((a, b) => a - b).map(String);
+}
+
+function setTrainingYearFilterOptions() {
+  const yearFilter = document.querySelector("#trainingYearFilter");
+  if (!yearFilter) return;
+  const current = activeTrainingYear || String(new Date().getFullYear());
+  const years = availableTrainingYears();
+  yearFilter.innerHTML = years.map((year) => `<option value="${year}">${year}</option>`).join("");
+  activeTrainingYear = years.includes(current) ? current : String(new Date().getFullYear());
+  if (!years.includes(activeTrainingYear)) activeTrainingYear = years[0] || String(new Date().getFullYear());
+  yearFilter.value = activeTrainingYear;
+}
+
+function staffTrainingRecords(staff) {
+  return trainingMatrix.filter((record) => (record.staffId && record.staffId === staff.staffId) || record.employee === staff.name);
+}
+
+function isLikelyTestRecord(item = {}) {
+  const text = [
+    item.name,
+    item.client,
+    item.address,
+    item.notes,
+    item.phone,
+    item.van,
+    item.assignedVan,
+    item.training,
+    item.trainingRecords
+  ].filter(Boolean).join(" ");
+  return /\b(test|dummy|sample)\b/i.test(text) || /^dave$/i.test(String(item.name || ""));
+}
+
+function testRecordBadge(item = {}) {
+  return isLikelyTestRecord(item) ? '<span class="status warning test-record-badge">Test record</span>' : "";
+}
+
+function staffTrainingAlertCount(staff) {
+  return staffTrainingRecords(staff).filter((record) => trainingStatus(record).className !== "ok").length;
+}
+
+function staffHolidayRequestsFor(staff, status = "") {
+  return holidayRequests.filter((request) => (request.staffId && request.staffId === staff.staffId) || request.name === staff.name)
+    .filter((request) => !status || request.status === status);
+}
+
+function staffNextHoliday(staff) {
+  return staffHolidayRequestsFor(staff, "Approved")
+    .filter((request) => String(request.from || "") >= today)
+    .sort((a, b) => String(a.from).localeCompare(String(b.from)))[0];
+}
+
+function staffCompactRow(title, detail, status = "") {
+  return `
+    <article class="staff-compact-row">
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <p>${escapeHtml(detail || "")}</p>
+      </div>
+      ${status ? `<span class="status ${status === "Approved" || status === "Present" ? "ok" : status === "Declined" || status === "Sick" || status === "Absent" || status === "Absent - Called in Sick" ? "urgent" : "warning"}">${escapeHtml(status)}</span>` : ""}
+    </article>
+  `;
+}
+
+function renderSelectedStaffProfile(staff, index, currentYear) {
+  const shell = document.querySelector("#staffProfileShell");
+  const body = document.querySelector("#staffProfileTabBody");
+  if (!shell || !body) return;
+  if (!staff) {
+    shell.innerHTML = `
+      <div class="staff-selected-empty">
+        <h3>No employee selected</h3>
+        <p>Add a staff member or clear the search to select an employee.</p>
+      </div>
+    `;
+    body.innerHTML = "";
+    return;
+  }
+
+  const attendance = attendanceFor(staff.name, today);
+  const leaveSummary = staffLeaveSummary(staff, currentYear);
+  const trainingAlerts = staffTrainingAlertCount(staff);
+  const nextHoliday = staffNextHoliday(staff);
+  document.querySelectorAll(".staff-profile-tab").forEach((button) => {
+    button.classList.toggle("active", button.dataset.staffTab === activeStaffTab);
+  });
+
+  shell.innerHTML = `
+    <div class="staff-selected-header">
+      <div>
+        <span class="profile-kicker">${escapeHtml(staff.role || "Staff member")}</span>
+        <h3>${escapeHtml(staff.name)} ${testRecordBadge(staff)}</h3>
+        <p>${escapeHtml(staff.phone || "No mobile")} | ${escapeHtml(staff.email || "No email")}</p>
+      </div>
+      <span class="status ${staffStatusClass(attendance.status)}">${escapeHtml(attendance.status)}</span>
+    </div>
+    <div class="staff-selected-actions">
+      <button class="secondary-button" type="button" data-edit-record="staff" data-record-index="${index}">Edit Profile</button>
+      <button class="secondary-button" type="button" data-staff-detail-attendance="${escapeHtml(staff.name)}">Log Sick / Late / Absent</button>
+      <button class="secondary-button" type="button" data-staff-detail-holiday="${escapeHtml(staff.name)}">Add Holiday</button>
+    </div>
+  `;
+
+  const holidayRows = staffHolidayRequestsFor(staff)
+    .sort((a, b) => String(b.from || "").localeCompare(String(a.from || "")))
+    .map((request) => staffCompactRow(
+      `${formatDateUk(request.from)} to ${formatDateUk(request.to)}`,
+      `${request.days || holidayCalculatedDays(request) || workingDateRangeValues(request.from, request.to).length || 0} day(s)${request.dayType === "Half day" ? ` | ${request.dayPart || "AM"} half day` : ""}${request.notes ? ` | ${request.notes}` : ""}`,
+      request.status || "Pending"
+    ))
+    .join("");
+  const attendanceRows = attendanceRecords
+    .filter((record) => record.name === staff.name)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .slice(0, 20)
+    .map((record) => staffCompactRow(formatDateUk(record.date), `${record.category || record.returnToWorkNotes || "No notes"}`, record.status))
+    .join("");
+  const trainingRows = staffTrainingRecords(staff)
+    .map((record) => {
+      const status = trainingStatus(record);
+      return staffCompactRow(record.course, `${record.provider || "Provider not set"} | Expires ${record.expiryDate ? formatDateUk(record.expiryDate) : "not set"}`, status.label);
+    })
+    .join("");
+  const incidents = incidentHistoryForStaff(staff);
+  const recentActivity = [
+    ...staffAttendanceHistory(staff.name, 3).map((record) => `${formatDateUk(record.date)}: ${record.status}`),
+    ...staffHolidayRequestsFor(staff).slice(-2).map((request) => `${request.status}: holiday ${formatDateUk(request.from)}`)
+  ].slice(0, 5);
+
+  const tabs = {
+    overview: `
+      <div class="staff-profile-cards">
+        ${staffProfileMetric("Mobile", staff.phone || "Not set")}
+        ${staffProfileMetric("Email", staff.email || "Not set")}
+        ${staffProfileMetric("Assigned van", staff.assignedVan || "Not set")}
+        ${staffProfileMetric("Emergency contact", staff.emergencyContact || "Not set")}
+        ${staffProfileMetric("Holiday remaining", leaveSummary.holidayRemaining)}
+        ${staffProfileMetric("Sick days this year", leaveSummary.sickDays)}
+        ${staffProfileMetric("Training alerts", trainingAlerts)}
+        ${staffProfileMetric("Next booked holiday", nextHoliday ? `${formatDateUk(nextHoliday.from)} to ${formatDateUk(nextHoliday.to)}` : "None booked")}
+      </div>
+      <section class="staff-tab-section">
+        <h4>Recent activity</h4>
+        ${recentActivity.length ? recentActivity.map((item) => staffCompactRow(item, "")).join("") : '<p class="empty-state">No recent activity.</p>'}
+      </section>
+    `,
+    holidays: `
+      <div class="staff-profile-cards">
+        ${staffProfileMetric("Holiday entitlement", leaveSummary.holidayAllowance)}
+        ${staffProfileMetric("Holidays used", leaveSummary.holidayTaken)}
+        ${staffProfileMetric("Holidays remaining", leaveSummary.holidayRemaining)}
+        ${staffProfileMetric("Company and bank holidays", leaveSummary.companyBankDeductions)}
+      </div>
+      <div class="staff-tab-actions">
+        <button class="primary-button" type="button" data-staff-detail-holiday="${escapeHtml(staff.name)}">Add holiday</button>
+        <button class="secondary-button" type="button" data-manage="companyHolidays">Add company holiday</button>
+      </div>
+      <section class="staff-tab-section">
+        <h4>Request history</h4>
+        ${holidayRows || '<p class="empty-state">No holiday requests or approved holidays yet.</p>'}
+      </section>
+    `,
+    attendance: `
+      <div class="staff-tab-actions">
+        <button class="primary-button" type="button" data-staff-detail-attendance="${escapeHtml(staff.name)}">Log sick / late / absent</button>
+        <button class="secondary-button" type="button" data-sick-call="${escapeHtml(staff.name)}">Sick call-in</button>
+      </div>
+      <section class="staff-tab-section">
+        <h4>Attendance records</h4>
+        ${attendanceRows || '<p class="empty-state">No attendance records yet.</p>'}
+      </section>
+    `,
+    training: `
+      <div class="staff-tab-actions">
+        <button class="primary-button" type="button" data-manage="training">Add training record</button>
+      </div>
+      <section class="staff-tab-section">
+        <h4>Training and qualifications</h4>
+        <div class="staff-detail-lines">
+          <p><strong>Qualifications:</strong> ${escapeHtml(staff.qualifications || "Not set")}</p>
+          <p><strong>Training records:</strong> ${escapeHtml(staff.trainingRecords || "Not set")}</p>
+        </div>
+        ${trainingRows || '<p class="empty-state">No matrix training records yet.</p>'}
+      </section>
+    `,
+    documents: `
+      <section class="staff-tab-section">
+        <h4>Staff documents</h4>
+        <p class="empty-state">Licence documents, certificates and other staff documents will be tracked here. Existing employee PDFs in OneDrive remain untouched.</p>
+      </section>
+    `,
+    notes: `
+      <section class="staff-tab-section">
+        <h4>Internal notes</h4>
+        <div class="staff-detail-lines">
+          <p>${escapeHtml(staff.notes || "No internal notes.")}</p>
+        </div>
+      </section>
+      <section class="staff-tab-section">
+        <h4>Incident log</h4>
+        ${incidents.length ? incidents.map((incident) => staffCompactRow(incident, "")).join("") : '<p class="empty-state">No internal accident or incident records logged.</p>'}
+      </section>
+    `
+  };
+
+  body.innerHTML = tabs[activeStaffTab] || tabs.overview;
+}
+
+function staffProfileMetric(label, value) {
+  return `
+    <article class="staff-profile-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(String(value ?? "Not set"))}</strong>
+    </article>
+  `;
+}
+
 function renderStaff() {
+  updateStaffOneDriveStatus();
   const todayAttendance = staffProfiles.map((staff) => attendanceFor(staff.name, today));
   const currentYear = String(new Date().getFullYear());
-  const trainingDays = attendanceRecords.filter((record) => record.status === "Training" && attendanceYear(record) === currentYear).length;
+  const trainingAlerts = trainingMatrix.filter((record) => trainingStatus(record).className !== "ok").length;
 
   document.querySelector("#staffPresentCount").textContent = todayAttendance.filter((record) => record.status === "Present" || record.status === "Late").length;
   document.querySelector("#staffUnavailableTodayCount").textContent = todayAttendance.filter((record) => isUnavailableStatus(record.status)).length;
   document.querySelector("#holidayRequestCount").textContent = holidayRequests.filter((request) => request.status === "Pending").length;
-  document.querySelector("#trainingDayCount").textContent = trainingDays;
-  const holidayTaken = totalHolidayUsedForYear(currentYear);
-  const holidayRemaining = totalHolidayAllowanceForYear(currentYear) - holidayTaken;
-  const sickDays = totalSickDaysForYear(currentYear);
-  const companyHolidayDays = companyHolidayDaysForYear(currentYear);
-  const safetyAlerts = occupationalRiddorAlerts();
-
-  const staffYearSummary = document.querySelector("#staffYearSummary");
-  if (staffYearSummary) {
-    const companyHolidayList = companyHolidays
-      .filter((holiday) => dateRangeValues(holiday.from, holiday.to).some((date) => date.startsWith(currentYear)))
-      .map((holiday) => `<div class="staff-company-holiday"><strong>${escapeHtml(holiday.title || holiday.type || "Company holiday")}</strong><span>${formatDateUk(holiday.from)} to ${formatDateUk(holiday.to)}</span></div>`)
-      .join("");
-    staffYearSummary.innerHTML = `
-      <div class="staff-year-stat"><span>Total holidays taken</span><strong>${holidayTaken}</strong></div>
-      <div class="staff-year-stat"><span>Remaining holiday balance</span><strong>${holidayRemaining}</strong></div>
-      <div class="staff-year-stat"><span>Company/bank holidays deducted</span><strong>${companyHolidayDays}</strong></div>
-      <div class="staff-year-stat"><span>Total sick days</span><strong>${sickDays}</strong></div>
-      ${companyHolidayList ? `<div class="staff-company-holidays">${companyHolidayList}</div>` : ""}
-    `;
-  }
-
-  const staffSafetyAlerts = document.querySelector("#staffSafetyAlerts");
-  if (staffSafetyAlerts) {
-    staffSafetyAlerts.innerHTML = safetyAlerts.length
-      ? safetyAlerts.map((alert) => `<div class="staff-safety-alert"><strong>${escapeHtml(alert.name)}</strong><br>${escapeHtml(alert.message)}</div>`).join("")
-      : '<p class="empty-state">No RIDDOR sickness flags.</p>';
-  }
-
-  const staffHolidayCalendar = document.querySelector("#staffHolidayCalendar");
-  if (staffHolidayCalendar) {
-    const entries = holidayCalendarEntriesForYear(currentYear);
-    staffHolidayCalendar.innerHTML = `
-      <h3>${currentYear} Bank, Public & Company Holidays</h3>
-      <div class="staff-holiday-calendar-list">
-        ${entries.map((entry) => `
-          <div class="staff-holiday-row">
-            <span>${formatDateUk(entry.date)}</span>
-            <strong>${escapeHtml(entry.title)}</strong>
-            <em>${escapeHtml(entry.type)}</em>
-          </div>
-        `).join("") || '<p class="empty-state">No bank or company holidays set for this year.</p>'}
-      </div>
-      <p class="staff-calendar-source">England & Wales bank holidays seeded from GOV.UK. Add company shutdown days here when Kingswood closes.</p>
-    `;
-  }
+  document.querySelector("#trainingDayCount").textContent = trainingAlerts;
 
   const visibleStaff = filteredStaff();
+  if (!staffProfiles[selectedStaffIndex] && staffProfiles.length) selectedStaffIndex = 0;
+  if (visibleStaff.length && !visibleStaff.includes(staffProfiles[selectedStaffIndex])) {
+    selectedStaffIndex = staffProfiles.indexOf(visibleStaff[0]);
+  }
+
   document.querySelector("#staffGrid").innerHTML = visibleStaff.map((staff) => {
     const attendance = attendanceFor(staff.name, today);
-    const restriction = activeSicknessRestrictionFor(staff.name, today);
-    const holidayUsed = holidayUsedForYear(staff.name, currentYear);
-    const holidayRemaining = staff.holidayAllowance - holidayUsed;
+    const leaveSummary = staffLeaveSummary(staff, currentYear);
     const index = staffProfiles.indexOf(staff);
-
+    const statusDot = isUnavailableStatus(attendance.status) ? "unavailable" : "available";
     return `
-      <article class="module-card staff-card">
-        <strong>${escapeHtml(staff.name)}</strong>
-        <p>${escapeHtml(staff.role)} | ${escapeHtml(staff.phone)}</p>
-        <p>${escapeHtml(staff.email)}</p>
-        <p>Tech app PIN: ${staff.techPin ? "PIN on file" : "Not set"}</p>
-        <p>Emergency: ${escapeHtml(staff.emergencyContact)}</p>
-        <p>Van: ${escapeHtml(staff.assignedVan)}</p>
-        <p>Training: ${escapeHtml(staff.trainingRecords)}</p>
-        <p>Qualifications: ${escapeHtml(staff.qualifications)}</p>
-        <p>Licence: ${escapeHtml(staff.drivingLicence)}</p>
-        <p>PPE: ${escapeHtml(staff.ppeIssued)}</p>
-        <p>Holiday ${currentYear}: ${holidayUsed} used, ${holidayRemaining} remaining</p>
-        <p>${escapeHtml(staff.notes)}</p>
-        <span class="status ${staffStatusClass(attendance.status)}">${escapeHtml(publicStaffStatus(staff.name, today))}</span>
-        ${restriction ? `<p class="staff-restriction-note">${escapeHtml(restriction.message)}</p>` : ""}
-        <div class="record-actions">
-          <button class="secondary-button" type="button" data-view-staff="${index}">View</button>
-          ${recordButtons("staff", index)}
-        </div>
-      </article>
+      <button class="staff-directory-item ${index === selectedStaffIndex ? "selected" : ""}" type="button" data-select-staff="${index}">
+        <span class="staff-status-dot ${statusDot}"></span>
+        <span>
+          <strong>${escapeHtml(staff.name)}</strong>
+          <em>${escapeHtml(staff.role || "Staff member")} ${testRecordBadge(staff)}</em>
+        </span>
+        <small>${escapeHtml(attendance.status)}</small>
+        <b>${leaveSummary.holidayRemaining} days</b>
+      </button>
     `;
   }).join("") || `
-    <article class="module-card staff-empty-card">
-      <strong>No staff profiles yet</strong>
-      <p>Add Kevin, Alex, Jodie and each technician here. Once a staff member is added, use View to examine their profile, holiday balance, sick days, training and attendance history.</p>
-      <div class="record-actions">
-        <button class="primary-button" type="button" data-manage="staff">Add Staff Member</button>
-      </div>
+    <article class="staff-empty-card">
+      <strong>No staff found</strong>
+      <p>Clear the search or add a staff member.</p>
+      <button class="primary-button" type="button" data-manage="staff">Add Staff Member</button>
     </article>
   `;
 
-  document.querySelector("#attendanceList").innerHTML = todayAttendance.map((record) => {
-    const index = attendanceRecords.indexOf(record);
-    const buttons = index >= 0 ? recordButtons("attendance", index) : "";
-    const callInButton = record.status === "Present" || record.status === "Late"
-      ? `<button class="secondary-button" type="button" data-sick-call="${escapeHtml(record.name)}">Sick call-in</button>`
-      : "";
-    return `
-      <article class="list-row">
-        <div>
-          <strong>${escapeHtml(record.name)}</strong>
-          <p>${escapeHtml(`${formatDateUk(record.date)} | ${record.category || record.status} | ${record.recoveryDate ? `Recovery/return ${formatDateUk(record.recoveryDate)}` : "No recovery date logged"}`)}</p>
-          <div class="record-actions">${callInButton}${buttons}</div>
-        </div>
-        <span class="status ${staffStatusClass(record.status)}">${escapeHtml(record.status)}</span>
-      </article>
-    `;
-  }).join("");
+  const staffHolidayRequestsList = document.querySelector("#staffHolidayRequestsList");
+  if (staffHolidayRequestsList) {
+    const pendingRequests = holidayRequests
+      .filter((request) => request.status === "Pending")
+      .sort((a, b) => String(a.from || "").localeCompare(String(b.from || "")));
+    staffHolidayRequestsList.innerHTML = pendingRequests.length
+      ? pendingRequests.map((request) => holidayRequestRow(request, holidayRequests.indexOf(request))).join("")
+      : '<p class="empty-state compact-empty">No pending holiday requests.</p>';
+  }
 
-  document.querySelector("#staffReports").innerHTML = staffProfiles.map((staff) => {
-    const sicknessDays = sicknessDaysForYear(staff.name, currentYear);
-    const training = trainingDaysForYear(staff.name, currentYear);
-    const holidayUsed = holidayUsedForYear(staff.name, currentYear);
-    const holidayRemaining = staff.holidayAllowance - holidayUsed;
-    const history = attendanceRecords.filter((record) => record.name === staff.name).map((record) => `${record.date}: ${record.status}`).join(", ");
-
-    return listRow(
-      staff.name,
-      `${currentYear}: Sick ${sicknessDays} | Holiday used ${holidayUsed} incl. company/bank holidays | Remaining ${holidayRemaining} | Training ${training} | ${history || "No attendance history"}`,
-      "Report"
-    );
-  }).join("");
+  renderSelectedStaffProfile(staffProfiles[selectedStaffIndex], selectedStaffIndex, currentYear);
 }
 
 function renderTrainingMatrix() {
-  const records = trainingMatrix.map((record, index) => ({ ...record, index, status: trainingStatus(record) }));
-  document.querySelector("#trainingCurrentCount").textContent = records.filter((record) => record.status.label === "Current" || record.status.label === "No expiry").length;
-  document.querySelector("#trainingExpiringCount").textContent = records.filter((record) => record.status.className === "warning").length;
-  document.querySelector("#trainingExpiredCount").textContent = records.filter((record) => record.status.className === "urgent").length;
-  document.querySelector("#trainingEmployeeCount").textContent = new Set(records.map((record) => record.employee).filter(Boolean)).size;
+  setTrainingYearFilterOptions();
+  ensureTrainingFilters();
+  const records = filteredTrainingRecords();
+  const allRecords = trainingMatrix
+    .map((record, index) => ({ ...record, index, status: trainingStatus(record) }))
+    .filter((record) => trainingRecordActiveInYear(record, activeTrainingYear));
+  document.querySelector("#trainingCurrentCount").textContent = allRecords.filter((record) => record.status.label === "Current" || record.status.label === "No Expiry").length;
+  document.querySelector("#trainingExpiringCount").textContent = allRecords.filter((record) => record.status.className === "warning").length;
+  document.querySelector("#trainingExpiredCount").textContent = allRecords.filter((record) => record.status.className === "urgent").length;
+  document.querySelector("#trainingEmployeeCount").textContent = new Set(allRecords.map((record) => record.employee).filter(Boolean)).size;
 
   document.querySelector("#trainingTableBody").innerHTML = records
     .sort((a, b) => a.employee.localeCompare(b.employee) || a.status.days - b.status.days)
     .map((record) => {
+      const certificateName = record.documentFileName || record.certificate || "";
       return `
         <tr>
           <td><strong>${escapeHtml(record.employee)}</strong></td>
           <td>${escapeHtml(record.course)}</td>
           <td>${escapeHtml(record.provider)}</td>
           <td>${escapeHtml(record.completedDate || "-")}</td>
-          <td>${escapeHtml(record.expiryDate || "-")}</td>
+          <td>${escapeHtml(record.noExpiry ? "No expiry" : record.expiryDate || "-")}</td>
           <td><span class="status ${record.status.className}">${escapeHtml(record.status.label)}</span></td>
-          <td>${escapeHtml(record.notes || record.certificate || "")}<div class="record-actions">${recordButtons("training", record.index)}</div></td>
+          <td>${certificateName ? `<button class="link-button" type="button" data-open-training-certificate="${record.index}">${escapeHtml(certificateName)}</button>` : '<span class="table-subtext">No certificate</span>'}</td>
+          <td>
+            <div class="record-actions">
+              <button class="secondary-button" type="button" data-view-training="${record.index}">View</button>
+              <button class="secondary-button" type="button" data-edit-record="training" data-record-index="${record.index}">Edit</button>
+              <button class="secondary-button" type="button" data-replace-training-certificate="${record.index}">Replace certificate</button>
+              <button class="danger-button" type="button" data-delete-record="training" data-record-index="${record.index}">Delete</button>
+            </div>
+          </td>
         </tr>
       `;
     })
-    .join("") || '<tr><td class="empty-state" colspan="7">No training records yet.</td></tr>';
+    .join("") || '<tr><td class="empty-state" colspan="8">No training records found.</td></tr>';
+}
+
+function ensureTrainingFilters() {
+  const employeeFilter = document.querySelector("#trainingEmployeeFilter");
+  const courseFilter = document.querySelector("#trainingCourseFilter");
+  if (employeeFilter) {
+    const current = employeeFilter.value || "all";
+    const names = [...new Set(trainingMatrix.map((record) => record.employee).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    employeeFilter.innerHTML = '<option value="all">All employees</option>' + names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+    employeeFilter.value = names.includes(current) ? current : "all";
+  }
+  if (courseFilter) {
+    const current = courseFilter.value || "all";
+    const courses = [...new Set(trainingMatrix.map((record) => record.course).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    courseFilter.innerHTML = '<option value="all">All training</option>' + courses.map((course) => `<option value="${escapeHtml(course)}">${escapeHtml(course)}</option>`).join("");
+    courseFilter.value = courses.includes(current) ? current : "all";
+  }
+}
+
+function selectedTrainingYearRecords() {
+  return trainingMatrix
+    .map((record, index) => ({ ...record, index, status: trainingStatus(record) }))
+    .filter((record) => trainingRecordActiveInYear(record, activeTrainingYear));
+}
+
+async function exportTrainingMatrix(format) {
+  const year = activeTrainingYear || String(new Date().getFullYear());
+  const records = selectedTrainingYearRecords();
+  if (!records.length) {
+    await kcInfo(`No training records found for ${year}.`);
+    return;
+  }
+  updateOneDriveHeaderStatus("Saving to OneDrive", `Exporting Training Matrix ${year}`);
+  try {
+    const response = await fetch("/api/export-training-matrix", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        year,
+        format,
+        generatedBy: currentUserName(),
+        records: records.map((record) => ({
+          employee: record.employee || "",
+          course: record.course || "",
+          provider: record.provider || "",
+          certificateNumber: record.certificateNumber || "",
+          completedDate: record.completedDate || "",
+          expiryDate: record.noExpiry ? "No Expiry" : record.expiryDate || "",
+          status: record.status.label,
+          notes: record.notes || "",
+          documentFileName: record.documentFileName || record.certificate || "",
+          oneDriveLocation: record.oneDriveLocation || ""
+        }))
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.saved) throw new Error(result.message || "The export was not confirmed by OneDrive.");
+    updateOneDriveHeaderStatus("OneDrive save complete", formatOneDriveSaveTime(new Date().toISOString()));
+    await kcInfo(`${format === "xlsx" ? "Excel" : "CSV"} export saved to OneDrive:\n${result.fileName}`);
+  } catch (error) {
+    keepPendingOneDriveBackup(commandData(), "Training Matrix export failed");
+    await kcInfo(`Training Matrix export has not been safely saved to OneDrive yet. ${error.message || "Please start Kingswood Hub with the launcher and try again."}`);
+  }
+}
+
+function filteredTrainingRecords() {
+  const term = (document.querySelector("#trainingSearch")?.value || "").trim().toLowerCase();
+  const employee = document.querySelector("#trainingEmployeeFilter")?.value || "all";
+  const course = document.querySelector("#trainingCourseFilter")?.value || "all";
+  const statusFilter = activeTrainingFilter !== "all" ? activeTrainingFilter : (document.querySelector("#trainingStatusFilter")?.value || "all");
+  const expiryFilter = document.querySelector("#trainingExpiryFilter")?.value || "all";
+  return trainingMatrix.map((record, index) => ({ ...record, index, status: trainingStatus(record) })).filter((record) => {
+    const searchable = `${record.employee} ${record.course} ${record.provider} ${record.certificateNumber} ${record.documentFileName} ${record.notes}`.toLowerCase();
+    const matchesStatus = statusFilter === "all"
+      || (statusFilter === "current" && record.status.label === "Current")
+      || (statusFilter === "expiring" && record.status.className === "warning")
+      || (statusFilter === "expired" && record.status.className === "urgent")
+      || (statusFilter === "no-expiry" && record.status.label === "No Expiry");
+    const matchesExpiry = expiryFilter === "all" || (!record.noExpiry && record.status.days >= 0 && record.status.days <= Number(expiryFilter));
+    return (!term || searchable.includes(term))
+      && trainingRecordActiveInYear(record, activeTrainingYear)
+      && (employee === "all" || record.employee === employee)
+      && (course === "all" || record.course === course)
+      && matchesStatus
+      && matchesExpiry;
+  });
+}
+
+function filteredAssets() {
+  const term = (document.querySelector("#assetSearch")?.value || "").trim().toLowerCase();
+  const category = document.querySelector("#assetCategoryFilter")?.value || "all";
+  const status = document.querySelector("#assetStatusFilter")?.value || "all";
+  const employee = document.querySelector("#assetEmployeeFilter")?.value || "all";
+  const vehicle = document.querySelector("#assetVehicleFilter")?.value || "all";
+  const due = activeAssetFilter !== "all" ? activeAssetFilter : (document.querySelector("#assetDueFilter")?.value || "all");
+  return assets.map((asset, index) => ({ ...asAssetObject(asset), index })).filter((item) => {
+    const searchable = `${item.asset} ${item.assetId} ${item.category} ${item.make} ${item.model} ${item.serialNumber} ${assetHolderLabel(item)} ${assetVehicleOrLocationLabel(item)}`.toLowerCase();
+    const matchesSearch = !term || searchable.includes(term);
+    const matchesCategory = category === "all" || item.category === category;
+    const matchesStatus = status === "all" || item.status === status;
+    const matchesEmployee = employee === "all" || item.assignedStaffId === employee;
+    const matchesVehicle = vehicle === "all" || item.vehicleId === vehicle;
+    const matchesDue = due === "all"
+      || (due === "in-use" && item.status === "In use")
+      || (due === "inspection" && assetNeedsInspection(item))
+      || (due === "service" && assetNeedsService(item))
+      || (due === "pat" && assetPatOverdue(item))
+      || (due === "repair" && item.status === "Needs repair");
+    return matchesSearch && matchesCategory && matchesStatus && matchesEmployee && matchesVehicle && matchesDue;
+  });
+}
+
+function refreshAssetFilters() {
+  const categoryFilter = document.querySelector("#assetCategoryFilter");
+  const statusFilter = document.querySelector("#assetStatusFilter");
+  const employeeFilter = document.querySelector("#assetEmployeeFilter");
+  const vehicleFilter = document.querySelector("#assetVehicleFilter");
+  if (categoryFilter && categoryFilter.options.length <= 1) {
+    categoryFilter.innerHTML = '<option value="all">All categories</option>' + assetCategories.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("");
+  }
+  if (statusFilter && statusFilter.options.length <= 1) {
+    statusFilter.innerHTML = '<option value="all">All statuses</option>' + assetStatuses.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("");
+  }
+  if (employeeFilter) {
+    const current = employeeFilter.value;
+    employeeFilter.innerHTML = '<option value="all">All employees</option>' + staffProfiles.map((staff) => `<option value="${escapeHtml(staff.staffId || staff.name)}">${escapeHtml(staff.name)}</option>`).join("");
+    employeeFilter.value = [...employeeFilter.options].some((option) => option.value === current) ? current : "all";
+  }
+  if (vehicleFilter) {
+    const current = vehicleFilter.value;
+    vehicleFilter.innerHTML = '<option value="all">All vehicles</option>' + vehicles.map(asVehicleObject).map((vehicle) => `<option value="${escapeHtml(vehicle.vehicleId || vehicle.registration)}">${escapeHtml(vehicle.registration || vehicle.vehicle)}</option>`).join("");
+    vehicleFilter.value = [...vehicleFilter.options].some((option) => option.value === current) ? current : "all";
+  }
+}
+
+function assetStatusBadgeClass(item) {
+  if (item.status === "Needs repair" || item.status === "Out of service" || item.status === "Lost") return "urgent";
+  if (item.status === "Needs inspection" || item.condition === "Poor" || item.condition === "Damaged") return "warning";
+  return "ok";
 }
 
 function renderAssets() {
-  document.querySelector("#assetsTableBody").innerHTML = assets.map((asset, index) => {
-    const item = asAssetObject(asset);
+  refreshAssetFilters();
+  const records = filteredAssets();
+  const allAssets = assets.map(asAssetObject);
+  document.querySelector("#assetTotalCount").textContent = allAssets.length;
+  document.querySelector("#assetInUseCount").textContent = allAssets.filter((item) => item.status === "In use").length;
+  document.querySelector("#assetInspectionDueCount").textContent = allAssets.filter(assetNeedsInspection).length;
+  document.querySelector("#assetServiceDueCount").textContent = allAssets.filter(assetNeedsService).length;
+  document.querySelector("#assetRepairCount").textContent = allAssets.filter((item) => item.status === "Needs repair").length;
+  document.querySelector("#assetsTableBody").innerHTML = records.map((item) => {
+    const inspection = assetDueState(item.nextInspectionDue);
     return `
     <tr>
-      <td><strong>${escapeHtml(item.asset)}</strong></td>
+      <td><strong>${escapeHtml(item.asset)}</strong><div class="table-subtext">${escapeHtml(item.make || "")} ${escapeHtml(item.model || "")}</div></td>
+      <td>${escapeHtml(item.assetId)}</td>
       <td>${escapeHtml(item.category)}</td>
-      <td>${escapeHtml(item.heldBy)}</td>
-      <td>${escapeHtml(item.inspectionDue)}</td>
-      <td><span class="status ${item.status === "OK" ? "ok" : "warning"}">${escapeHtml(item.status)}</span><div class="record-actions">${recordButtons("assets", index)}</div></td>
+      <td>${escapeHtml(assetHolderLabel(item))}</td>
+      <td>${escapeHtml(assetVehicleOrLocationLabel(item))}</td>
+      <td><span class="status ${item.condition === "Damaged" || item.condition === "Poor" ? "warning" : "ok"}">${escapeHtml(item.condition)}</span></td>
+      <td><span class="status ${assetStatusBadgeClass(item)}">${escapeHtml(item.status)}</span></td>
+      <td>${item.inspectionRequired === "Yes" ? `${formatDateUk(item.nextInspectionDue)}<br><span class="status ${inspection.className}">${inspection.label}</span>` : '<span class="table-subtext">Not required</span>'}</td>
+      <td><div class="record-actions">${assetRecordButtons(item.index)}</div></td>
     </tr>
   `;
-  }).join("");
+  }).join("") || '<tr><td class="empty-state" colspan="9">No assets found.</td></tr>';
+}
+
+function assetRecordButtons(index) {
+  return `
+    <button class="secondary-button" type="button" data-view-asset="${index}">View</button>
+    <button class="secondary-button" type="button" data-edit-record="assets" data-record-index="${index}">Edit Asset</button>
+    <button class="secondary-button" type="button" data-asset-action="reassign" data-asset-index="${index}">Reassign</button>
+    <button class="secondary-button" type="button" data-asset-action="inspection" data-asset-index="${index}">Add Inspection</button>
+    <button class="secondary-button" type="button" data-asset-action="service" data-asset-index="${index}">Add Service</button>
+    <button class="secondary-button" type="button" data-asset-action="repair" data-asset-index="${index}">Add Repair</button>
+    <button class="danger-button" type="button" data-asset-action="lost" data-asset-index="${index}">Mark Lost</button>
+    <button class="danger-button" type="button" data-asset-action="disposed" data-asset-index="${index}">Mark Disposed</button>
+  `;
+}
+
+async function showAssetProfile(index) {
+  const item = asAssetObject(assets[Number(index)]);
+  const inspection = assetDueState(item.nextInspectionDue);
+  const service = assetDueState(item.nextServiceDue);
+  const pat = assetDueState(item.nextPatDue);
+  const docs = item.documents?.length ? item.documents.map((document) => `- ${document.name || "Document"}`).join("\n") : "No photos or documents linked yet.";
+  const history = item.history?.length ? item.history.slice(-8).map((entry) => `- ${formatDateUk(String(entry.at || "").slice(0, 10))}: ${entry.action} by ${entry.by || "Unknown"}`).join("\n") : "No history yet.";
+  await kcInfo([
+    `${item.asset} (${item.assetId})`,
+    "",
+    `Category: ${item.category}`,
+    `Make/model: ${[item.make, item.model].filter(Boolean).join(" ") || "Not set"}`,
+    `Serial number: ${item.serialNumber || "Not set"}`,
+    `Current holder: ${assetHolderLabel(item)}`,
+    `Vehicle/location: ${assetVehicleOrLocationLabel(item)}`,
+    `Condition: ${item.condition}`,
+    `Status: ${item.status}`,
+    `Purchase: ${item.purchaseDate ? formatDateUk(item.purchaseDate) : "Not set"} | GBP ${Number(item.purchaseCost || 0).toFixed(2)}`,
+    `Inspection: ${item.inspectionRequired === "Yes" ? `${inspection.label} - ${formatDateUk(item.nextInspectionDue)}` : "Not required"}`,
+    `Service: ${item.serviceRequired === "Yes" ? `${service.label} - ${formatDateUk(item.nextServiceDue)}` : "Not required"}`,
+    `PAT: ${item.powerSource === "Mains powered" && item.patTestingRequired === "Yes" ? `${pat.label} - ${formatDateUk(item.nextPatDue)}` : "Not applicable"}`,
+    "",
+    "Documents:",
+    docs,
+    "",
+    "Recent history:",
+    history
+  ].join("\n"));
+}
+
+async function handleAssetAction(action, index) {
+  const numericIndex = Number(index);
+  const item = asAssetObject(assets[numericIndex]);
+  if (!item) return;
+  const actionLabels = {
+    reassign: "Reassign Asset",
+    inspection: "Inspection added",
+    service: "Service added",
+    repair: "Repair added",
+    lost: "Marked lost",
+    disposed: "Marked disposed"
+  };
+  if (action === "reassign") {
+    openDataDialog("assets", index);
+    return;
+  }
+  if (["lost", "disposed"].includes(action)) {
+    const confirmed = await kcConfirmAction(`Mark ${item.asset} as ${action === "lost" ? "lost" : "disposed"}? This will be kept in the asset history.`, action === "lost" ? "Mark Lost" : "Mark Disposed");
+    if (!confirmed) return;
+    item.status = action === "lost" ? "Lost" : "Disposed";
+  }
+  if (action === "inspection") {
+    item.lastInspectionDate = today;
+    item.nextInspectionDue = item.nextInspectionDue || "";
+    item.status = item.status === "Needs inspection" ? "In use" : item.status;
+  }
+  if (action === "service") {
+    item.lastServiceDate = today;
+    item.nextServiceDue = item.nextServiceDue || "";
+  }
+  if (action === "repair") {
+    item.status = "Needs repair";
+  }
+  item.history = Array.isArray(item.history) ? item.history : [];
+  item.history.push({
+    action: actionLabels[action] || "Asset updated",
+    by: currentUserName(),
+    at: new Date().toISOString(),
+    status: item.status
+  });
+  item.updatedAt = new Date().toISOString();
+  assets[numericIndex] = item;
+  const saved = await saveCommandData();
+  if (!saved) return;
+  render();
+  await kcInfo(`${actionLabels[action] || "Asset updated"} for ${item.asset}.`);
+}
+
+async function exportAssets(format = "csv") {
+  const records = filteredAssets();
+  if (!records.length) {
+    await kcInfo("No assets found for the current filters.");
+    return;
+  }
+  updateOneDriveHeaderStatus("Saving to OneDrive", `Exporting Asset Register ${format.toUpperCase()}`);
+  try {
+    const response = await fetch("/api/export-assets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        format,
+        generatedBy: currentUserName(),
+        records: records.map((item) => ({
+          asset: item.asset,
+          assetId: item.assetId,
+          category: item.category,
+          assignedTo: assetHolderLabel(item),
+          vehicleOrLocation: assetVehicleOrLocationLabel(item),
+          condition: item.condition,
+          status: item.status,
+          nextInspectionDue: item.nextInspectionDue,
+          nextServiceDue: item.nextServiceDue,
+          nextPatDue: item.powerSource === "Mains powered" && item.patTestingRequired === "Yes" ? item.nextPatDue : "",
+          serialNumber: item.serialNumber,
+          purchaseDate: item.purchaseDate,
+          purchaseCost: item.purchaseCost
+        }))
+      })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.saved) throw new Error(result.message || "The export was not confirmed by OneDrive.");
+    updateOneDriveHeaderStatus("OneDrive save complete", formatOneDriveSaveTime(new Date().toISOString()));
+    await kcInfo(`${format === "xlsx" ? "Excel" : "CSV"} asset register export saved to OneDrive:\n${result.fileName}`);
+  } catch (error) {
+    keepPendingOneDriveBackup(commandData(), "Asset export failed");
+    updateOneDriveHeaderStatus("Local backup pending", "Asset export not saved");
+    await kcInfo(`The asset export has not been safely saved to OneDrive yet. ${error.message || "Please start Kingswood Hub with the launcher and try again."}`);
+  }
+}
+
+async function showTrainingRecord(index) {
+  const record = trainingMatrix[Number(index)];
+  if (!record) return;
+  const status = trainingStatus(record);
+  await kcInfo([
+    `${record.employee || "Employee"} - ${record.course || "Training record"}`,
+    `Provider: ${record.provider || "Not set"}`,
+    `Certificate/licence: ${record.certificateNumber || "Not set"}`,
+    `Completed: ${record.completedDate ? formatDateUk(record.completedDate) : "Not set"}`,
+    `Expires: ${record.noExpiry ? "No expiry" : record.expiryDate ? formatDateUk(record.expiryDate) : "Not set"}`,
+    `Status: ${status.label}`,
+    `Document: ${record.documentFileName || record.certificate || "No document linked"}`,
+    record.notes ? `Notes: ${record.notes}` : ""
+  ].filter(Boolean).join("\n"));
+}
+
+async function openTrainingCertificate(index) {
+  const record = trainingMatrix[Number(index)];
+  if (!record) return;
+  const location = record.oneDriveLocation || "";
+  if (!location) {
+    await kcInfo("No OneDrive certificate location has been saved for this training record yet.");
+    return;
+  }
+  if (/^https?:\/\//i.test(location)) {
+    window.open(location, "_blank", "noopener");
+    return;
+  }
+  activeCertificateRecord = record;
+  const fileName = record.documentFileName || record.certificate || "Training certificate";
+  const fileUrl = localFileUrl(location);
+  const isImage = /\.(png|jpe?g)$/i.test(fileName);
+  const isPdf = /\.pdf$/i.test(fileName);
+  if (isPdf) {
+    window.open(fileUrl, "_blank", "noopener");
+  }
+  if (certificateViewerTitle) certificateViewerTitle.textContent = fileName;
+  if (certificateViewerPreview) {
+    certificateViewerPreview.innerHTML = isImage
+      ? `<img src="${fileUrl}" alt="${escapeHtml(fileName)}">`
+      : `<div class="certificate-file-card"><strong>${escapeHtml(fileName)}</strong><p>${isPdf ? "PDF opened in a new tab." : "Certificate file ready to open."}</p></div>`;
+  }
+  certificateViewerDialog?.showModal();
+}
+
+function localFileUrl(filePath) {
+  return `/api/local-file?path=${encodeURIComponent(filePath)}`;
+}
+
+function localFolderUrl(filePath) {
+  const normalised = String(filePath || "").replace(/\\/g, "/");
+  const folder = normalised.includes("/") ? normalised.slice(0, normalised.lastIndexOf("/")) : normalised;
+  return `file:///${folder.replace(/ /g, "%20")}`;
+}
+
+function filteredCompanyDocuments() {
+  const category = document.querySelector("#documentsCategoryFilter")?.value || "all";
+  const status = document.querySelector("#documentsStatusFilter")?.value || "all";
+  const term = (document.querySelector("#documentsSearch")?.value || "").trim().toLowerCase();
+  return companyDocuments.map((raw, index) => ({ item: asCompanyDocument(raw), index })).filter(({ item }) => {
+    const documentStatus = companyDocumentStatus(item);
+    const searchable = `${item.title} ${item.category} ${item.oneDriveLink} ${item.owner}`.toLowerCase();
+    return (category === "all" || item.category === category)
+      && (status === "all" || documentStatus.value === status)
+      && (!term || searchable.includes(term));
+  });
+}
+
+function renderCompanyDocuments() {
+  const body = document.querySelector("#documentsTableBody");
+  if (!body) return;
+  const summary = companyDocumentReminderSummary();
+  const summaryGrid = document.querySelector("#documentsSummaryGrid");
+  if (summaryGrid) {
+    summaryGrid.innerHTML = `
+      <article class="summary-tile success">
+        <span class="summary-label">Tracker Records</span>
+        <strong>${summary.total}</strong>
+      </article>
+      <article class="summary-tile warning">
+        <span class="summary-label">Critical Expiring</span>
+        <strong>${summary.criticalExpiring}</strong>
+        <p>90 / 60 / 30 / 7 day watch</p>
+      </article>
+      <article class="summary-tile warning">
+        <span class="summary-label">Standard Expiring</span>
+        <strong>${summary.standardExpiring}</strong>
+        <p>30 day watch</p>
+      </article>
+      <article class="summary-tile danger">
+        <span class="summary-label">Expired</span>
+        <strong>${summary.expired}</strong>
+        <p>Critical expiry nags Kev and Alex until resolved</p>
+      </article>
+    `;
+  }
+
+  const rows = filteredCompanyDocuments();
+  body.innerHTML = rows.map(({ item, index }) => {
+    const status = companyDocumentStatus(item);
+    const expiryText = item.expiryDate
+      ? `${formatDateUk(item.expiryDate)}${Number.isFinite(status.days) ? ` (${status.days} days)` : ""}`
+      : "No expiry";
+    const oneDriveLink = /^https?:\/\//i.test(item.oneDriveLink)
+      ? `<a href="${escapeHtml(item.oneDriveLink)}" target="_blank" rel="noopener">Open</a>`
+      : escapeHtml(item.oneDriveLink || "Not set");
+    return `
+      <tr>
+        <td><strong>${escapeHtml(item.title)}</strong><br><span class="table-subtext">${escapeHtml(isCriticalCompanyDocument(item) ? "Critical tier" : "Standard tier")}</span></td>
+        <td>${escapeHtml(item.category)}</td>
+        <td>${item.issueDate ? escapeHtml(formatDateUk(item.issueDate)) : "-"}</td>
+        <td>${escapeHtml(expiryText)}</td>
+        <td><span class="status ${status.className}">${escapeHtml(status.label)}</span></td>
+        <td>${oneDriveLink}</td>
+        <td>${escapeHtml(item.owner || "Kevin")}<br><span class="table-subtext">Updated by ${escapeHtml(item.lastUpdatedBy || item.owner || "Kevin")}</span></td>
+        <td><div class="record-actions">${recordButtons("documents", index)}</div></td>
+      </tr>
+    `;
+  }).join("") || '<tr><td class="empty-state" colspan="8">No company document tracker records found.</td></tr>';
 }
 
 function renderCards(target, items) {
@@ -5606,35 +8307,552 @@ function recordButtons(collection, index) {
   `;
 }
 
-function renderTechnicians() {
-  document.querySelector("#techniciansGrid").innerHTML = technicians.map((tech) => `
-    <article class="module-card">
-      <strong>${tech.name}</strong>
-      <p>${tech.role}</p>
-      <p>${tech.phone} | Van ${tech.van}</p>
-      <p>${tech.training}</p>
+function complianceRecordButtons(index) {
+  return `
+    <button class="secondary-button" type="button" data-view-compliance="${index}">View</button>
+    <button class="secondary-button" type="button" data-edit-record="compliance" data-record-index="${index}">Edit</button>
+    <button class="secondary-button" type="button" data-open-compliance-document-record="${index}">Open document</button>
+    <button class="secondary-button" type="button" data-replace-compliance-document="${index}">Replace document</button>
+    <button class="secondary-button" type="button" data-renew-compliance="${index}">Mark renewed</button>
+    <button class="danger-button" type="button" data-delete-record="compliance" data-record-index="${index}">Delete</button>
+  `;
+}
+
+function complianceRecordAt(index) {
+  return complianceRecords()[Number(index)];
+}
+
+async function showComplianceRecord(index) {
+  const item = complianceRecordAt(index);
+  if (!item) return;
+  const status = complianceStatus(item);
+  await kcInfo([
+    `${item.title}`,
+    `Type: ${item.complianceType}`,
+    `Provider: ${item.provider || "-"}`,
+    `Reference: ${item.certificateNumber || "-"}`,
+    `Responsible: ${item.responsiblePerson}`,
+    `Status: ${status.label} - ${status.reminder}`,
+    `Document: ${item.documentFileName || "No document saved"}`,
+    `History entries: ${Array.isArray(item.history) ? item.history.length : 0}`
+  ].join("\n"));
+}
+
+async function openComplianceDocument(index) {
+  const item = complianceRecordAt(index);
+  if (!item?.oneDriveLocation) {
+    await kcInfo("No OneDrive document location has been saved for this compliance record yet.");
+    return;
+  }
+  const fileUrl = `file:///${String(item.oneDriveLocation).replace(/\\/g, "/").replace(/ /g, "%20")}`;
+  window.open(fileUrl, "_blank", "noopener");
+}
+
+async function renewComplianceRecord(index) {
+  const records = complianceRecords();
+  const item = records[Number(index)];
+  if (!item) return;
+  const startDate = await kcInput(`Enter the new start date for:\n${item.title}`, "New start date (yyyy-mm-dd)", today);
+  if (!startDate || startDate === "cancel") return;
+  const expiryDate = await kcInput("Enter the new expiry or review date. Leave blank only if this item has no expiry.", "New expiry / review date", item.expiryDate || "");
+  if (expiryDate === "cancel") return;
+  const confirmed = await kcConfirmAction("Renew this compliance item? The old dates and old document location will be kept in renewal history.", "Mark renewed");
+  if (!confirmed) return;
+
+  const historyEntry = {
+    renewedAt: new Date().toISOString(),
+    renewedBy: currentUserName(),
+    previousStartDate: item.startDate || "",
+    previousExpiryDate: item.expiryDate || "",
+    previousDocumentFileName: item.documentFileName || "",
+    previousOneDriveLocation: item.oneDriveLocation || "",
+    previousStatus: complianceStatus(item).label
+  };
+  const updated = {
+    ...item,
+    startDate,
+    expiryDate: expiryDate || "",
+    noExpiry: !expiryDate,
+    history: [...(Array.isArray(item.history) ? item.history : []), historyEntry],
+    audit: [
+      ...(Array.isArray(item.audit) ? item.audit : []),
+      { action: "renewed", by: currentUserName(), at: new Date().toISOString() }
+    ],
+    updatedAt: new Date().toISOString()
+  };
+  updated.status = complianceStatus(updated).label;
+  records[Number(index)] = updated;
+  dataModels.compliance.set(records);
+  const saved = await saveComplianceDocumentToOneDrive(updated, { renewal: true });
+  if (!saved) return;
+  const commandSaved = await saveCommandData();
+  if (!commandSaved) return;
+  await kcInfo("Compliance item renewed and saved to OneDrive.");
+  render();
+}
+
+function technicianFieldStatus(tech) {
+  const staff = staffProfiles.find((profile) => profile.name === tech.name) || {};
+  const attendance = attendanceFor(tech.name, today);
+  const active = !isUnavailableStatus(attendance.status) && String(staff.status || "Active").toLowerCase() !== "inactive";
+  return {
+    label: active ? "Active" : "Inactive / unavailable",
+    className: active ? "ok" : "warning",
+    attendance: attendance.status || "Present"
+  };
+}
+
+function technicianCurrentOrNextJob(name) {
+  const sentJobs = jobs
+    .filter((job) => job.technician === name && job.status === "Sent to Tech" && job.date >= today)
+    .sort((a, b) => `${a.date} ${a.slot || ""}`.localeCompare(`${b.date} ${b.slot || ""}`));
+  const current = sentJobs.find((job) => job.date === today);
+  const job = current || sentJobs[0];
+  if (!job) return { label: "No sent job", detail: "No current or upcoming Tech App job.", job: null };
+  return {
+    label: current ? "Current job" : "Next job",
+    detail: `${formatDateUk(job.date)} ${job.slot || ""} | ${job.postcode || job.address || job.client || job.title}`,
+    job
+  };
+}
+
+function milesBetween(pointA, pointB) {
+  const lat1 = Number(pointA?.lat);
+  const lon1 = Number(pointA?.lng);
+  const lat2 = Number(pointB?.lat);
+  const lon2 = Number(pointB?.lng);
+  if ([lat1, lon1, lat2, lon2].some((value) => Number.isNaN(value))) return null;
+  const toRad = (value) => value * Math.PI / 180;
+  const earthRadiusMiles = 3958.8;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return earthRadiusMiles * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function defaultGeofenceTestLocation(name) {
+  const existing = technicianGeofenceTestLocations[name];
+  if (existing) return existing;
+  technicianGeofenceTestLocations[name] = {
+    mode: "away",
+    distance: 1.4,
+    lastUpdate: new Date().toISOString()
+  };
+  return technicianGeofenceTestLocations[name];
+}
+
+function geofenceLabelClass(label) {
+  if (label === "Near Job") return "ok";
+  if (label === "Not Near Job") return "warning";
+  if (label === "Offline") return "urgent";
+  return "draft";
+}
+
+function technicianGeofenceStatus(tech, job, appStatus) {
+  if (!job) {
+    return {
+      label: "Location Not Available",
+      className: "draft",
+      distanceText: "-",
+      lastUpdate: "No assigned job"
+    };
+  }
+
+  if (technicianGeofenceTestMode) {
+    const testLocation = defaultGeofenceTestLocation(tech.name);
+    if (testLocation.mode === "offline") {
+      return {
+        label: "Offline",
+        className: "urgent",
+        distanceText: "-",
+        lastUpdate: formatTrackingTime(testLocation.lastUpdate)
+      };
+    }
+    if (testLocation.mode === "unavailable") {
+      return {
+        label: "Location Not Available",
+        className: "draft",
+        distanceText: "-",
+        lastUpdate: formatTrackingTime(testLocation.lastUpdate)
+      };
+    }
+    const distance = Number(testLocation.distance || 0);
+    const label = distance <= technicianGeofenceRadiusMiles ? "Near Job" : "Not Near Job";
+    return {
+      label,
+      className: geofenceLabelClass(label),
+      distanceText: `${distance.toFixed(1)} miles`,
+      lastUpdate: formatTrackingTime(testLocation.lastUpdate)
+    };
+  }
+
+  if (appStatus.className !== "ok") {
+    return {
+      label: "Offline",
+      className: "urgent",
+      distanceText: "-",
+      lastUpdate: appStatus.lastActivity || "No app activity"
+    };
+  }
+
+  const staff = staffProfiles.find((profile) => profile.name === tech.name) || {};
+  const techPoint = { lat: tech.lat || staff.currentLat, lng: tech.lng || staff.currentLng };
+  const jobPoint = { lat: job.lat || job.jobLat, lng: job.lng || job.jobLng };
+  const distance = milesBetween(techPoint, jobPoint);
+  if (distance === null) {
+    return {
+      label: "Location Not Available",
+      className: "draft",
+      distanceText: "-",
+      lastUpdate: tech.lastLocationUpdate || staff.lastLocationUpdate || "No location update"
+    };
+  }
+
+  const label = distance <= technicianGeofenceRadiusMiles ? "Near Job" : "Not Near Job";
+  return {
+    label,
+    className: geofenceLabelClass(label),
+    distanceText: `${distance.toFixed(1)} miles`,
+    lastUpdate: formatTrackingTime(tech.lastLocationUpdate || staff.lastLocationUpdate || new Date().toISOString())
+  };
+}
+
+function renderTechnicianGeofenceTestPanel() {
+  const target = document.querySelector("#technicianGeofenceTestPanel");
+  if (!target) return;
+  target.innerHTML = `
+    <article class="work-panel technician-geofence-panel">
+      <div>
+        <span class="status warning">TEST MODE</span>
+        <h3>Job Geofence Status</h3>
+        <p class="panel-note">Simulated technician locations only. This does not save real location data or mark jobs complete.</p>
+      </div>
+      <div class="technician-geofence-mode">
+        <span>Radius: ${technicianGeofenceRadiusMiles} miles from assigned job</span>
+        <button class="secondary-button" type="button" data-technician-geofence-toggle>${technicianGeofenceTestMode ? "Test Mode On" : "Live Mode"}</button>
+      </div>
     </article>
-  `).join("") || '<p class="empty-state">Add staff with a technician role to populate this view.</p>';
+  `;
+}
+
+function technicianAppStatus(tech) {
+  const staff = staffProfiles.find((profile) => profile.name === tech.name) || {};
+  const hasPin = Boolean(staff.techPin || tech.techPin);
+  const feed = integrationFeeds.technicianApp || buildTechnicianFeed();
+  const hasSentJob = feed.jobs?.some((job) => job.technician === tech.name);
+  const connected = Boolean(tech.lastAppActivity || staff.lastAppActivity);
+  if (connected) {
+    return {
+      label: "Connected",
+      className: "ok",
+      lastActivity: formatDateUk(tech.lastAppActivity || staff.lastAppActivity),
+      pinLabel: hasPin ? "PIN set" : "PIN not set"
+    };
+  }
+  if (hasSentJob) {
+    return {
+      label: "Feed ready",
+      className: "warning",
+      lastActivity: "No app activity yet",
+      pinLabel: hasPin ? "PIN set" : "PIN not set"
+    };
+  }
+  return {
+    label: "Not Connected",
+    className: "draft",
+    lastActivity: "Coming later",
+    pinLabel: hasPin ? "PIN set" : "PIN not set"
+  };
+}
+
+function renderTechnicians() {
+  const summaryTarget = document.querySelector("#techniciansSummaryGrid");
+  const grid = document.querySelector("#techniciansGrid");
+  if (!grid) return;
+  const techRows = technicians.map((tech) => {
+    const fieldStatus = technicianFieldStatus(tech);
+    const appStatus = technicianAppStatus(tech);
+    const jobStatus = technicianCurrentOrNextJob(tech.name);
+    const geofence = technicianGeofenceStatus(tech, jobStatus.job, appStatus);
+    const attention = fieldStatus.className !== "ok" || appStatus.className !== "ok";
+    return { tech, fieldStatus, appStatus, jobStatus, geofence, attention };
+  });
+  renderTechnicianGeofenceTestPanel();
+
+  if (summaryTarget) {
+    const activeCount = techRows.filter((item) => item.fieldStatus.className === "ok").length;
+    const connectedCount = techRows.filter((item) => item.appStatus.className === "ok").length;
+    const workingCount = techRows.filter((item) => item.jobStatus.label === "Current job").length;
+    const attentionCount = techRows.filter((item) => item.attention).length;
+    summaryTarget.innerHTML = [
+      ["Active Technicians", activeCount, "Ready field users", "success"],
+      ["Connected to Tech App", connectedCount, "Live app activity", connectedCount === techRows.length && techRows.length ? "success" : "warning"],
+      ["Currently Working", workingCount, "Sent jobs today", workingCount ? "success" : ""],
+      ["Offline or Attention Needed", attentionCount, "PIN, app or availability checks", attentionCount ? "warning" : "success"]
+    ].map(([label, value, note, className]) => `
+      <article class="summary-tile technician-summary-tile ${className}">
+        <span class="summary-label">${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        <p class="summary-copy">${escapeHtml(note)}</p>
+      </article>
+    `).join("");
+  }
+
+  grid.innerHTML = techRows.map(({ tech, fieldStatus, appStatus, jobStatus, geofence }) => `
+    <article class="module-card technician-access-card">
+      <div class="technician-card-header">
+        <div>
+          <strong>${escapeHtml(tech.name)}</strong>
+          <p>${escapeHtml(tech.role || "Field technician")}</p>
+        </div>
+        <span class="status ${escapeHtml(fieldStatus.className)}">${escapeHtml(fieldStatus.label)}</span>
+      </div>
+
+      <dl class="technician-access-details">
+        <div>
+          <dt>Tech App</dt>
+          <dd><span class="status ${escapeHtml(appStatus.className)}">${escapeHtml(appStatus.label)}</span></dd>
+        </div>
+        <div>
+          <dt>Last app activity</dt>
+          <dd>${escapeHtml(appStatus.lastActivity)}</dd>
+        </div>
+        <div>
+          <dt>Assigned job</dt>
+          <dd>${escapeHtml(jobStatus.job ? `${jobStatus.job.number || ""} ${jobStatus.job.title || jobStatus.job.client || "Assigned job"}`.trim() : "No assigned job")}</dd>
+        </div>
+        <div>
+          <dt>Job postcode</dt>
+          <dd>${escapeHtml(jobStatus.job?.postcode || "Not set")}</dd>
+        </div>
+        <div>
+          <dt>Assigned van</dt>
+          <dd>${escapeHtml(tech.van || "Not assigned")}</dd>
+        </div>
+        <div>
+          <dt>App PIN</dt>
+          <dd>${escapeHtml(appStatus.pinLabel)}</dd>
+        </div>
+        <div>
+          <dt>Distance from job</dt>
+          <dd>${escapeHtml(geofence.distanceText)}</dd>
+        </div>
+        <div>
+          <dt>Geofence status</dt>
+          <dd><span class="status ${escapeHtml(geofence.className)}">${escapeHtml(geofence.label)}</span></dd>
+        </div>
+        <div>
+          <dt>Last location update</dt>
+          <dd>${escapeHtml(geofence.lastUpdate)}</dd>
+        </div>
+      </dl>
+
+      ${technicianGeofenceTestMode && jobStatus.job ? `
+        <div class="technician-geofence-actions">
+          <span class="muted">Test location</span>
+          <button class="secondary-button" type="button" data-technician-geofence="near" data-technician-name="${escapeHtml(tech.name)}">Move Near Job</button>
+          <button class="secondary-button" type="button" data-technician-geofence="away" data-technician-name="${escapeHtml(tech.name)}">Move Away</button>
+          <button class="secondary-button" type="button" data-technician-geofence="unavailable" data-technician-name="${escapeHtml(tech.name)}">Location Unavailable</button>
+          <button class="secondary-button" type="button" data-technician-geofence="offline" data-technician-name="${escapeHtml(tech.name)}">Offline</button>
+        </div>
+      ` : ""}
+
+      <div class="technician-actions">
+        <button class="secondary-button" type="button" data-technician-action="view" data-technician-name="${escapeHtml(tech.name)}">View Technician</button>
+        <button class="secondary-button" type="button" data-technician-action="app" data-technician-name="${escapeHtml(tech.name)}">View Tech App</button>
+        <button class="secondary-button" type="button" data-technician-action="message" data-technician-name="${escapeHtml(tech.name)}">Send Message</button>
+        <button class="secondary-button" type="button" data-technician-action="pin" data-technician-name="${escapeHtml(tech.name)}">Reset PIN</button>
+        <button class="danger-button" type="button" data-technician-action="disable" data-technician-name="${escapeHtml(tech.name)}">Disable App Access</button>
+      </div>
+    </article>
+  `).join("") || '<p class="empty-state">Add active staff with a technician role to populate Tech App access.</p>';
+}
+
+function trackingVehicles() {
+  if (trackingMode === "test") return testTrackingVehicles;
+  return [];
+}
+
+function trackingStatusClass(status) {
+  if (status === "Driving") return "ok";
+  if (status === "Stopped") return "warning";
+  return "urgent";
+}
+
+function updateTestVehiclePositions() {
+  if (trackingMode !== "test") return;
+  testTrackingVehicles = testTrackingVehicles.map((vehicle, index) => {
+    if (vehicle.status !== "Driving") {
+      return { ...vehicle, lastUpdate: new Date().toISOString() };
+    }
+    const wobble = Math.sin(Date.now() / 8000 + index) * 0.00018;
+    return {
+      ...vehicle,
+      lat: vehicle.lat + vehicle.routeBearing,
+      lng: vehicle.lng + wobble,
+      speed: Math.max(8, Math.round(vehicle.speed + Math.sin(Date.now() / 6000 + index) * 5)),
+      lastUpdate: new Date().toISOString()
+    };
+  });
+}
+
+function trackingPopupHtml(vehicle) {
+  return `
+    <div class="tracking-popup">
+      <strong>${escapeHtml(vehicle.technician)}</strong>
+      <p>${escapeHtml(vehicle.registration)}</p>
+      <p>${escapeHtml(vehicle.status)} | ${vehicle.speed || 0} mph</p>
+      <p>Updated ${escapeHtml(formatTrackingTime(vehicle.lastUpdate))}</p>
+      <span>TEST DATA</span>
+    </div>
+  `;
+}
+
+function formatTrackingTime(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "now";
+  return date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function trackingMapConfigs() {
+  return [
+    { key: "main", mapId: "trackingMap", fallbackId: "trackingMapFallback", zoom: 11 },
+    { key: "split", mapId: "splitTrackingMap", fallbackId: "splitTrackingMapFallback", zoom: 10 }
+  ];
+}
+
+function ensureTrackingMapView(config) {
+  const mapElement = document.querySelector(`#${config.mapId}`);
+  const fallback = document.querySelector(`#${config.fallbackId}`);
+  if (!mapElement || !window.L) {
+    fallback?.classList.add("visible");
+    return null;
+  }
+  fallback?.classList.remove("visible");
+  let view = trackingMapViews.get(config.key);
+  if (!view) {
+    const map = L.map(mapElement, { zoomControl: true }).setView([51.3741, 0.0672], config.zoom);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
+      maxZoom: 19
+    }).addTo(map);
+    view = { map, markers: new Map() };
+    trackingMapViews.set(config.key, view);
+  }
+  window.setTimeout(() => view.map.invalidateSize(), 80);
+  return view;
+}
+
+function renderTrackingMarkersForView(config) {
+  const view = ensureTrackingMapView(config);
+  if (!view) return;
+  const vehiclesToShow = trackingVehicles();
+  const activeIds = new Set(vehiclesToShow.map((vehicle) => vehicle.id));
+  view.markers.forEach((marker, id) => {
+    if (!activeIds.has(id)) {
+      marker.remove();
+      view.markers.delete(id);
+    }
+  });
+  vehiclesToShow.forEach((vehicle) => {
+    const markerClass = `tracking-marker ${trackingStatusClass(vehicle.status)}`;
+    const icon = L.divIcon({
+      className: markerClass,
+      html: `<span>${escapeHtml(vehicle.registration.slice(0, 2))}</span>`,
+      iconSize: [34, 34],
+      iconAnchor: [17, 17]
+    });
+    let marker = view.markers.get(vehicle.id);
+    if (!marker) {
+      marker = L.marker([vehicle.lat, vehicle.lng], { icon }).addTo(view.map);
+      marker.on("click", () => selectTrackingVehicle(vehicle.id, true));
+      view.markers.set(vehicle.id, marker);
+    } else {
+      marker.setLatLng([vehicle.lat, vehicle.lng]);
+      marker.setIcon(icon);
+    }
+    marker.bindPopup(trackingPopupHtml(vehicle));
+  });
+}
+
+function renderTrackingMarkers() {
+  trackingMapConfigs().forEach(renderTrackingMarkersForView);
+}
+
+function selectTrackingVehicle(vehicleId, openPopup = false) {
+  selectedTrackingVehicleId = vehicleId;
+  const vehicle = trackingVehicles().find((item) => item.id === vehicleId);
+  if (vehicle) {
+    trackingMapViews.forEach((view) => {
+      view.map.setView([vehicle.lat, vehicle.lng], Math.max(view.map.getZoom(), 13), { animate: true });
+      if (openPopup) view.markers.get(vehicle.id)?.openPopup();
+    });
+  }
+  renderTrackingList();
+}
+
+function trackingVehicleCard(vehicle) {
+  return `
+    <button class="tracking-vehicle-card ${vehicle.id === selectedTrackingVehicleId ? "selected" : ""}" type="button" data-tracking-vehicle="${escapeHtml(vehicle.id)}">
+      <span class="tracking-test-label">${trackingMode === "test" ? "TEST DATA" : "LIVE DATA"}</span>
+      <strong>${escapeHtml(vehicle.technician)}</strong>
+      <span>${escapeHtml(vehicle.registration)}</span>
+      <small>${vehicle.speed || 0} mph | Last update ${escapeHtml(formatTrackingTime(vehicle.lastUpdate))}</small>
+      <em class="status ${trackingStatusClass(vehicle.status)}">${escapeHtml(vehicle.status)}</em>
+    </button>
+  `;
+}
+
+function renderTrackingListFor(selector) {
+  const list = document.querySelector(selector);
+  if (!list) return;
+  const vehiclesToShow = trackingVehicles();
+  list.innerHTML = vehiclesToShow.length ? vehiclesToShow.map(trackingVehicleCard).join("") : '<p class="empty-state">Live tracking provider not connected yet.</p>';
+}
+
+function renderTrackingList() {
+  renderTrackingListFor("#trackingList");
+  renderTrackingListFor("#splitTrackingList");
 }
 
 function renderTracking() {
-  document.querySelector("#trackingList").innerHTML = vehicles.map((vehicle) => {
-    const tech = technicians.find((person) => person.van === vehicle.registration);
-    return listRow(vehicle.registration, `${vehicle.vehicle} | ${tech?.name || "Unassigned"} | ${tech?.location || "No location"}`, vehicle.tracker);
-  }).join("");
+  const modeStatus = document.querySelector("#trackingModeStatus");
+  const sourceLabel = document.querySelector("#trackingSourceLabel");
+  if (modeStatus) {
+    modeStatus.textContent = trackingMode === "test" ? "TEST MODE" : "LIVE MODE";
+    modeStatus.className = `status ${trackingMode === "test" ? "warning" : "ok"}`;
+  }
+  if (sourceLabel) {
+    sourceLabel.textContent = trackingMode === "test"
+      ? "TEST MODE - simulated Kingswood vehicles, not saved as business data"
+      : "LIVE MODE - waiting for tracking provider connection";
+  }
+  if (trackingMode === "test") updateTestVehiclePositions();
+  renderTrackingList();
+  renderTrackingMarkers();
+  if (!trackingMoveTimer) {
+    trackingMoveTimer = window.setInterval(() => {
+      if (document.querySelector("#tracking")?.classList.contains("active")) {
+        updateTestVehiclePositions();
+        renderTrackingList();
+        renderTrackingMarkers();
+      }
+    }, 5000);
+  }
 }
 
 function renderSplitScreen() {
-  const trackingList = document.querySelector("#splitTrackingList");
   const plannerBoard = document.querySelector("#splitPlannerBoard");
   const plannerTitle = document.querySelector("#splitPlannerWeekTitle");
-  if (!trackingList || !plannerBoard || !plannerTitle) return;
+  const splitModeStatus = document.querySelector("#splitTrackingModeStatus");
+  if (!plannerBoard || !plannerTitle) return;
 
-  trackingList.innerHTML = vehicles.map((vehicle) => {
-    const tech = technicians.find((person) => person.van === vehicle.registration);
-    const status = vehicle.tracker === "Active" ? "Live" : vehicle.tracker || "Pending";
-    return listRow(vehicle.registration, `${vehicle.vehicle} | ${tech?.name || "Unassigned"} | ${tech?.location || "No location"}`, status);
-  }).join("") || '<p class="empty-state">No vehicles have been added yet.</p>';
+  if (splitModeStatus) {
+    splitModeStatus.textContent = trackingMode === "test" ? "TEST MODE" : "LIVE MODE";
+    splitModeStatus.className = `status ${trackingMode === "test" ? "warning" : "ok"}`;
+  }
+  renderTrackingListFor("#splitTrackingList");
+  renderTrackingMarkersForView({ key: "split", mapId: "splitTrackingMap", fallbackId: "splitTrackingMapFallback", zoom: 10 });
 
   const week = plannerCurrentWeek();
   const board = plannerBoardHtml(week, weeklyPlanner.filter((item) => item.week === week), false);
@@ -5694,7 +8912,7 @@ function render() {
   renderValuations();
   renderVehicles();
   renderAssets();
-  renderCards("#documentsGrid", companyDocuments);
+  renderCompanyDocuments();
   renderCards("#clientsGrid", clients);
   renderCards("#settingsGrid", settings);
   renderSettingsDetail();
@@ -5790,6 +9008,12 @@ function showSection(sectionId) {
   localStorage.setItem(sectionStorageKey, sectionId);
   updateProofingFrame(sectionId);
   updateSectionUrl(sectionId);
+  if (sectionId === "tracking" || sectionId === "split-screen") {
+    window.setTimeout(() => {
+      renderTracking();
+      renderSplitScreen();
+    }, 80);
+  }
 }
 
 function updateProofingFrame(sectionId) {
@@ -5870,7 +9094,7 @@ document.addEventListener("input", (event) => {
     updateProofingPreview();
   }
 });
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const removeButton = event.target.closest("[data-remove-proofing-photo]");
   if (!removeButton) return;
   const kind = removeButton.dataset.removeProofingPhoto;
@@ -5878,6 +9102,11 @@ document.addEventListener("click", (event) => {
   proofingPhotos[kind].splice(index, 1);
   renderProofingPhotoCards(kind);
   updateProofingPreview();
+});
+document.addEventListener("click", async (event) => {
+  const trackingButton = event.target.closest("[data-tracking-vehicle]");
+  if (!trackingButton) return;
+  selectTrackingVehicle(trackingButton.dataset.trackingVehicle, true);
 });
 Object.values(proofingFields).forEach((field) => {
   field?.addEventListener("input", updateProofingPreview);
@@ -5966,8 +9195,17 @@ document.querySelector("#plannerBoard").addEventListener("click", (event) => {
 });
 document.querySelector("#complianceSearch").addEventListener("input", renderCompliance);
 document.querySelector("#complianceCategoryFilter").addEventListener("change", renderCompliance);
+document.querySelector("#complianceStatusFilter")?.addEventListener("change", () => {
+  activeComplianceFilter = document.querySelector("#complianceStatusFilter").value;
+  renderCompliance();
+});
+document.querySelector("#complianceOwnerFilter")?.addEventListener("change", renderCompliance);
+document.querySelector("#complianceExpiryFilter")?.addEventListener("change", renderCompliance);
 document.querySelector("#fineSearch").addEventListener("input", renderFines);
 document.querySelector("#fineStatusFilter").addEventListener("change", renderFines);
+document.querySelector("#documentsSearch")?.addEventListener("input", renderCompanyDocuments);
+document.querySelector("#documentsCategoryFilter")?.addEventListener("change", renderCompanyDocuments);
+document.querySelector("#documentsStatusFilter")?.addEventListener("change", renderCompanyDocuments);
 document.querySelector("#valuationSearch").addEventListener("input", renderValuations);
 document.querySelector("#valuationMonthFilter").addEventListener("change", renderValuations);
 document.querySelector("#valuationYearFilter").addEventListener("change", renderValuations);
@@ -5981,11 +9219,47 @@ document.querySelector("#generateArkValuationButton").addEventListener("click", 
 document.querySelector("#generateJgValuationButton").addEventListener("click", () => generateValuationWorkbook("jg"));
 document.querySelector("#generateOtherValuationButton").addEventListener("click", () => generateValuationWorkbook("other"));
 closeValuationGraphButton?.addEventListener("click", () => valuationGraphDialog.close());
-document.querySelector("#staffSearch").addEventListener("input", renderStaff);
-document.querySelector("#attendanceStatusFilter").addEventListener("change", renderStaff);
+document.querySelector("#staffSearch")?.addEventListener("input", renderStaff);
+document.querySelector("#attendanceStatusFilter")?.addEventListener("change", renderStaff);
+document.querySelector("#trainingSearch")?.addEventListener("input", () => {
+  activeTrainingFilter = "all";
+  renderTrainingMatrix();
+});
+document.querySelector("#trainingYearFilter")?.addEventListener("change", (event) => {
+  activeTrainingYear = event.target.value || String(new Date().getFullYear());
+  activeTrainingFilter = "all";
+  renderTrainingMatrix();
+});
+document.querySelector("#trainingEmployeeFilter")?.addEventListener("change", () => {
+  activeTrainingFilter = "all";
+  renderTrainingMatrix();
+});
+document.querySelector("#trainingCourseFilter")?.addEventListener("change", () => {
+  activeTrainingFilter = "all";
+  renderTrainingMatrix();
+});
+document.querySelector("#trainingStatusFilter")?.addEventListener("change", () => {
+  activeTrainingFilter = "all";
+  renderTrainingMatrix();
+});
+document.querySelector("#trainingExpiryFilter")?.addEventListener("change", () => {
+  activeTrainingFilter = "all";
+  renderTrainingMatrix();
+});
+document.querySelector("#exportTrainingCsvButton")?.addEventListener("click", () => exportTrainingMatrix("csv"));
+document.querySelector("#exportTrainingExcelButton")?.addEventListener("click", () => exportTrainingMatrix("xlsx"));
+["#assetSearch", "#assetCategoryFilter", "#assetStatusFilter", "#assetEmployeeFilter", "#assetVehicleFilter", "#assetDueFilter"].forEach((selector) => {
+  document.querySelector(selector)?.addEventListener(selector === "#assetSearch" ? "input" : "change", () => {
+    activeAssetFilter = "all";
+    renderAssets();
+  });
+});
+document.querySelector("#exportAssetsCsvButton")?.addEventListener("click", () => exportAssets("csv"));
+document.querySelector("#exportAssetsExcelButton")?.addEventListener("click", () => exportAssets("xlsx"));
 globalSearch.addEventListener("input", applyGlobalSearch);
 publishFeedsButton?.addEventListener("click", publishIntegrationFeeds);
 refreshFeedsButton?.addEventListener("click", renderIntegrationFeeds);
+syncNowButton?.addEventListener("click", syncNow);
 pinForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const selectedUser = loginNameInput.value;
@@ -5999,7 +9273,7 @@ pinForm?.addEventListener("submit", (event) => {
 });
 lockHubButton?.addEventListener("click", lockHub);
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const publishButton = event.target.closest("[data-publish-feeds]");
   if (publishButton) {
     publishIntegrationFeeds();
@@ -6034,6 +9308,290 @@ document.addEventListener("click", (event) => {
   const valuationCheckbox = event.target.closest("[data-valuation-checked]");
   if (valuationCheckbox) {
     toggleValuationChecked(valuationCheckbox.dataset.valuationChecked, valuationCheckbox.checked);
+    return;
+  }
+
+  const approveHolidayButton = event.target.closest("[data-approve-holiday]");
+  if (approveHolidayButton) {
+    approveHolidayRequest(approveHolidayButton.dataset.approveHoliday);
+    return;
+  }
+
+  const declineHolidayButton = event.target.closest("[data-decline-holiday]");
+  if (declineHolidayButton) {
+    declineHolidayRequest(declineHolidayButton.dataset.declineHoliday);
+    return;
+  }
+
+  const removeFineEvidenceButton = event.target.closest("[data-remove-fine-evidence]");
+  if (removeFineEvidenceButton) {
+    fineEvidenceDraft.splice(Number(removeFineEvidenceButton.dataset.removeFineEvidence), 1);
+    renderFineEvidencePreview();
+    return;
+  }
+
+  const openFineEvidenceButton = event.target.closest("[data-open-fine-evidence]");
+  if (openFineEvidenceButton) {
+    const evidence = fineEvidenceDraft[Number(openFineEvidenceButton.dataset.openFineEvidence)];
+    if (evidence?.dataUrl) {
+      window.open(evidence.dataUrl, "_blank", "noopener");
+    }
+    return;
+  }
+
+  const removeTrainingDocumentButton = event.target.closest("[data-remove-training-document]");
+  if (removeTrainingDocumentButton) {
+    trainingDocumentDraft = null;
+    renderTrainingDocumentPreview();
+    return;
+  }
+
+  const openTrainingDocumentButton = event.target.closest("[data-open-training-document]");
+  if (openTrainingDocumentButton) {
+    if (trainingDocumentDraft?.dataUrl) {
+      window.open(trainingDocumentDraft.dataUrl, "_blank", "noopener");
+    }
+    return;
+  }
+
+  const viewTrainingButton = event.target.closest("[data-view-training]");
+  if (viewTrainingButton) {
+    showTrainingRecord(viewTrainingButton.dataset.viewTraining);
+    return;
+  }
+
+  const openTrainingCertificateButton = event.target.closest("[data-open-training-certificate]");
+  if (openTrainingCertificateButton) {
+    openTrainingCertificate(openTrainingCertificateButton.dataset.openTrainingCertificate);
+    return;
+  }
+
+  if (event.target.closest("[data-close-certificate-viewer]")) {
+    certificateViewerDialog?.close();
+    return;
+  }
+
+  if (event.target.closest("[data-certificate-open-file]")) {
+    if (activeCertificateRecord?.oneDriveLocation) {
+      window.open(localFileUrl(activeCertificateRecord.oneDriveLocation), "_blank", "noopener");
+    }
+    return;
+  }
+
+  if (event.target.closest("[data-certificate-open-folder]")) {
+    if (activeCertificateRecord?.oneDriveLocation) {
+      window.open(localFolderUrl(activeCertificateRecord.oneDriveLocation), "_blank", "noopener");
+    }
+    return;
+  }
+
+  if (event.target.closest("[data-certificate-download]")) {
+    if (activeCertificateRecord?.oneDriveLocation) {
+      const link = document.createElement("a");
+      link.href = localFileUrl(activeCertificateRecord.oneDriveLocation);
+      link.download = activeCertificateRecord.documentFileName || activeCertificateRecord.certificate || "certificate";
+      link.click();
+    }
+    return;
+  }
+
+  const removeComplianceDocumentButton = event.target.closest("[data-remove-compliance-document]");
+  if (removeComplianceDocumentButton) {
+    complianceDocumentDraft = null;
+    renderComplianceDocumentPreview();
+    return;
+  }
+
+  const removeAssetDocumentButton = event.target.closest("[data-remove-asset-document]");
+  if (removeAssetDocumentButton) {
+    assetDocumentDraft.splice(Number(removeAssetDocumentButton.dataset.removeAssetDocument), 1);
+    renderAssetDocumentPreview();
+    return;
+  }
+
+  const openAssetDraftButton = event.target.closest("[data-open-asset-document]");
+  if (openAssetDraftButton) {
+    const item = assetDocumentDraft[Number(openAssetDraftButton.dataset.openAssetDocument)];
+    if (item?.dataUrl) window.open(item.dataUrl, "_blank", "noopener");
+    else if (item?.filePath) window.open(localFileUrl(item.filePath), "_blank", "noopener");
+    return;
+  }
+
+  const openComplianceDraftButton = event.target.closest("[data-open-compliance-document]");
+  if (openComplianceDraftButton) {
+    if (complianceDocumentDraft?.dataUrl) {
+      window.open(complianceDocumentDraft.dataUrl, "_blank", "noopener");
+    }
+    return;
+  }
+
+  const viewComplianceButton = event.target.closest("[data-view-compliance]");
+  if (viewComplianceButton) {
+    showComplianceRecord(viewComplianceButton.dataset.viewCompliance);
+    return;
+  }
+
+  const viewAssetButton = event.target.closest("[data-view-asset]");
+  if (viewAssetButton) {
+    showAssetProfile(viewAssetButton.dataset.viewAsset);
+    return;
+  }
+
+  const assetCard = event.target.closest("[data-asset-card-filter]");
+  if (assetCard) {
+    activeAssetFilter = assetCard.dataset.assetCardFilter || "all";
+    const dueSelect = document.querySelector("#assetDueFilter");
+    if (dueSelect) dueSelect.value = ["inspection", "service", "repair"].includes(activeAssetFilter) ? activeAssetFilter : "all";
+    renderAssets();
+    return;
+  }
+
+  const assetActionButton = event.target.closest("[data-asset-action]");
+  if (assetActionButton) {
+    handleAssetAction(assetActionButton.dataset.assetAction, assetActionButton.dataset.assetIndex);
+    return;
+  }
+
+  const openComplianceButton = event.target.closest("[data-open-compliance-document-record]");
+  if (openComplianceButton) {
+    openComplianceDocument(openComplianceButton.dataset.openComplianceDocumentRecord);
+    return;
+  }
+
+  const replaceComplianceButton = event.target.closest("[data-replace-compliance-document]");
+  if (replaceComplianceButton) {
+    openDataDialog("compliance", replaceComplianceButton.dataset.replaceComplianceDocument);
+    return;
+  }
+
+  const renewComplianceButton = event.target.closest("[data-renew-compliance]");
+  if (renewComplianceButton) {
+    renewComplianceRecord(renewComplianceButton.dataset.renewCompliance);
+    return;
+  }
+
+  const replaceTrainingCertificateButton = event.target.closest("[data-replace-training-certificate]");
+  if (replaceTrainingCertificateButton) {
+    openDataDialog("training", replaceTrainingCertificateButton.dataset.replaceTrainingCertificate);
+    return;
+  }
+
+  const trainingCard = event.target.closest("[data-training-card-filter]");
+  if (trainingCard) {
+    activeTrainingFilter = trainingCard.dataset.trainingCardFilter || "all";
+    const statusSelect = document.querySelector("#trainingStatusFilter");
+    if (statusSelect) statusSelect.value = activeTrainingFilter === "all" ? "all" : activeTrainingFilter;
+    renderTrainingMatrix();
+    return;
+  }
+
+  const complianceCard = event.target.closest("[data-compliance-card-filter]");
+  if (complianceCard) {
+    activeComplianceFilter = complianceCard.dataset.complianceCardFilter || "all";
+    const statusSelect = document.querySelector("#complianceStatusFilter");
+    if (statusSelect) statusSelect.value = activeComplianceFilter === "all" ? "all" : activeComplianceFilter;
+    renderCompliance();
+    return;
+  }
+
+  const dashboardComplianceFilter = event.target.closest("[data-dashboard-compliance-filter]");
+  if (dashboardComplianceFilter) {
+    showSection("compliance");
+    const filter = dashboardComplianceFilter.dataset.dashboardComplianceFilter;
+    const statusSelect = document.querySelector("#complianceStatusFilter");
+    const expirySelect = document.querySelector("#complianceExpiryFilter");
+    if (filter === "Overdue") {
+      activeComplianceFilter = "Overdue";
+      if (statusSelect) statusSelect.value = "Overdue";
+      if (expirySelect) expirySelect.value = "all";
+    } else if (filter === "30") {
+      activeComplianceFilter = "all";
+      if (statusSelect) statusSelect.value = "all";
+      if (expirySelect) expirySelect.value = "30";
+    }
+    renderCompliance();
+    return;
+  }
+
+  const trainingDashboardFilter = event.target.closest("[data-training-dashboard-filter]");
+  if (trainingDashboardFilter) {
+    showSection("training");
+    const filter = trainingDashboardFilter.dataset.trainingDashboardFilter;
+    activeTrainingFilter = filter === "expired" ? "expired" : "all";
+    const statusSelect = document.querySelector("#trainingStatusFilter");
+    const expirySelect = document.querySelector("#trainingExpiryFilter");
+    if (statusSelect) statusSelect.value = filter === "expired" ? "expired" : "all";
+    if (expirySelect) expirySelect.value = filter === "30" ? "30" : "all";
+    renderTrainingMatrix();
+    return;
+  }
+
+  const geofenceToggle = event.target.closest("[data-technician-geofence-toggle]");
+  if (geofenceToggle) {
+    technicianGeofenceTestMode = !technicianGeofenceTestMode;
+    renderTechnicians();
+    return;
+  }
+
+  const geofenceButton = event.target.closest("[data-technician-geofence]");
+  if (geofenceButton) {
+    const name = geofenceButton.dataset.technicianName || "";
+    const mode = geofenceButton.dataset.technicianGeofence;
+    const distanceByMode = {
+      near: 0.2,
+      away: 1.4,
+      unavailable: null,
+      offline: null
+    };
+    technicianGeofenceTestLocations[name] = {
+      mode,
+      distance: distanceByMode[mode],
+      lastUpdate: new Date().toISOString()
+    };
+    renderTechnicians();
+    return;
+  }
+
+  const technicianActionButton = event.target.closest("[data-technician-action]");
+  if (technicianActionButton) {
+    const name = technicianActionButton.dataset.technicianName || "Technician";
+    const action = technicianActionButton.dataset.technicianAction;
+    if (action === "view") {
+      showSection("staff");
+      activeStaffTab = "overview";
+      renderStaff();
+      await kcInfo(`${name}'s full employee file is managed in Staff Management.`);
+      return;
+    }
+    if (action === "app") {
+      await kcInfo(`${name}'s technician app feed is generated from sent jobs and staff availability. A separate live technician app screen is not connected yet.`);
+      return;
+    }
+    if (action === "message") {
+      await kcInfo("Technician messaging is coming later. No message has been sent.");
+      return;
+    }
+    if (action === "pin") {
+      await kcInfo("PIN reset is coming later. Current PIN records have not been changed.");
+      return;
+    }
+    if (action === "disable") {
+      await kcInfo("Disable App Access is coming later. No technician access has been changed.");
+      return;
+    }
+  }
+
+  const selectStaffButton = event.target.closest("[data-select-staff]");
+  if (selectStaffButton) {
+    selectedStaffIndex = Number(selectStaffButton.dataset.selectStaff);
+    renderStaff();
+    return;
+  }
+
+  const staffTabButton = event.target.closest("[data-staff-tab]");
+  if (staffTabButton) {
+    activeStaffTab = staffTabButton.dataset.staffTab;
+    renderStaff();
     return;
   }
 
@@ -6106,15 +9664,28 @@ document.addEventListener("click", (event) => {
   }
 });
 
+let dataDialogSaving = false;
+
 dataForm.addEventListener("submit", async (event) => {
   if (event.submitter?.value === "cancel") {
     return;
   }
 
   event.preventDefault();
-  const saved = await saveDataDialog();
-  if (saved !== false) {
-    dataDialog.close();
+  if (dataDialogSaving) return;
+  dataDialogSaving = true;
+  if (dataSaveButton) dataSaveButton.disabled = true;
+  if (dataSaveSystemButton) dataSaveSystemButton.disabled = true;
+  setDataDialogStatus("Checking job details...", "");
+  try {
+    const saved = await saveDataDialog(event.submitter?.value || "default");
+    if (saved !== false) {
+      dataDialog.close();
+    }
+  } finally {
+    dataDialogSaving = false;
+    if (dataSaveButton) dataSaveButton.disabled = false;
+    if (dataSaveSystemButton) dataSaveSystemButton.disabled = false;
   }
 });
 
@@ -6176,3 +9747,4 @@ setInterval(updateLiveDateTime, 30000);
 updateOrpingtonWeather();
 setInterval(updateOrpingtonWeather, 600000);
 loadCommandData();
+

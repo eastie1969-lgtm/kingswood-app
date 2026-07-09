@@ -1,74 +1,174 @@
-# Kingswood Command Centre
+# Kingswood Connect Hub
 
-This is a separate central command centre project. It should stay separate from Kingswood Connect unless Kev explicitly asks for the two projects to connect.
+Kingswood Connect Hub is the central office and management system for Kingswood (London) Ltd.
 
-## What this prototype includes
+It is the main business command centre for planning, administration, compliance, documents, staff, vehicles, assets, valuations, RAMS, reports and live operational visibility.
 
-- Full-screen desktop command centre using the Kingswood silver logo, wide-screen navigation, and dashboard-led layout.
-- Dashboard with jobs today, jobs tomorrow, urgent jobs, reports due, RAMS to send, vehicle alerts, MOT reminders, insurance reminders, technician locations, and quick statistics.
-- Job Diary starter table for jobs, clients, technicians, reports, and search.
-- Live Vehicle Tracking placeholder ready for tracker data later.
-- RAMS Centre for assigning RAMS to jobs, marking RAMS as sent, and storing the sent date.
-- Compliance Centre with Green, Amber, and Red reminders for MOTs, servicing, insurance, licences, qualifications, PPE, ladders, fire extinguishers, PAT testing, first aid, and company insurance.
-- Company Documents area for policies, COSHH, risk assessments, method statements, insurance, accreditations, training certificates, and toolbox talks.
-- Vehicle Management starter table with MOT, insurance, driver, vehicle, and tracker status.
-- Fines and Charges area for parking tickets, congestion charges, ULEZ, speeding fines, bus lane fines, Dart Charge issues, other vehicle charges, evidence photos, payment deadlines, and statuses.
-- Staff Management area for staff profiles, emergency contacts, assigned vans, training, qualifications, driving licence details, PPE, attendance, sickness, holiday, fit notes, return to work notes, availability, and simple attendance reports.
-- Technician Management starter cards.
-- Asset Register starter table.
-- Clients area for Ark, JG Pest Control, Private, and Housing Associations.
-- Job History, Notifications, Search, and Settings starter areas.
+The old separate Admin App is no longer part of the intended final system. Office/admin work should be absorbed into the Kingswood Connect Hub.
 
-## How to open it and save data
+## Design Standard
 
-Double-click `Start Kingswood Hub.cmd`.
+The permanent product-wide design authority is [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).
 
-That opens the Hub at:
+All future UI work must follow that standard so Kingswood Connect feels like one piece of premium business office software, not separate pages stitched together.
+
+## Current Architecture
+
+Kingswood Connect is being shaped as two joined-up parts:
+
+- **Kingswood Connect Hub** - the office and management system.
+- **Technician App** - the field app used by technicians for jobs, RAMS, reports, photos, signatures and navigation.
+
+Both should eventually use the same live business data so office actions and technician actions stay in sync automatically.
+
+## Storage And Data
+
+OneDrive is the current document and data storage layer.
+
+While running locally, the Hub uses the local helper server to save data and generated documents into the Kingswood OneDrive folders. The browser cannot safely write directly to the C drive by itself, so the helper is needed for local file saving.
+
+Current local data includes:
+
+- `data/command-centre-data.json` - main Hub data.
+- `data/technician-app-feed.json` - technician-facing job and operational feed.
+- `data/connect-v12-feed.json` - bridge feed for the current technician/admin compatibility work.
+
+The live production version must later use secure automatic cloud storage and shared data access. OneDrive remains useful for document storage, but the final live system should not depend on one local PC being switched on.
+
+## How To Open Locally
+
+Double-click:
+
+`Start Kingswood Hub.cmd`
+
+Then open:
 
 `http://127.0.0.1:8126/index.html`
 
-The same starter also opens the Pest Proofing Report Builder in the Hub under **Proofing Reports**. The report builder runs locally at:
+Keep the local helper running while using the Hub so OneDrive saves can complete.
 
-`http://127.0.0.1:5000/`
+## Main Hub Areas
 
-Keep the small black server window open while using the Hub. When you add or edit records, the data is saved in:
+### Dashboard
 
-`data/command-centre-data.json`
+The office landing screen showing operational totals, alerts, OneDrive status, live office time, pending requests, valuation totals and quick routes into the key management areas.
 
-Because this project folder is inside OneDrive, that data file is stored in OneDrive with the rest of the Kingswood Hub.
+### Job Dispatch
 
-## Linking with Technician and Admin apps
+Office job creation and sending to the Technician App.
 
-The Hub now has an App Connection Centre in Settings.
+Jobs can be saved as drafts inside the Hub or sent to the Technician App. Sent jobs update the Weekly Planner using technician, date and AM/PM slot.
 
-Use `Publish App Feeds` to prepare shared data for the other apps.
+### Job Diary
 
-The Hub saves:
+Office view of jobs by date, client, technician, postcode and completion/report status.
 
-- `data/command-centre-data.json` - the full Hub data.
-- `data/technician-app-feed.json` - jobs, RAMS, documents, navigation addresses, vehicle assignment, and technician availability.
-- `data/admin-app-feed.json` - office dashboard data, jobs, compliance, staff, vehicles, fines, clients, assets, reports, and reminders.
-- `data/connect-v12-feed.json` - a Kingswood Connect v1.2 bridge feed for the Admin and Tech views.
+### Weekly Planner
 
-The Technician App and Admin App can later be pointed at these OneDrive files, or the same structure can be moved into Microsoft Lists, SharePoint, or a proper database when the system is ready for multiple users.
+The operational weekly view showing technicians down the left, AM/PM rows, Monday to Friday columns, jobs, holiday, sickness and other availability notes.
 
-For Kingswood Connect v1.2, the Hub passes this feed through the `hubFeed` link parameter when opening the Admin or Tech view.
+### Live Vehicle Tracking
 
-## Suggested novice-friendly build steps
+Live Vehicle Tracking now has a working **Test Mode** with an interactive map and simulated Kingswood vehicles.
 
-1. Replace the starter sample data with real Kingswood jobs, vehicles, technicians, clients, and documents.
-2. Add file links to OneDrive documents.
-3. Add email templates for sending RAMS to clients and technicians.
-4. Add proper multi-user storage later, such as Microsoft Lists/SharePoint or a database.
-5. Connect live vehicle tracking once the tracking provider is chosen and installed.
+This is a test data source only. It is designed so a real tracking provider can later replace the test data without rebuilding the screen.
 
-## Long-term system shape
+### RAMS Centre
 
-- Technician App: jobs, reports, photos, signatures, RAMS, and navigation.
-- Command Centre: planning, compliance, documents, vehicles, staff, clients, reporting, and administration.
+RAMS creation, review, revision, saving and sent-date tracking.
 
-The goal is one joined-up system that runs the business without relying on lots of separate apps.
+RAMS documents are managed here, not in Company Documents or Compliance Centre.
 
-## Staff and job planning rule
+### Proofing Reports
 
-The Job Diary should show if a technician is sick, on holiday, training, absent, late, or on unpaid leave. If someone is unavailable, the office should see a warning before assigning work to them.
+Pest proofing report building, PDF generation and OneDrive saving.
+
+Generated PDFs should keep a consistent Kingswood document style.
+
+### Training Matrix
+
+Training Matrix is the single source of truth for employee training, qualifications and certificates.
+
+Staff Management must read the same training records by `staffId`. Do not create a separate training database inside Staff Management.
+
+### Compliance Centre
+
+Compliance Centre is for company-level compliance only.
+
+It manages items such as:
+
+- Public liability insurance.
+- Employers' liability insurance.
+- Fleet insurance.
+- SafeContractor.
+- Company policy review dates.
+- Office compliance checks.
+- Fire extinguisher servicing.
+- Company-level certificates, accreditations and renewals.
+
+It must not manage:
+
+- Staff training or qualifications. These belong in Training Matrix.
+- MOT, vehicle tax, vehicle servicing or vehicle insurance. These belong in Vehicles.
+- RAMS. These belong in RAMS Centre.
+- General company document tracking. These belong in Company Documents.
+
+### Company Documents
+
+Company Documents is a tracker for corporate, legal, policy, template and correspondence documents that already live in OneDrive.
+
+It is not intended to replace OneDrive document storage or version history.
+
+### Vehicles
+
+Vehicle Management owns vehicle compliance and vehicle records, including MOT, tax, servicing, vehicle insurance, tracker status, mileage and vehicle-specific documents.
+
+### Staff Management
+
+Staff Management covers employee records, holiday, sickness, attendance, availability, emergency contacts, assigned vans and staff profile information.
+
+Training records shown in Staff Management should come from Training Matrix.
+
+### Assets, Tools & Equipment
+
+Assets, Tools & Equipment is being developed into a full Kingswood asset register for machinery, power tools, hand tools, ladders, access equipment, pest control equipment, sprayers, testing equipment, cameras, PPE equipment, vehicle equipment and office equipment.
+
+It uses Staff Management and Vehicles data for assignment instead of duplicating employee or vehicle records.
+
+### Fines And Charges
+
+Fines and Charges tracks parking tickets, congestion charges, ULEZ, speeding, bus lane, Dart Charge and other vehicle-related charges, including evidence and payment history.
+
+### Clients
+
+Client records for Ark, JG Pest Control, Private clients, housing associations and other customers.
+
+## Integration Direction
+
+The intended long-term shape is:
+
+- The Hub controls office planning, compliance, staff, vehicles, documents, assets, valuations, RAMS and administration.
+- The Technician App receives the correct field work, RAMS, navigation, reporting tasks and technician-specific records.
+- Both use shared live business data.
+- OneDrive stores documents and current local data.
+- A secure cloud data layer should later handle production multi-user storage, permissions and live sync.
+
+## Important Data Safety Rules
+
+- Do not pretend a save has completed unless OneDrive or the final storage layer confirms it.
+- Keep a local pending backup if OneDrive saving fails.
+- Do not overwrite existing OneDrive files silently.
+- Keep previous documents and history where renewal, replacement or disposal is involved.
+- Do not show raw file paths, JSON or internal IDs to office users unless there is a deliberate support/debug reason.
+
+## Staff And Job Planning Rule
+
+The Job Diary and Job Dispatch must respect staff availability.
+
+If a technician is sick, on holiday, training, absent, late, or on unpaid leave, the office should see a warning before assigning work. Where the system rules require it, the technician should be blocked from being selected.
+
+## Current Build Approach
+
+Build the Hub gradually, section by section, while keeping existing data safe.
+
+Every new or improved screen must follow [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).

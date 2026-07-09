@@ -4,7 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Kingswood Command Centre</title>
-    <link rel="stylesheet" href="styles.css?v=140">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="styles.css?v=179">
   </head>
   <body class="locked">
     <section class="auth-screen" id="authScreen" aria-label="Command Centre PIN">
@@ -38,11 +39,9 @@
     <div class="app-shell kw-dashboard-layout">
       <aside class="sidebar kw-sidebar">
         <div class="brand-block">
-          <div class="brand-reference-lockup" aria-label="Kingswood Connect">
-            <div class="brand-reference-emblem">
-              <img src="assets/kingswood-k-emblem.png" alt="">
-            </div>
-            <div class="brand-reference-copy">
+          <div class="brand-animated-lockup" aria-label="Kingswood Connect">
+            <img class="brand-animated-emblem" src="assets/kingswood-k-emblem.png" alt="">
+            <div class="brand-animated-copy">
               <span>Kingswood</span>
               <strong>Connect</strong>
             </div>
@@ -64,7 +63,7 @@
           <button class="nav-button kw-nav-item" type="button" data-section="staff" data-icon="users">Staff Management</button>
           <button class="nav-button kw-nav-item" type="button" data-section="training" data-icon="clipboard">Training Matrix</button>
           <button class="nav-button kw-nav-item" type="button" data-section="technicians" data-icon="user-check">Technicians</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="assets" data-icon="package">Assets</button>
+          <button class="nav-button kw-nav-item" type="button" data-section="assets" data-icon="package">Assets, Tools & Equipment</button>
           <button class="nav-button kw-nav-item" type="button" data-section="clients" data-icon="building">Clients</button>
           <button class="nav-button kw-nav-item" type="button" data-section="history" data-icon="history">Job History</button>
           <button class="nav-button kw-nav-item" type="button" data-section="notifications" data-icon="bell">Notifications</button>
@@ -82,7 +81,11 @@
           <div class="topbar-clock" aria-label="Live office time">
             <span>Live office time</span>
             <strong id="liveDateTime">Loading time</strong>
-            <small id="storageStatus">Checking OneDrive storage</small>
+          </div>
+          <div class="topbar-onedrive" aria-label="OneDrive status">
+            <span>OneDrive status</span>
+            <strong id="storageStatus">Checking OneDrive</strong>
+            <button class="sync-now-button" id="syncNowButton" type="button">Sync now</button>
           </div>
           <div class="topbar-weather" aria-label="Orpington weather">
             <span>Orpington weather</span>
@@ -111,7 +114,7 @@
                     <span>Jobs Today</span>
                     <strong id="jobsTodayCount">0</strong>
                   </article>
-                  <article class="metric primary overdue kw-card">
+                  <article class="metric primary overdue kw-card clickable-summary" data-dashboard-compliance-filter="Overdue">
                     <span>Compliance Overdue</span>
                     <strong id="complianceOverdueCount">0</strong>
                   </article>
@@ -146,8 +149,34 @@
                       <strong id="insuranceReminderCount">0</strong>
                     </article>
                     <article>
+                      <span>Critical Documents</span>
+                      <strong id="criticalDocumentAlertCount">0</strong>
+                    </article>
+                    <article>
+                      <span>Expired Documents</span>
+                      <strong id="expiredDocumentAlertCount">0</strong>
+                    </article>
+                    <article>
+                      <span>Company Documents</span>
+                      <button class="secondary-button compact-alert-button" type="button" data-jump-section="documents">Open</button>
+                    </article>
+                    <article>
+                      <span>Training Expired</span>
+                      <button class="secondary-button compact-alert-button alert-count-button" type="button" data-training-dashboard-filter="expired">
+                        <strong id="trainingExpiredDashboardCount">0</strong>
+                      </button>
+                    </article>
+                    <article>
+                      <span>Training 30 Days</span>
+                      <button class="secondary-button compact-alert-button alert-count-button" type="button" data-training-dashboard-filter="30">
+                        <strong id="trainingThirtyDayDashboardCount">0</strong>
+                      </button>
+                    </article>
+                    <article>
                       <span>Compliance Due</span>
-                      <strong id="complianceDueCount">0</strong>
+                      <button class="secondary-button compact-alert-button alert-count-button" type="button" data-dashboard-compliance-filter="30">
+                        <strong id="complianceDueCount">0</strong>
+                      </button>
                     </article>
                     <article>
                       <span>Fine Deadlines</span>
@@ -195,6 +224,16 @@
                   <strong id="privateMonthTotal">£0.00</strong>
                 </article>
               </div>
+            </section>
+
+            <section class="work-panel pending-holiday-panel">
+              <div class="panel-heading">
+                <div>
+                  <h2>Pending Holiday Requests</h2>
+                  <p class="panel-note">Approve or decline technician holiday requests from the office dashboard.</p>
+                </div>
+              </div>
+              <div id="dashboardHolidayRequests" class="stack-list"></div>
             </section>
 
             <div class="two-column">
@@ -248,13 +287,17 @@
                     <span>Live vehicle tracking</span>
                     <h2>Vehicles & Technicians</h2>
                   </div>
+                  <span class="status warning" id="splitTrackingModeStatus">TEST MODE</span>
                   <button class="secondary-button" type="button" data-jump-section="tracking">Open Tracking</button>
                 </div>
-                <div class="split-map">
-                  <strong>Live map</strong>
-                  <span>Tracker map will show here once the vehicle system is connected.</span>
+                <div class="split-map tracking-map-panel">
+                  <div id="splitTrackingMap" class="tracking-map split-tracking-map" aria-label="Split screen vehicle tracking map"></div>
+                  <div class="tracking-map-fallback" id="splitTrackingMapFallback">
+                    <strong>Map loading</strong>
+                    <span>Test vehicle data is still shown in the list below.</span>
+                  </div>
                 </div>
-                <div id="splitTrackingList" class="stack-list"></div>
+                <div id="splitTrackingList" class="tracking-vehicle-list compact-tracking-list"></div>
               </section>
 
               <section class="split-pane planner-pane">
@@ -457,16 +500,32 @@
 
           <section class="section-panel" id="tracking" data-title="Live Vehicle Tracking">
             <div class="panel-heading">
-              <h2>Live Vehicle Tracking</h2>
-              <span class="status draft">Ready for tracker link</span>
-            </div>
-            <div class="map-placeholder">
               <div>
-                <strong>Live map will appear here</strong>
-                <span>Once vehicle tracking is installed, this area can show speed, last update, journey history, and nearest technician.</span>
+                <h2>Live Vehicle Tracking</h2>
+                <p class="panel-note">Test tracking uses temporary data only. It is not saved as real business data.</p>
               </div>
+              <span class="status warning" id="trackingModeStatus">TEST MODE</span>
             </div>
-            <div id="trackingList" class="stack-list"></div>
+            <div class="tracking-mode-banner">
+              <strong>TEST MODE / Live Mode status:</strong>
+              <span id="trackingSourceLabel">TEST MODE - simulated Kingswood vehicles</span>
+            </div>
+            <div class="tracking-layout">
+              <div class="tracking-map-panel">
+                <div id="trackingMap" class="tracking-map" aria-label="Test vehicle tracking map"></div>
+                <div class="tracking-map-fallback" id="trackingMapFallback">
+                  <strong>Map loading</strong>
+                  <span>If the map tiles do not load, check the internet connection. Test vehicle data is still shown in the list.</span>
+                </div>
+              </div>
+              <aside class="tracking-vehicle-panel">
+                <div class="panel-heading compact-heading">
+                  <h3>Test Vehicles</h3>
+                  <span class="status warning">TEST DATA</span>
+                </div>
+                <div id="trackingList" class="tracking-vehicle-list"></div>
+              </aside>
+            </div>
           </section>
 
           <section class="section-panel" id="rams" data-title="RAMS Centre">
@@ -652,54 +711,88 @@
 
           <section class="section-panel" id="compliance" data-title="Compliance Centre">
             <div class="panel-heading">
-              <h2>Compliance Centre</h2>
+              <div>
+                <h2>Compliance Centre</h2>
+                <p class="panel-note">Company-level compliance, insurance, accreditation and renewal management only.</p>
+              </div>
               <button class="primary-button" type="button" data-manage="compliance">Add Compliance Item</button>
             </div>
             <div class="summary-grid" aria-label="Compliance summary">
-              <article class="summary-tile traffic-green">
-                <span class="summary-label">Green</span>
+              <article class="summary-tile traffic-green clickable-summary" data-compliance-card-filter="Current">
+                <span class="summary-label">Current</span>
                 <strong id="greenComplianceCount">0</strong>
               </article>
-              <article class="summary-tile traffic-amber">
-                <span class="summary-label">Amber</span>
+              <article class="summary-tile traffic-amber clickable-summary" data-compliance-card-filter="Due Soon">
+                <span class="summary-label">Due Soon</span>
                 <strong id="amberComplianceCount">0</strong>
               </article>
-              <article class="summary-tile traffic-red">
-                <span class="summary-label">Red</span>
+              <article class="summary-tile traffic-red clickable-summary" data-compliance-card-filter="Overdue">
+                <span class="summary-label">Overdue</span>
                 <strong id="redComplianceCount">0</strong>
               </article>
-              <article class="summary-tile">
-                <span class="summary-label">Total Items</span>
+              <article class="summary-tile clickable-summary" data-compliance-card-filter="all">
+                <span class="summary-label">Total Records</span>
                 <strong id="totalComplianceCount">0</strong>
               </article>
             </div>
             <div class="toolbar">
               <label>
-                Category
+                Compliance type
                 <select id="complianceCategoryFilter">
-                  <option value="all">All categories</option>
-                  <option value="Vehicle">Vehicle</option>
-                  <option value="Technician">Technician</option>
-                  <option value="Equipment">Equipment</option>
-                  <option value="Company">Company</option>
+                  <option value="all">All types</option>
+                  <option value="Insurance">Insurance</option>
+                  <option value="Accreditation">Accreditation</option>
+                  <option value="Policy Review">Policy Review</option>
+                  <option value="Office Compliance">Office Compliance</option>
+                  <option value="Certificate">Certificate</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+              <label>
+                Status
+                <select id="complianceStatusFilter">
+                  <option value="all">All statuses</option>
+                  <option value="Current">Current</option>
+                  <option value="Due Soon">Due Soon</option>
+                  <option value="Overdue">Overdue</option>
+                  <option value="No Expiry">No Expiry</option>
+                </select>
+              </label>
+              <label>
+                Responsible person
+                <select id="complianceOwnerFilter">
+                  <option value="all">Everyone</option>
+                  <option value="Kevin">Kevin</option>
+                  <option value="Alex">Alex</option>
+                  <option value="Jodie">Jodie</option>
+                </select>
+              </label>
+              <label>
+                Expiring within
+                <select id="complianceExpiryFilter">
+                  <option value="all">Any time</option>
+                  <option value="30">30 days</option>
+                  <option value="60">60 days</option>
+                  <option value="90">90 days</option>
                 </select>
               </label>
               <label>
                 Search compliance
-                <input id="complianceSearch" type="search" placeholder="MOT, insurance, ladder, technician">
+                <input id="complianceSearch" type="search" placeholder="Insurance, SafeContractor, policy, provider">
               </label>
             </div>
             <div class="table-shell">
               <table>
                 <thead>
                   <tr>
+                    <th>Compliance item</th>
+                    <th>Type</th>
+                    <th>Provider</th>
+                    <th>Expiry / review</th>
+                    <th>Responsible</th>
                     <th>Status</th>
-                    <th>Item</th>
-                    <th>Category</th>
-                    <th>Owner</th>
-                    <th>Due Date</th>
-                    <th>Days</th>
-                    <th>Reminder</th>
+                    <th>Document</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="complianceTableBody"></tbody>
@@ -709,10 +802,65 @@
 
           <section class="section-panel" id="documents" data-title="Company Documents">
             <div class="panel-heading">
-              <h2>Company Documents</h2>
-              <button class="primary-button" type="button" data-manage="documents">Add Document</button>
+              <div>
+                <h2>Company Documents Tracker</h2>
+                <p class="panel-note">Track corporate, legal, insurance, policy, template and correspondence documents stored in OneDrive.</p>
+              </div>
+              <button class="primary-button" type="button" data-manage="documents">Add Tracker Record</button>
             </div>
-            <div id="documentsGrid" class="module-grid"></div>
+            <section class="documents-tracker-shell">
+              <article class="work-panel documents-tracker-intro">
+                <div>
+                  <p class="eyebrow">Tracker only</p>
+                  <h3>OneDrive remains the document store</h3>
+                  <p>Use this page to record what exists, where the OneDrive file lives, and when it needs updating. RAMS, staff files, training certificates and vehicle documents belong in their own Hub areas.</p>
+                </div>
+              </article>
+              <div class="summary-grid documents-summary-grid" id="documentsSummaryGrid"></div>
+              <div class="documents-filter-bar">
+                <label>
+                  Category
+                  <select id="documentsCategoryFilter">
+                    <option value="all">All categories</option>
+                    <option>Insurance</option>
+                    <option>Legal</option>
+                    <option>Policy</option>
+                    <option>Template</option>
+                    <option>Correspondence</option>
+                  </select>
+                </label>
+                <label>
+                  Status
+                  <select id="documentsStatusFilter">
+                    <option value="all">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="expiring">Expiring</option>
+                    <option value="expired">Expired</option>
+                  </select>
+                </label>
+                <label>
+                  Search documents
+                  <input id="documentsSearch" type="search" placeholder="Title, category, OneDrive link">
+                </label>
+              </div>
+              <div class="table-shell" aria-label="Company document tracker">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Document</th>
+                      <th>Category</th>
+                      <th>Issue</th>
+                      <th>Expiry</th>
+                      <th>Status</th>
+                      <th>OneDrive</th>
+                      <th>Owner</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="documentsTableBody"></tbody>
+                </table>
+              </div>
+            </section>
           </section>
 
           <section class="section-panel" id="vehicles" data-title="Vehicle Management">
@@ -766,9 +914,11 @@
                 <select id="fineStatusFilter">
                   <option value="all">All statuses</option>
                   <option value="New">New</option>
+                  <option value="Awaiting Driver">Awaiting Driver</option>
+                  <option value="Under Review">Under Review</option>
                   <option value="Appealed">Appealed</option>
+                  <option value="Awaiting Payment">Awaiting Payment</option>
                   <option value="Paid">Paid</option>
-                  <option value="Deducted from wages">Deducted from wages</option>
                   <option value="Cancelled">Cancelled</option>
                 </select>
               </label>
@@ -801,7 +951,10 @@
           <section class="section-panel" id="staff" data-title="Staff Management">
             <div class="panel-heading">
               <h2>Staff Management</h2>
-              <button class="primary-button" type="button" data-manage="staff">Add Staff Member</button>
+              <div class="panel-actions">
+                <span id="staffOneDriveStatus" class="staff-onedrive-status">Checking staff OneDrive save</span>
+                <button class="primary-button" type="button" data-manage="staff">Add Staff Member</button>
+              </div>
             </div>
             <div class="summary-grid" aria-label="Staff summary">
               <article class="summary-tile">
@@ -817,57 +970,48 @@
                 <strong id="holidayRequestCount">0</strong>
               </article>
               <article class="summary-tile">
-                <span class="summary-label">Training Days</span>
+                <span class="summary-label">Training Alerts</span>
                 <strong id="trainingDayCount">0</strong>
               </article>
             </div>
-            <div class="toolbar">
-              <label>
-                Attendance
-                <select id="attendanceStatusFilter">
-                  <option value="all">All attendance</option>
-                  <option value="Present">Present</option>
-                  <option value="Sick">Sick</option>
-                  <option value="Absent - Called in Sick">Absent - Called in Sick</option>
-                  <option value="Holiday">Holiday</option>
-                  <option value="Training">Training</option>
-                  <option value="Unpaid leave">Unpaid leave</option>
-                  <option value="Late">Late</option>
-                  <option value="Absent">Absent</option>
-                </select>
-              </label>
-              <label>
-                Search staff
-                <input id="staffSearch" type="search" placeholder="Name, role, van, qualification">
-              </label>
-            </div>
-            <div id="staffGrid" class="module-grid"></div>
+            <section class="work-panel staff-holiday-requests-panel compact-work-queue">
+              <div class="panel-heading">
+                <div>
+                  <h2>Pending Holiday Requests</h2>
+                  <p class="panel-note">Quick approval queue for office staff.</p>
+                </div>
+                <button class="secondary-button" type="button" data-manage="holidays">Add Holiday Request</button>
+              </div>
+              <div id="staffHolidayRequestsList" class="stack-list"></div>
+            </section>
 
-            <div class="two-column staff-lower">
-              <section class="work-panel">
-                <div class="panel-heading">
-                  <h2>Attendance Today</h2>
+            <div class="staff-management-layout">
+              <section class="work-panel staff-directory-panel">
+                <div class="staff-directory-header">
+                  <div>
+                    <h3>Employees</h3>
+                    <p>Search, select and manage staff records.</p>
+                  </div>
                   <button class="secondary-button" type="button" data-manage="attendance">Record Attendance</button>
                 </div>
-                <div id="attendanceList" class="stack-list"></div>
+                <label class="staff-search-label">
+                  Staff search
+                  <input id="staffSearch" type="search" placeholder="Name, role, van, qualification">
+                </label>
+                <div id="staffGrid" class="staff-directory-list"></div>
               </section>
 
-              <section class="work-panel staff-year-panel">
-                <div class="panel-heading">
-                  <h2>Annual Leave & Absence</h2>
-                  <button class="secondary-button" type="button" data-manage="companyHolidays">Add Company Holiday</button>
+              <section class="work-panel staff-profile-panel">
+                <div id="staffProfileShell" class="staff-profile-shell"></div>
+                <div class="staff-profile-tabs" role="tablist" aria-label="Staff profile tabs">
+                  <button class="staff-profile-tab active" type="button" data-staff-tab="overview">Overview</button>
+                  <button class="staff-profile-tab" type="button" data-staff-tab="holidays">Holidays</button>
+                  <button class="staff-profile-tab" type="button" data-staff-tab="attendance">Attendance</button>
+                  <button class="staff-profile-tab" type="button" data-staff-tab="training">Training</button>
+                  <button class="staff-profile-tab" type="button" data-staff-tab="documents">Documents</button>
+                  <button class="staff-profile-tab" type="button" data-staff-tab="notes">Notes</button>
                 </div>
-                <div id="staffYearSummary" class="staff-year-summary"></div>
-                <div id="staffHolidayCalendar" class="staff-holiday-calendar"></div>
-                <div id="staffSafetyAlerts" class="staff-safety-alerts"></div>
-              </section>
-
-              <section class="work-panel">
-                <div class="panel-heading">
-                  <h2>Simple Reports</h2>
-                  <button class="secondary-button" type="button" data-manage="holidays">Book Holiday</button>
-                </div>
-                <div id="staffReports" class="stack-list"></div>
+                <div id="staffProfileTabBody" class="staff-profile-tab-body"></div>
               </section>
             </div>
           </section>
@@ -878,25 +1022,70 @@
                 <h2>Training Matrix</h2>
                 <p class="panel-note">Track employee training, qualifications and expiry dates. Staff profiles update automatically from this matrix.</p>
               </div>
-              <button class="primary-button" type="button" data-manage="training">Add Training Record</button>
+              <div class="panel-actions">
+                <button class="secondary-button" type="button" id="exportTrainingCsvButton">Export Current Year CSV</button>
+                <button class="secondary-button" type="button" id="exportTrainingExcelButton">Export Current Year Excel</button>
+                <button class="primary-button" type="button" data-manage="training">Add Training Record</button>
+              </div>
             </div>
             <div class="summary-grid" aria-label="Training summary">
-              <article class="summary-tile">
+              <article class="summary-tile training-summary-card" data-training-card-filter="current" role="button" tabindex="0">
                 <span class="summary-label">Current</span>
                 <strong id="trainingCurrentCount">0</strong>
               </article>
-              <article class="summary-tile traffic-amber">
+              <article class="summary-tile traffic-amber training-summary-card" data-training-card-filter="expiring" role="button" tabindex="0">
                 <span class="summary-label">Expiring Soon</span>
                 <strong id="trainingExpiringCount">0</strong>
               </article>
-              <article class="summary-tile traffic-red">
+              <article class="summary-tile traffic-red training-summary-card" data-training-card-filter="expired" role="button" tabindex="0">
                 <span class="summary-label">Expired</span>
                 <strong id="trainingExpiredCount">0</strong>
               </article>
-              <article class="summary-tile">
+              <article class="summary-tile training-summary-card" data-training-card-filter="all" role="button" tabindex="0">
                 <span class="summary-label">Employees Covered</span>
                 <strong id="trainingEmployeeCount">0</strong>
               </article>
+            </div>
+            <div class="filter-bar training-filter-bar">
+              <label>
+                Year
+                <select id="trainingYearFilter"></select>
+              </label>
+              <label>
+                Search
+                <input id="trainingSearch" type="search" placeholder="Employee, course, provider, certificate">
+              </label>
+              <label>
+                Employee
+                <select id="trainingEmployeeFilter">
+                  <option value="all">All employees</option>
+                </select>
+              </label>
+              <label>
+                Training / qualification
+                <select id="trainingCourseFilter">
+                  <option value="all">All training</option>
+                </select>
+              </label>
+              <label>
+                Status
+                <select id="trainingStatusFilter">
+                  <option value="all">All statuses</option>
+                  <option value="current">Current</option>
+                  <option value="expiring">Expiring Soon</option>
+                  <option value="expired">Expired</option>
+                  <option value="no-expiry">No Expiry</option>
+                </select>
+              </label>
+              <label>
+                Expiry
+                <select id="trainingExpiryFilter">
+                  <option value="all">All expiry dates</option>
+                  <option value="30">Next 30 days</option>
+                  <option value="60">Next 60 days</option>
+                  <option value="90">Next 90 days</option>
+                </select>
+              </label>
             </div>
             <div class="table-shell">
               <table>
@@ -908,7 +1097,8 @@
                     <th>Completed</th>
                     <th>Expires</th>
                     <th>Status</th>
-                    <th>Notes</th>
+                    <th>Certificate</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="trainingTableBody"></tbody>
@@ -916,27 +1106,105 @@
             </div>
           </section>
 
-          <section class="section-panel" id="technicians" data-title="Technician Management">
+          <section class="section-panel" id="technicians" data-title="Technicians">
             <div class="panel-heading">
-              <h2>Technician Management</h2>
+              <div>
+                <h2>Technician App Access</h2>
+                <p class="panel-note">Manage field technicians as Tech App users, without duplicating staff HR records.</p>
+              </div>
             </div>
+            <div class="summary-grid technicians-summary-grid" id="techniciansSummaryGrid"></div>
+            <div id="technicianGeofenceTestPanel"></div>
             <div id="techniciansGrid" class="module-grid"></div>
           </section>
 
-          <section class="section-panel" id="assets" data-title="Asset Register">
+          <section class="section-panel" id="assets" data-title="Assets, Tools & Equipment">
             <div class="panel-heading">
-              <h2>Asset Register</h2>
-              <button class="primary-button" type="button" data-manage="assets">Add Asset</button>
+              <div>
+                <h2>Assets, Tools & Equipment</h2>
+                <p class="panel-note">Track Kingswood owned equipment, inspections, servicing, documents and responsibility.</p>
+              </div>
+              <div class="action-row">
+                <button class="secondary-button" type="button" id="exportAssetsCsvButton">Export CSV</button>
+                <button class="secondary-button" type="button" id="exportAssetsExcelButton">Export Excel</button>
+                <button class="primary-button" type="button" data-manage="assets">Add Asset</button>
+              </div>
+            </div>
+            <div class="summary-grid">
+              <article class="summary-tile asset-summary-card" data-asset-card-filter="all">
+                <span class="summary-label">Total Assets</span>
+                <strong id="assetTotalCount">0</strong>
+              </article>
+              <article class="summary-tile asset-summary-card" data-asset-card-filter="in-use">
+                <span class="summary-label">In Use</span>
+                <strong id="assetInUseCount">0</strong>
+              </article>
+              <article class="summary-tile traffic-amber asset-summary-card" data-asset-card-filter="inspection">
+                <span class="summary-label">Inspection Due</span>
+                <strong id="assetInspectionDueCount">0</strong>
+              </article>
+              <article class="summary-tile traffic-amber asset-summary-card" data-asset-card-filter="service">
+                <span class="summary-label">Service Due</span>
+                <strong id="assetServiceDueCount">0</strong>
+              </article>
+              <article class="summary-tile traffic-red asset-summary-card" data-asset-card-filter="repair">
+                <span class="summary-label">Needs Repair</span>
+                <strong id="assetRepairCount">0</strong>
+              </article>
+            </div>
+            <div class="toolbar asset-toolbar">
+              <label>
+                Search
+                <input id="assetSearch" type="search" placeholder="Asset, ID, serial, employee, vehicle">
+              </label>
+              <label>
+                Category
+                <select id="assetCategoryFilter">
+                  <option value="all">All categories</option>
+                </select>
+              </label>
+              <label>
+                Status
+                <select id="assetStatusFilter">
+                  <option value="all">All statuses</option>
+                </select>
+              </label>
+              <label>
+                Employee
+                <select id="assetEmployeeFilter">
+                  <option value="all">All employees</option>
+                </select>
+              </label>
+              <label>
+                Vehicle
+                <select id="assetVehicleFilter">
+                  <option value="all">All vehicles</option>
+                </select>
+              </label>
+              <label>
+                Due
+                <select id="assetDueFilter">
+                  <option value="all">All</option>
+                  <option value="inspection">Inspection due</option>
+                  <option value="service">Service due</option>
+                  <option value="pat">PAT overdue</option>
+                  <option value="repair">Needs repair</option>
+                </select>
+              </label>
             </div>
             <div class="table-shell">
               <table>
                 <thead>
                   <tr>
                     <th>Asset</th>
+                    <th>Asset ID</th>
                     <th>Category</th>
-                    <th>Held By</th>
-                    <th>Inspection Due</th>
+                    <th>Assigned to</th>
+                    <th>Vehicle or location</th>
+                    <th>Condition</th>
                     <th>Status</th>
+                    <th>Next inspection</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="assetsTableBody"></tbody>
@@ -1168,9 +1436,29 @@
         <div id="dataFields" class="data-fields"></div>
 
         <div class="dialog-actions">
+          <p class="dialog-status-message" id="dataDialogStatus" aria-live="polite"></p>
           <button class="secondary-button" value="cancel" type="submit" formnovalidate>Cancel</button>
+          <button class="secondary-button job-system-save-button" id="dataSaveSystemButton" value="save-system" type="submit">Save to System</button>
           <button class="primary-button" id="dataSaveButton" value="default" type="submit">Save</button>
         </div>
+      </form>
+    </dialog>
+
+    <dialog id="kcDialog" class="kc-dialog" aria-labelledby="kcDialogTitle">
+      <form method="dialog" class="kc-dialog-card">
+        <div class="kc-dialog-heading">
+          <h2 id="kcDialogTitle">Kingswood Connect says</h2>
+          <button class="kc-dialog-close" id="kcDialogClose" value="cancel" type="submit" aria-label="Close">x</button>
+        </div>
+        <div class="kc-dialog-accent"></div>
+        <div class="kc-dialog-body">
+          <p id="kcDialogMessage"></p>
+          <label class="kc-dialog-input-wrap hidden" id="kcDialogInputWrap">
+            <span id="kcDialogInputLabel">Response</span>
+            <input id="kcDialogInput" type="text">
+          </label>
+        </div>
+        <div class="kc-dialog-actions" id="kcDialogActions"></div>
       </form>
     </dialog>
 
@@ -1244,6 +1532,23 @@
       </div>
     </dialog>
 
-    <script src="app.js?v=140"></script>
+    <dialog id="certificateViewerDialog" class="certificate-viewer-dialog">
+      <div class="modal-card">
+        <div class="dialog-header">
+          <h2 id="certificateViewerTitle">Certificate</h2>
+          <button class="icon-button" type="button" data-close-certificate-viewer aria-label="Close">x</button>
+        </div>
+        <div id="certificateViewerPreview" class="certificate-viewer-preview"></div>
+        <div class="record-actions certificate-viewer-actions">
+          <button class="secondary-button" type="button" data-certificate-open-file>Open file</button>
+          <button class="secondary-button" type="button" data-certificate-open-folder>Open folder</button>
+          <button class="secondary-button" type="button" data-certificate-download>Download copy</button>
+          <button class="primary-button" type="button" data-close-certificate-viewer>Close</button>
+        </div>
+      </div>
+    </dialog>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="app.js?v=179"></script>
   </body>
 </html>
