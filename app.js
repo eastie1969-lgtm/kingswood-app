@@ -7,7 +7,9 @@ const finesPendingStorageKey = "kingswood-fines-pending";
 const oneDrivePendingStorageKey = "kingswood-hub-onedrive-pending";
 const oneDriveLastSavedStorageKey = "kingswood-hub-onedrive-last-saved";
 const oneDriveAutoSyncIntervalMs = 30000;
-const appVersion = "181";
+const appVersion = "182";
+const reviewModeParam = "review";
+const reviewMode = new URLSearchParams(window.location.search).get(reviewModeParam) === "1";
 let selectedStaffIndex = 0;
 let activeStaffTab = "overview";
 let fineEvidenceDraft = [];
@@ -1565,7 +1567,115 @@ function greetingForNow(name) {
   return `Good ${dayPart}, ${name}`;
 }
 
+function isReviewMode() {
+  return reviewMode;
+}
+
+function reviewModeUrl(sectionId = "dashboard") {
+  const url = new URL(location.href);
+  url.searchParams.set(reviewModeParam, "1");
+  url.searchParams.set("section", sectionId);
+  url.searchParams.set("v", appVersion);
+  return url.toString();
+}
+
+function applyReviewModeShell() {
+  if (!isReviewMode()) return;
+  document.body.classList.add("review-mode");
+  document.body.classList.remove("locked");
+  authScreen?.setAttribute("aria-hidden", "true");
+  if (userGreeting) userGreeting.textContent = "Review mode - read only";
+  if (signedInUser) signedInUser.textContent = "REVIEW MODE";
+  if (lockHubButton) {
+    lockHubButton.textContent = "Read only";
+    lockHubButton.disabled = true;
+  }
+  if (!document.querySelector("#reviewModeBanner")) {
+    const banner = document.createElement("div");
+    banner.id = "reviewModeBanner";
+    banner.className = "review-mode-banner";
+    banner.innerHTML = "<strong>REVIEW MODE</strong><span>Read-only layout inspection. Live data cannot be changed.</span>";
+    document.body.prepend(banner);
+  }
+}
+
+function reviewModeMessage() {
+  kcInfo("Review Mode is read only. Create, edit, delete, upload, approve and save actions are disabled.");
+}
+
+function reviewModeBlockedAction(target) {
+  if (!isReviewMode()) return false;
+  const actionSelector = [
+    "[data-manage]",
+    "[data-edit-record]",
+    "[data-delete-record]",
+    "[data-approve-holiday]",
+    "[data-decline-holiday]",
+    "[data-clear-data]",
+    "[data-asset-action]",
+    "[data-renew-compliance]",
+    "[data-replace-training-certificate]",
+    "[data-replace-compliance-document]",
+    "[data-replace-asset-document]",
+    "[data-technician-geofence]",
+    "[data-technician-geofence-toggle]",
+    "[data-remove-proofing-photo]",
+    "[data-remove-fine-evidence]",
+    "[data-remove-asset-document]",
+    "[data-remove-training-document]",
+    "[data-remove-compliance-document]",
+    "#syncNowButton",
+    "#saveBuiltRamsButton",
+    "#aiRamsDraftButton",
+    "#saveNativeProofingReport",
+    "#parseNativeProofingNotes",
+    "#clearNativeProofingReport",
+    "#exportTrainingCsvButton",
+    "#exportTrainingExcelButton",
+    "#exportAssetsCsvButton",
+    "#exportAssetsExcelButton",
+    "#exportArkCsvButton",
+    "#exportJgCsvButton",
+    "#exportOtherCsvButton",
+    "#generateArkValuationButton",
+    "#generateJgValuationButton",
+    "#generateOtherValuationButton"
+  ].join(",");
+  return Boolean(target.closest(actionSelector));
+}
+
+function maskReviewModeSensitiveSections() {
+  if (!isReviewMode()) return;
+  const staffSection = document.querySelector("#staff");
+  if (staffSection && !staffSection.dataset.reviewMasked) {
+    staffSection.dataset.reviewMasked = "true";
+    staffSection.innerHTML = `
+      <div class="review-redacted-panel">
+        <span class="status warning">REVIEW MODE</span>
+        <h2>Staff Management Hidden</h2>
+        <p>Employee records, emergency contacts, absence records and personal information are hidden in temporary review mode.</p>
+        <p>This page remains available in the live office system after normal PIN sign-in.</p>
+      </div>
+    `;
+  }
+  const settingsSection = document.querySelector("#settings");
+  if (settingsSection && !settingsSection.dataset.reviewMasked) {
+    settingsSection.dataset.reviewMasked = "true";
+    settingsSection.innerHTML = `
+      <div class="review-redacted-panel">
+        <span class="status warning">REVIEW MODE</span>
+        <h2>Settings Hidden</h2>
+        <p>Storage, reset, configuration and permission controls are hidden during read-only design review.</p>
+      </div>
+    `;
+  }
+}
+
 function unlockHub(name) {
+  if (isReviewMode()) {
+    applyReviewModeShell();
+    return;
+  }
   localStorage.setItem(authStorageKey, name);
   document.body.classList.remove("locked");
   authScreen?.setAttribute("aria-hidden", "true");
@@ -1577,6 +1687,10 @@ function unlockHub(name) {
 }
 
 function lockHub() {
+  if (isReviewMode()) {
+    applyReviewModeShell();
+    return;
+  }
   localStorage.removeItem(authStorageKey);
   document.body.classList.add("locked");
   authScreen?.removeAttribute("aria-hidden");
@@ -1593,10 +1707,15 @@ function lockHub() {
 }
 
 function currentUserName() {
+  if (isReviewMode()) return "Review Mode";
   return localStorage.getItem(authStorageKey) || "Kevin";
 }
 
 function initialiseAuth() {
+  if (isReviewMode()) {
+    applyReviewModeShell();
+    return;
+  }
   const rememberedUser = localStorage.getItem(authStorageKey);
   if (rememberedUser) {
     unlockHub(rememberedUser);
@@ -2357,6 +2476,10 @@ function applyInitialSectionFromUrl() {
 }
 
 async function saveCommandData() {
+  if (isReviewMode()) {
+    updateOneDriveHeaderStatus("Live OneDrive data loaded", "Review mode - saving disabled");
+    return false;
+  }
   const payload = commandData();
   localStorage.setItem(storageKey, JSON.stringify(ramsItems));
   updateOneDriveHeaderStatus("Saving to OneDrive", "Writing live office data");
@@ -2419,6 +2542,10 @@ async function saveCommandData() {
 }
 
 async function syncNow() {
+  if (isReviewMode()) {
+    await reviewModeMessage();
+    return false;
+  }
   if (oneDrivePendingBackup()) {
     const confirmed = await kcConfirmAction(
       "A local backup is pending. Sync now will write this Hub data back to OneDrive. Continue only if this is the latest office record.",
@@ -2450,6 +2577,7 @@ function loadRams() {
 }
 
 function saveRams() {
+  if (isReviewMode()) return false;
   saveCommandData();
 }
 
@@ -8924,6 +9052,8 @@ function render() {
   renderNotifications();
   renderProofingReports();
   updateProofingPreview();
+  applyReviewModeShell();
+  maskReviewModeSensitiveSections();
 }
 
 function openDialog(item = null) {
@@ -9027,6 +9157,7 @@ function updateSectionUrl(sectionId) {
   const url = new URL(location.href);
   url.searchParams.set("section", sectionId);
   url.searchParams.set("v", appVersion);
+  if (isReviewMode()) url.searchParams.set(reviewModeParam, "1");
   history.replaceState(null, "", url.toString());
 }
 
@@ -9034,6 +9165,7 @@ function sectionUrl(sectionId) {
   const url = new URL(location.href);
   url.searchParams.set("section", sectionId);
   url.searchParams.set("v", appVersion);
+  if (isReviewMode()) url.searchParams.set(reviewModeParam, "1");
   return url.toString();
 }
 
@@ -9047,6 +9179,36 @@ function applyGlobalSearch() {
 document.querySelectorAll(".nav-button").forEach((button) => {
   button.addEventListener("click", () => showSection(button.dataset.section));
 });
+
+document.addEventListener("click", (event) => {
+  if (!reviewModeBlockedAction(event.target)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  reviewModeMessage();
+}, true);
+
+document.addEventListener("submit", (event) => {
+  if (!isReviewMode()) return;
+  if (event.target === pinForm) return;
+  if (event.target?.closest?.("#kcDialog")) return;
+  event.preventDefault();
+  event.stopPropagation();
+  reviewModeMessage();
+}, true);
+
+document.addEventListener("drop", (event) => {
+  if (!isReviewMode()) return;
+  event.preventDefault();
+  event.stopPropagation();
+  reviewModeMessage();
+}, true);
+
+document.addEventListener("paste", (event) => {
+  if (!isReviewMode()) return;
+  const target = event.target;
+  if (target?.matches?.("input, textarea, [contenteditable='true']")) return;
+  event.preventDefault();
+}, true);
 
 document.addEventListener("keydown", (event) => {
   if (event.key !== "F5") return;

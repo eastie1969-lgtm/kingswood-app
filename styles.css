@@ -40,6 +40,89 @@ body {
   overflow: hidden;
 }
 
+body.review-mode {
+  padding-top: 42px;
+}
+
+.review-mode-banner {
+  align-items: center;
+  background: linear-gradient(90deg, #071241, #0e3150);
+  border-bottom: 2px solid #20c7bf;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.24);
+  color: #ffffff;
+  display: flex;
+  gap: 14px;
+  inset: 0 0 auto 0;
+  justify-content: center;
+  min-height: 42px;
+  padding: 8px 18px;
+  position: fixed;
+  z-index: 1200;
+}
+
+.review-mode-banner strong {
+  color: #58ddd3;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+
+.review-mode-banner span {
+  color: #dbeafe;
+  font-size: 13px;
+}
+
+body.review-mode [data-manage],
+body.review-mode [data-edit-record],
+body.review-mode [data-delete-record],
+body.review-mode [data-approve-holiday],
+body.review-mode [data-decline-holiday],
+body.review-mode [data-clear-data],
+body.review-mode [data-asset-action],
+body.review-mode [data-renew-compliance],
+body.review-mode [data-replace-training-certificate],
+body.review-mode [data-replace-compliance-document],
+body.review-mode [data-technician-geofence],
+body.review-mode [data-technician-geofence-toggle],
+body.review-mode #syncNowButton,
+body.review-mode #saveBuiltRamsButton,
+body.review-mode #aiRamsDraftButton,
+body.review-mode #saveNativeProofingReport,
+body.review-mode #parseNativeProofingNotes,
+body.review-mode #clearNativeProofingReport,
+body.review-mode #exportTrainingCsvButton,
+body.review-mode #exportTrainingExcelButton,
+body.review-mode #exportAssetsCsvButton,
+body.review-mode #exportAssetsExcelButton,
+body.review-mode [id^="generate"][id$="ValuationButton"],
+body.review-mode [id^="export"][id$="CsvButton"] {
+  cursor: not-allowed;
+  filter: grayscale(0.25);
+  opacity: 0.45;
+}
+
+.review-redacted-panel {
+  background: #ffffff;
+  border: 1px solid rgba(32, 199, 191, 0.28);
+  border-left: 4px solid #20c7bf;
+  border-radius: 14px;
+  box-shadow: var(--soft-shadow);
+  margin: 24px;
+  max-width: 820px;
+  padding: 28px;
+}
+
+.review-redacted-panel h2 {
+  color: var(--text-primary);
+  font-size: 28px;
+  margin: 14px 0 8px;
+}
+
+.review-redacted-panel p {
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 0 0 8px;
+}
+
 body.locked .app-shell {
   opacity: 0;
   pointer-events: none;
