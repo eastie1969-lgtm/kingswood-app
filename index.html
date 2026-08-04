@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Kingswood Command Centre</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-    <link rel="stylesheet" href="styles.css?v=182">
+    <link rel="stylesheet" href="styles.css?v=260">
   </head>
   <body class="locked">
     <section class="auth-screen" id="authScreen" aria-label="Command Centre PIN">
@@ -49,154 +49,163 @@
         </div>
         <nav class="main-nav kw-sidebar-nav" aria-label="Hub sections">
           <button class="nav-button kw-nav-item active" type="button" data-section="dashboard" data-icon="dashboard">Dashboard</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="admin-centre" data-icon="briefcase">Job Dispatch</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="diary" data-icon="calendar">Job Diary</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="weekly-planner" data-icon="screen">Weekly Planner</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="valuations" data-icon="pound">Valuations</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="tracking" data-icon="map">Live Tracking</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="rams" data-icon="file-check">RAMS Centre</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="proofing-reports" data-icon="file-text">Proofing Reports</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="compliance" data-icon="shield">Compliance Centre</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="documents" data-icon="folder">Company Documents</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="vehicles" data-icon="truck">Vehicles</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="fines" data-icon="receipt">Fines and Charges</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="staff" data-icon="users">Staff Management</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="training" data-icon="clipboard">Training Matrix</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="technicians" data-icon="user-check">Technicians</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="assets" data-icon="package">Assets, Tools & Equipment</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="clients" data-icon="building">Clients</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="history" data-icon="history">Job History</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="notifications" data-icon="bell">Notifications</button>
-          <button class="nav-button kw-nav-item" type="button" data-section="settings" data-icon="settings">Settings</button>
+          <section class="nav-group" data-nav-group="operations">
+            <button class="nav-group-toggle" type="button" id="navGroupOperations" aria-expanded="false" aria-controls="navGroupPanelOperations">
+              <span>Operations</span>
+              <span class="nav-group-chevron" aria-hidden="true"></span>
+            </button>
+            <div class="nav-group-panel" id="navGroupPanelOperations" role="group" aria-labelledby="navGroupOperations">
+              <button class="nav-button kw-nav-item" type="button" data-section="admin-centre" data-icon="briefcase">Job Dispatch</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="diary" data-icon="calendar">Job Diary</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="weekly-planner" data-icon="screen">Weekly Planner</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="tracking" data-icon="map">Live Tracking</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="clients" data-icon="building">Clients</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="history" data-icon="history">Job History</button>
+            </div>
+          </section>
+          <section class="nav-group" data-nav-group="reports-compliance">
+            <button class="nav-group-toggle" type="button" id="navGroupReportsCompliance" aria-expanded="false" aria-controls="navGroupPanelReportsCompliance">
+              <span>Reports &amp; Compliance</span>
+              <span class="nav-group-chevron" aria-hidden="true"></span>
+            </button>
+            <div class="nav-group-panel" id="navGroupPanelReportsCompliance" role="group" aria-labelledby="navGroupReportsCompliance">
+              <button class="nav-button kw-nav-item" type="button" data-section="rams" data-icon="file-check">RAMS Centre</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="proofing-reports" data-icon="file-text">Proofing Reports</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="compliance" data-icon="shield">Compliance Centre</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="training-safety-compliance" data-icon="shield-alert">Training, Safety &amp; Compliance</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="training" data-icon="clipboard">Training Matrix</button>
+            </div>
+          </section>
+          <section class="nav-group" data-nav-group="people">
+            <button class="nav-group-toggle" type="button" id="navGroupPeople" aria-expanded="false" aria-controls="navGroupPanelPeople">
+              <span>People</span>
+              <span class="nav-group-chevron" aria-hidden="true"></span>
+            </button>
+            <div class="nav-group-panel" id="navGroupPanelPeople" role="group" aria-labelledby="navGroupPeople">
+              <button class="nav-button kw-nav-item" type="button" data-section="staff" data-icon="users">Staff Management</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="technicians" data-icon="user-check">Technicians</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="holiday-planner" data-icon="calendar">Holiday Planner</button>
+            </div>
+          </section>
+          <section class="nav-group" data-nav-group="fleet-assets">
+            <button class="nav-group-toggle" type="button" id="navGroupFleetAssets" aria-expanded="false" aria-controls="navGroupPanelFleetAssets">
+              <span>Fleet &amp; Assets</span>
+              <span class="nav-group-chevron" aria-hidden="true"></span>
+            </button>
+            <div class="nav-group-panel" id="navGroupPanelFleetAssets" role="group" aria-labelledby="navGroupFleetAssets">
+              <button class="nav-button kw-nav-item" type="button" data-section="vehicles" data-icon="truck">Vehicles</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="assets" data-icon="package">Assets, Tools &amp; Equipment</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="fines" data-icon="receipt">Fines and Charges</button>
+            </div>
+          </section>
+          <section class="nav-group" data-nav-group="company">
+            <button class="nav-group-toggle" type="button" id="navGroupCompany" aria-expanded="false" aria-controls="navGroupPanelCompany">
+              <span>Company</span>
+              <span class="nav-group-chevron" aria-hidden="true"></span>
+            </button>
+            <div class="nav-group-panel" id="navGroupPanelCompany" role="group" aria-labelledby="navGroupCompany">
+              <button class="nav-button kw-nav-item" type="button" data-section="valuations" data-icon="pound">Valuations</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="documents" data-icon="folder">Company Documents</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="notifications" data-icon="bell">Notifications</button>
+              <button class="nav-button kw-nav-item" type="button" data-section="settings" data-icon="settings">Settings</button>
+            </div>
+          </section>
         </nav>
+        <div class="sidebar-footer" aria-label="Restricted and version information">
+          <button class="nav-button kw-nav-item director-only-nav sidebar-footer-link hidden" type="button" data-section="directors" data-icon="shield">DIRECTORS&rsquo; AREA</button>
+          <p class="sidebar-version">Version 1</p>
+        </div>
       </aside>
 
       <div class="workspace kw-main-content">
         <header class="topbar">
-          <div>
+          <div class="header-scene" aria-hidden="true">
+            <span class="scene-layer scene-weather"></span>
+          </div>
+          <div class="topbar-title-block">
             <p class="eyebrow">Central command centre</p>
             <h1 id="pageTitle">Dashboard</h1>
             <p class="user-greeting" id="userGreeting">Good morning</p>
-          </div>
-          <div class="topbar-clock" aria-label="Live office time">
-            <span>Live office time</span>
-            <strong id="liveDateTime">Loading time</strong>
+            <div class="topbar-revolut-balance hidden" id="dashboardRevolutCard" aria-label="Revolut Business GBP balance">
+              <span>Revolut Balance</span>
+              <strong id="dashboardRevolutBalance">Unavailable</strong>
+              <small id="dashboardRevolutStatus" class="hidden">Low balance</small>
+            </div>
           </div>
           <div class="topbar-onedrive" aria-label="OneDrive status">
             <span>OneDrive status</span>
             <strong id="storageStatus">Checking OneDrive</strong>
             <button class="sync-now-button" id="syncNowButton" type="button">Sync now</button>
           </div>
-          <div class="topbar-weather" aria-label="Orpington weather">
-            <span>Orpington weather</span>
-            <strong id="weatherCurrent">Loading</strong>
-            <small id="weatherSummary">Checking today's forecast</small>
+          <div class="topbar-live-block" aria-label="Live office time, date and weather">
+            <div class="topbar-clock">
+              <span>Live office time</span>
+              <strong id="liveTime">Loading time</strong>
+              <small id="liveDate">Loading date</small>
+            </div>
+            <div class="topbar-weather" aria-label="Orpington weather">
+              <span>Orpington weather</span>
+              <strong id="weatherCurrent">Loading</strong>
+              <small id="weatherSummary">Checking today's forecast</small>
+              <small id="weatherThemePreviewBadge" class="theme-preview-badge hidden">Preview mode</small>
+            </div>
           </div>
-          <label class="global-search">
-            Search everything
-            <input id="globalSearch" type="search" placeholder="Address, postcode, job, technician, vehicle">
-          </label>
-          <div class="user-panel">
-            <span id="signedInUser">Signed in</span>
+          <div class="user-panel" aria-label="Signed in user and lock control">
+            <span>Signed in as</span>
+            <strong id="signedInUser">Signed out</strong>
             <button class="secondary-button" id="lockHubButton" type="button">Lock</button>
           </div>
         </header>
 
         <main>
           <section class="section-panel active" id="dashboard" data-title="Dashboard">
-            <div class="dashboard-action-bar">
-              <button class="primary-button split-screen-button" type="button" data-jump-section="split-screen">Split Screen</button>
-            </div>
-            <div class="dashboard-layout">
-              <div>
-                <div class="dashboard-grid metric-grid-primary kw-grid-3" aria-label="Main dashboard priorities">
-                  <article class="metric primary normal kw-card">
-                    <span>Jobs Today</span>
-                    <strong id="jobsTodayCount">0</strong>
-                  </article>
-                  <article class="metric primary overdue kw-card clickable-summary" data-dashboard-compliance-filter="Overdue">
-                    <span>Compliance Overdue</span>
-                    <strong id="complianceOverdueCount">0</strong>
-                  </article>
-                </div>
-
-                <div class="dashboard-grid metric-grid-secondary kw-grid-3" aria-label="Secondary dashboard alerts">
-                  <article class="metric compact warning kw-card">
-                    <span>Vehicle Alerts</span>
-                    <strong id="vehicleAlertCount">0</strong>
-                  </article>
-                  <article class="metric compact kw-card">
-                    <span>MOT Reminders</span>
-                    <strong id="motReminderCount">0</strong>
-                  </article>
-                  <article class="metric compact kw-card">
-                    <span>Staff Available</span>
-                    <strong id="staffAvailableCount">0</strong>
-                  </article>
-                  <article class="metric compact warning kw-card">
-                    <span>Staff Unavailable</span>
-                    <strong id="staffUnavailableCount">0</strong>
-                  </article>
-                </div>
-              </div>
-
-              <aside class="dashboard-alerts-panel">
-                <details open>
-                  <summary>Alerts</summary>
-                  <div class="alert-stat-list">
-                    <article>
-                      <span>Insurance Reminders</span>
-                      <strong id="insuranceReminderCount">0</strong>
-                    </article>
-                    <article>
-                      <span>Critical Documents</span>
-                      <strong id="criticalDocumentAlertCount">0</strong>
-                    </article>
-                    <article>
-                      <span>Expired Documents</span>
-                      <strong id="expiredDocumentAlertCount">0</strong>
-                    </article>
-                    <article>
-                      <span>Company Documents</span>
-                      <button class="secondary-button compact-alert-button" type="button" data-jump-section="documents">Open</button>
-                    </article>
-                    <article>
-                      <span>Training Expired</span>
-                      <button class="secondary-button compact-alert-button alert-count-button" type="button" data-training-dashboard-filter="expired">
-                        <strong id="trainingExpiredDashboardCount">0</strong>
-                      </button>
-                    </article>
-                    <article>
-                      <span>Training 30 Days</span>
-                      <button class="secondary-button compact-alert-button alert-count-button" type="button" data-training-dashboard-filter="30">
-                        <strong id="trainingThirtyDayDashboardCount">0</strong>
-                      </button>
-                    </article>
-                    <article>
-                      <span>Compliance Due</span>
-                      <button class="secondary-button compact-alert-button alert-count-button" type="button" data-dashboard-compliance-filter="30">
-                        <strong id="complianceDueCount">0</strong>
-                      </button>
-                    </article>
-                    <article>
-                      <span>Fine Deadlines</span>
-                      <strong id="fineDeadlineCount">0</strong>
-                    </article>
-                    <article>
-                      <span>Open Charges</span>
-                      <strong id="openFineCount">0</strong>
-                    </article>
-                    <article>
-                      <span>Jobs Tomorrow</span>
-                      <strong id="jobsTomorrowCount">0</strong>
-                    </article>
-                    <article>
-                      <span>Awaiting Reports</span>
-                      <strong id="reportsDueCount">0</strong>
-                    </article>
+            <div class="dashboard-operations-grid">
+              <section class="work-panel dashboard-main-panel dashboard-today-panel">
+                <div class="panel-heading">
+                  <div>
+                    <h2>Today's Job Diary</h2>
+                    <p class="panel-note">The work list office staff need in front of them today.</p>
                   </div>
-                </details>
-              </aside>
+                  <div class="dashboard-heading-actions">
+                    <button class="secondary-button split-screen-button" type="button" data-jump-section="split-screen">Split Screen</button>
+                  </div>
+                </div>
+                <div class="dashboard-filter-bar" aria-label="Dashboard job filters">
+                  <label>
+                    <span>Date</span>
+                    <input id="dashboardJobDateFilter" type="date">
+                  </label>
+                  <label>
+                    <span>Technician</span>
+                    <select id="dashboardTechnicianFilter">
+                      <option value="all">All technicians</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Status</span>
+                    <select id="dashboardStatusFilter">
+                      <option value="all">All statuses</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="dashboard-job-table-wrap">
+                  <table class="dashboard-job-table">
+                    <thead>
+                      <tr>
+                        <th>Slot</th>
+                        <th>Ref</th>
+                        <th>Client</th>
+                        <th>Job</th>
+                        <th>Postcode</th>
+                        <th>Technician</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dashboardTodayJobs"></tbody>
+                  </table>
+                </div>
+              </section>
             </div>
 
             <section class="work-panel dashboard-valuation">
@@ -207,6 +216,10 @@
                     <span id="valuationMonthLabel">Current month</span>
                     <span id="valuationDueLabel"></span>
                   </p>
+                </div>
+                <div class="dashboard-valuation-total">
+                  <span>Current month total</span>
+                  <strong id="valuationDashboardMonthTotal">£0.00</strong>
                 </div>
                 <button class="secondary-button" type="button" data-jump-section="valuations">Open Valuations</button>
               </div>
@@ -223,60 +236,111 @@
                   <span class="summary-label">Private</span>
                   <strong id="privateMonthTotal">£0.00</strong>
                 </article>
+                <article class="summary-tile valuation-total-card vergo-total-card">
+                  <span class="summary-label">Vergo</span>
+                  <strong id="vergoMonthTotal">£0.00</strong>
+                </article>
               </div>
             </section>
 
-            <section class="work-panel pending-holiday-panel">
-              <div class="panel-heading">
-                <div>
-                  <h2>Pending Holiday Requests</h2>
-                  <p class="panel-note">Approve or decline technician holiday requests from the office dashboard.</p>
+            <div class="dashboard-alerts-grid">
+              <section class="work-panel dashboard-compact-panel dashboard-notifications-panel">
+                <div class="panel-heading compact-heading">
+                  <h2>Notifications</h2>
                 </div>
-              </div>
-              <div id="dashboardHolidayRequests" class="stack-list"></div>
-            </section>
-
-            <div class="two-column">
-              <section class="work-panel">
-                <div class="panel-heading">
-                  <h2>Today and Tomorrow</h2>
-                </div>
-                <div id="dashboardJobs" class="stack-list"></div>
+                <div id="dashboardNotifications" class="dashboard-live-list compact-list"></div>
               </section>
 
-              <section class="work-panel">
-                <div class="panel-heading">
-                  <h2>Technician Locations</h2>
+              <section class="work-panel dashboard-compact-panel">
+                <div class="panel-heading compact-heading">
+                  <h2>Vehicle Alerts</h2>
+                  <button class="secondary-button compact-alert-button" type="button" data-jump-section="vehicles">Open</button>
                 </div>
-                <div id="technicianLocations" class="stack-list"></div>
+                <div id="dashboardVehicleAlerts" class="dashboard-live-list compact-list"></div>
               </section>
             </div>
 
-            <section class="work-panel report-gate-panel">
-              <div class="panel-heading">
-                <div>
-                  <h2>Report Gate</h2>
-                  <p class="panel-note">Reports due before the next day's work is released to technicians.</p>
+            <div class="dashboard-secondary-grid">
+              <section class="work-panel dashboard-main-panel dashboard-tech-panel">
+                <div class="panel-heading compact-heading">
+                  <div>
+                    <h2>Technician Status</h2>
+                    <p class="panel-note">Field team, app connection and current job status.</p>
+                  </div>
+                  <button class="secondary-button compact-alert-button" type="button" data-jump-section="technicians">Open</button>
                 </div>
-              </div>
-              <div id="reportGateList" class="stack-list"></div>
-            </section>
+                <div id="dashboardTechnicianStatus" class="dashboard-live-list"></div>
+              </section>
 
-            <section class="work-panel dashboard-compliance">
-              <div class="panel-heading">
-                <h2>Compliance Watch</h2>
-                <button class="secondary-button" type="button" data-jump-section="compliance">Open Compliance Centre</button>
-              </div>
-              <div id="dashboardCompliance" class="stack-list"></div>
-            </section>
+              <section class="work-panel dashboard-compact-panel">
+                <div class="panel-heading compact-heading">
+                  <h2>Compliance Reminders</h2>
+                  <button class="secondary-button compact-alert-button" type="button" data-jump-section="compliance">Open</button>
+                </div>
+                <div id="dashboardCompliance" class="dashboard-live-list compact-list"></div>
+              </section>
 
-            <section class="work-panel dashboard-setup">
-              <div class="panel-heading">
-                <h2>Setup & Data Input</h2>
-                <button class="secondary-button" type="button" data-jump-section="settings">Open Settings</button>
-              </div>
-              <div id="setupGrid" class="setup-grid"></div>
-            </section>
+              <section class="work-panel dashboard-compact-panel">
+                <div class="panel-heading compact-heading">
+                  <h2>Pending Holiday Requests</h2>
+                  <button class="secondary-button compact-alert-button" type="button" data-jump-section="staff">Open</button>
+                </div>
+                <div id="dashboardHolidayRequests" class="dashboard-live-list compact-list"></div>
+              </section>
+            </div>
+
+            <div class="dashboard-kpi-row" aria-label="Dashboard priorities">
+              <button class="metric dashboard-kpi-card normal" type="button" data-jump-section="diary">
+                <span class="dashboard-card-icon">Today</span>
+                <span class="dashboard-kpi-title">Jobs Today</span>
+                <strong id="jobsTodayCount">0</strong>
+                <small>View diary</small>
+              </button>
+              <button class="metric dashboard-kpi-card normal" type="button" data-jump-section="diary">
+                <span class="dashboard-card-icon">Next</span>
+                <span class="dashboard-kpi-title">Jobs Tomorrow</span>
+                <strong id="jobsTomorrowCount">0</strong>
+                <small>Plan ahead</small>
+              </button>
+              <button class="metric dashboard-kpi-card normal" type="button" data-jump-section="notifications">
+                <span class="dashboard-card-icon">!</span>
+                <span class="dashboard-kpi-title">Actions Required</span>
+                <strong id="urgentAttentionCount">0</strong>
+                <small>Review now</small>
+              </button>
+              <button class="metric dashboard-kpi-card normal" type="button" data-jump-section="diary">
+                <span class="dashboard-card-icon">Rpt</span>
+                <span class="dashboard-kpi-title">Reports Due</span>
+                <strong id="reportsDueCount">0</strong>
+                <small>Check reports</small>
+              </button>
+              <button class="metric dashboard-kpi-card normal" type="button" data-jump-section="rams">
+                <span class="dashboard-card-icon">RAMS</span>
+                <span class="dashboard-kpi-title">RAMS Due</span>
+                <strong id="ramsToSendDashboardCount">0</strong>
+                <small>Open RAMS</small>
+              </button>
+            </div>
+
+            <div class="visually-hidden" aria-hidden="true">
+              <strong id="vehicleAlertCount">0</strong>
+              <strong id="motReminderCount">0</strong>
+              <strong id="insuranceReminderCount">0</strong>
+              <strong id="criticalDocumentAlertCount">0</strong>
+              <strong id="expiredDocumentAlertCount">0</strong>
+              <strong id="trainingExpiredDashboardCount">0</strong>
+              <strong id="trainingThirtyDayDashboardCount">0</strong>
+              <strong id="complianceDueCount">0</strong>
+              <strong id="complianceOverdueCount">0</strong>
+              <strong id="fineDeadlineCount">0</strong>
+              <strong id="openFineCount">0</strong>
+              <strong id="staffAvailableCount">0</strong>
+              <strong id="staffUnavailableCount">0</strong>
+              <div id="dashboardJobs"></div>
+              <div id="technicianLocations"></div>
+              <div id="reportGateList"></div>
+              <div id="setupGrid"></div>
+            </div>
           </section>
 
           <section class="section-panel" id="split-screen" data-title="Split Screen">
@@ -377,9 +441,13 @@
           <section class="section-panel" id="weekly-planner" data-title="Weekly Planner">
             <div class="panel-heading">
               <h2>Weekly Planner</h2>
-              <button class="primary-button" type="button" data-manage="planner">Add Planner Item</button>
+              <div class="panel-actions">
+                <button class="secondary-button" type="button" id="sendTodayScheduleButton">Send Today's Schedule</button>
+                <button class="secondary-button" type="button" id="sendTomorrowScheduleButton">Send Tomorrow's Schedule</button>
+                <button class="primary-button" type="button" data-manage="planner">Add Planner Item</button>
+              </div>
             </div>
-            <div class="summary-grid" aria-label="Weekly planner summary">
+            <div class="summary-grid weekly-planner-summary" aria-label="Weekly planner summary">
               <article class="summary-tile">
                 <span class="summary-label">Planner Items</span>
                 <strong id="plannerItemCount">0</strong>
@@ -398,6 +466,7 @@
               </article>
             </div>
             <div id="plannerWeekTabs" class="planner-week-tabs" aria-label="Planner weeks"></div>
+            <section id="plannerDispatchResults" class="work-panel planner-dispatch-results" aria-label="Technician delivery results"></section>
             <div id="plannerBoard" class="planner-board"></div>
           </section>
 
@@ -414,6 +483,7 @@
                 <button class="secondary-button" id="valuationGraphButton" type="button">Graph</button>
                 <button class="secondary-button generate-action" id="generateArkValuationButton" type="button">Generate Ark Valuation</button>
                 <button class="secondary-button generate-action" id="generateJgValuationButton" type="button">Generate JG Valuation</button>
+                <button class="secondary-button generate-action" id="generateVergoValuationButton" type="button">Generate Vergo Valuation</button>
                 <button class="secondary-button generate-action" id="generateOtherValuationButton" type="button">Generate Other Valuation</button>
                 <button class="primary-button" type="button" data-manage="valuations">Add Valuation</button>
               </div>
@@ -430,6 +500,10 @@
               <article class="summary-tile valuation-total-card private-total-card">
                 <span class="summary-label">Private</span>
                 <strong id="valuationPrivateTotal">£0.00</strong>
+              </article>
+              <article class="summary-tile valuation-total-card vergo-total-card">
+                <span class="summary-label">Vergo</span>
+                <strong id="valuationVergoTotal">£0.00</strong>
               </article>
               <article class="summary-tile">
                 <span class="summary-label">Reports Outstanding</span>
@@ -498,7 +572,7 @@
             </div>
           </section>
 
-          <section class="section-panel" id="tracking" data-title="Live Vehicle Tracking">
+          <section class="section-panel" id="tracking" data-title="Live Tracking">
             <div class="panel-heading">
               <div>
                 <h2>Live Vehicle Tracking</h2>
@@ -863,7 +937,7 @@
             </section>
           </section>
 
-          <section class="section-panel" id="vehicles" data-title="Vehicle Management">
+          <section class="section-panel" id="vehicles" data-title="Vehicles">
             <div class="panel-heading">
               <h2>Vehicle Management</h2>
               <button class="primary-button" type="button" data-manage="vehicles">Add Vehicle</button>
@@ -878,10 +952,52 @@
                     <th>MOT</th>
                     <th>Insurance</th>
                     <th>Tracker</th>
+                    <th>Assigned Technician</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="vehiclesTableBody"></tbody>
               </table>
+            </div>
+            <div id="vehicleRecordDetail" class="vehicle-record-detail" aria-live="polite"></div>
+            <div class="vehicle-review-panel">
+              <div class="panel-heading compact-panel-heading">
+                <div>
+                  <h3>Weekly Vehicle Checks</h3>
+                  <p class="section-support">Office review of submitted inspections and reported defects.</p>
+                </div>
+                <button class="secondary-button compact-button" type="button" data-refresh-vehicle-inspections>Refresh</button>
+              </div>
+              <div class="toolbar vehicle-review-toolbar">
+                <label>
+                  Review filter
+                  <select id="vehicleInspectionReviewFilter">
+                    <option value="awaiting">Awaiting review</option>
+                    <option value="safety">Safety-critical</option>
+                    <option value="defects">With defects</option>
+                    <option value="no-defects">No defects</option>
+                    <option value="reviewed">Reviewed</option>
+                    <option value="all">All checks</option>
+                  </select>
+                </label>
+              </div>
+              <div class="table-shell">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Inspection</th>
+                      <th>Vehicle</th>
+                      <th>Technician</th>
+                      <th>Submitted</th>
+                      <th>Defects</th>
+                      <th>Review</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="vehicleInspectionReviewTableBody"></tbody>
+                </table>
+              </div>
+              <div id="vehicleInspectionReviewDetail" class="vehicle-review-detail" aria-live="polite"></div>
             </div>
           </section>
 
@@ -985,6 +1101,16 @@
               <div id="staffHolidayRequestsList" class="stack-list"></div>
             </section>
 
+            <section class="work-panel staff-activity-panel">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <h2>Leave &amp; Attendance Activity</h2>
+                  <p class="panel-note">Recent employee leave and attendance updates.</p>
+                </div>
+              </div>
+              <div id="staffActivityNotifications" class="staff-activity-list"></div>
+            </section>
+
             <div class="staff-management-layout">
               <section class="work-panel staff-directory-panel">
                 <div class="staff-directory-header">
@@ -1013,6 +1139,75 @@
                 </div>
                 <div id="staffProfileTabBody" class="staff-profile-tab-body"></div>
               </section>
+            </div>
+          </section>
+
+          <section class="section-panel" id="holiday-planner" data-title="Holiday Planner">
+            <div class="panel-heading">
+              <div>
+                <h2>Holiday Planner</h2>
+                <p class="panel-note">Visual planning view of approved and pending leave using the existing Staff Management holiday records.</p>
+              </div>
+              <div class="panel-actions">
+                <button class="secondary-button" type="button" id="holidayPlannerTodayButton">Today</button>
+                <button class="secondary-button" type="button" id="holidayPlannerPrevButton">Previous month</button>
+                <button class="secondary-button" type="button" id="holidayPlannerNextButton">Next month</button>
+              </div>
+            </div>
+            <div class="filter-bar holiday-planner-filters">
+              <label>
+                Employee
+                <select id="holidayPlannerEmployeeFilter">
+                  <option value="all">All employees</option>
+                </select>
+              </label>
+              <label>
+                Status
+                <select id="holidayPlannerStatusFilter">
+                  <option value="active">Approved and Pending</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Declined">Declined</option>
+                  <option value="Cancelled">Cancelled</option>
+                  <option value="all">All statuses</option>
+                </select>
+              </label>
+              <label>
+                Month
+                <input id="holidayPlannerMonthInput" type="month">
+              </label>
+              <label>
+                Search employee
+                <input id="holidayPlannerSearch" type="search" placeholder="Search employee">
+              </label>
+              <div class="holiday-toggle-row" aria-label="Additional holiday status filters">
+              <label class="checkbox-inline holiday-toggle-chip">
+                <input id="holidayPlannerShowDeclined" type="checkbox">
+                <span aria-hidden="true">✓</span>
+                Declined
+              </label>
+              <label class="checkbox-inline holiday-toggle-chip">
+                <input id="holidayPlannerShowCancelled" type="checkbox">
+                <span aria-hidden="true">✓</span>
+                Cancelled
+              </label>
+              </div>
+            </div>
+            <div class="holiday-planner-layout">
+              <section class="work-panel holiday-calendar-panel">
+                <div class="holiday-calendar-heading">
+                  <h3 id="holidayPlannerMonthTitle">Current Month</h3>
+                  <span class="panel-note">Monday to Sunday</span>
+                </div>
+                <div class="holiday-calendar-weekdays" aria-hidden="true">
+                  <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                </div>
+                <div id="holidayPlannerCalendar" class="holiday-calendar-grid"></div>
+              </section>
+              <aside class="work-panel holiday-summary-panel">
+                <h3>Availability Summary</h3>
+                <div id="holidayPlannerSummary" class="holiday-summary-list"></div>
+              </aside>
             </div>
           </section>
 
@@ -1074,6 +1269,10 @@
                   <option value="current">Current</option>
                   <option value="expiring">Expiring Soon</option>
                   <option value="expired">Expired</option>
+                  <option value="missing">Missing / Not Recorded</option>
+                  <option value="not-applicable">Not Applicable</option>
+                  <option value="superseded">Superseded</option>
+                  <option value="inactive">Inactive</option>
                   <option value="no-expiry">No Expiry</option>
                 </select>
               </label>
@@ -1103,6 +1302,546 @@
                 </thead>
                 <tbody id="trainingTableBody"></tbody>
               </table>
+            </div>
+          </section>
+
+          <section class="section-panel" id="training-safety-compliance" data-title="Training, Safety & Compliance">
+            <div class="panel-heading">
+              <div>
+                <h2>Training, Safety & Compliance</h2>
+                <p class="panel-note">Governance foundation for controlled documents, published revisions, assignments, evidence records and universal audit evidence.</p>
+              </div>
+              <span class="module-status-badge">Architecture foundation</span>
+            </div>
+
+            <div class="tsc-module-tabs" role="tablist" aria-label="Training, Safety and Compliance areas">
+              <button class="tsc-module-tab active" type="button" data-tsc-tab="dashboard">Dashboard</button>
+              <button class="tsc-module-tab" type="button" data-tsc-tab="content">Content Management</button>
+              <button class="tsc-module-tab" type="button" data-tsc-tab="communications">Communications</button>
+              <button class="tsc-module-tab" type="button" data-tsc-tab="training">Training</button>
+              <button class="tsc-module-tab" type="button" data-tsc-tab="compliance">Compliance</button>
+            </div>
+
+            <div class="tsc-tab-panel active" data-tsc-panel="dashboard">
+              <div class="tsc-model-strip" aria-label="Training, Safety and Compliance data model">
+                <article><span>1</span><strong>Controlled Document</strong><p>Governance metadata and lifecycle state.</p></article>
+                <article><span>2</span><strong>Published Revision</strong><p>Read-only operational content snapshot.</p></article>
+                <article><span>3</span><strong>Issue Campaign</strong><p>Future issue batch for a published revision.</p></article>
+                <article><span>4</span><strong>Assignment</strong><p>The obligation placed on an employee.</p></article>
+                <article><span>5</span><strong>Evidence Record</strong><p>Proof of completion, acknowledgement or verification.</p></article>
+              </div>
+
+                <div class="summary-grid tsc-summary-grid" aria-label="Training, Safety and Compliance summary">
+                <article class="summary-tile traffic-amber">
+                  <span class="summary-label">Items Requiring Action</span>
+                  <strong id="tscKpiActionRequired">0</strong>
+                  <small>Outstanding Toolbox Talks</small>
+                </article>
+                <article class="summary-tile">
+                  <span class="summary-label">Awaiting Acknowledgement</span>
+                  <strong id="tscKpiAwaiting">0</strong>
+                  <small>Employee actions pending</small>
+                </article>
+                <article class="summary-tile traffic-red">
+                  <span class="summary-label">Overdue</span>
+                  <strong id="tscKpiOverdue">0</strong>
+                  <small>Past due date</small>
+                </article>
+                <article class="summary-tile traffic-amber">
+                  <span class="summary-label">Completed This Month</span>
+                  <strong id="tscKpiCompletedMonth">0</strong>
+                  <small>Acknowledged this month</small>
+                </article>
+              </div>
+
+              <div class="tsc-layout">
+                <section class="work-panel tsc-main-panel">
+                  <div class="tsc-section-heading">
+                    <div>
+                      <span class="tsc-eyebrow">Document Control</span>
+                      <h3>Governance Overview</h3>
+                    </div>
+                    <span class="tsc-soft-badge" id="tscLiveIssueBadge">No published revisions yet</span>
+                  </div>
+                  <div class="tsc-overview-grid">
+                    <article><strong>Approved</strong><span id="tscOverviewLive">0</span><p>Approved but not yet published.</p></article>
+                    <article><strong>Published</strong><span id="tscOverviewScheduled">0</span><p>Official read-only revisions.</p></article>
+                    <article><strong>Archived</strong><span id="tscOverviewComplete">0</span><p>Retained historical records.</p></article>
+                  </div>
+                </section>
+
+                <aside class="work-panel tsc-activity-panel">
+                  <div class="tsc-section-heading compact">
+                    <div>
+                      <span class="tsc-eyebrow">Recent Activity</span>
+                      <h3>Activity Timeline</h3>
+                    </div>
+                  </div>
+                  <ol class="tsc-timeline" id="tscRecentActivity">
+                    <li><span></span><div><strong>No audit activity yet</strong><p>Create or update a controlled document to start the audit trail.</p></div></li>
+                  </ol>
+                </aside>
+
+                <section class="work-panel tsc-feature-panel">
+                  <div class="tsc-section-heading">
+                    <div>
+                      <span class="tsc-eyebrow">Training Expiry</span>
+                      <h3>Training Snapshot</h3>
+                    </div>
+                  </div>
+                  <div class="tsc-feature-grid compact">
+                    <article><strong>Training Matrix</strong><p>Existing Training Matrix remains the source of truth.</p></article>
+                    <article><strong>Certificates</strong><p>Future certificate access will reference existing training documents.</p></article>
+                    <article><strong>Competencies</strong><p>Prepared for staff competency views.</p></article>
+                  </div>
+                </section>
+
+                <section class="work-panel tsc-feature-panel">
+                  <div class="tsc-section-heading">
+                    <div>
+                      <span class="tsc-eyebrow">Evidence Model</span>
+                      <h3>Evidence Snapshot</h3>
+                    </div>
+                  </div>
+                  <div class="tsc-compliance-grid">
+                    <article><span>Assignments</span><strong id="tscAssignmentModelCount">0</strong><p>Obligations only</p></article>
+                    <article><span>Evidence Records</span><strong id="tscEvidenceRecordCount">0</strong><p>Proof kept separately</p></article>
+                    <article><span>Evidence Types</span><strong>11</strong><p>Extensible model</p></article>
+                    <article><span>Audit Link</span><strong>Ready</strong><p>Universal audit integration</p></article>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <div class="tsc-tab-panel" data-tsc-panel="content">
+              <section class="work-panel">
+                <div class="tsc-section-heading">
+                  <div>
+                    <span class="tsc-eyebrow">Master Content</span>
+                    <h3>Content Management</h3>
+                    <p>Create controlled documents and move them through Draft, Submitted for Approval, Approved, Published and Archived.</p>
+                    <p class="tsc-status-guide">Only Published revisions are operational. Published revisions are read-only and retained historically.</p>
+                  </div>
+                  <div class="tsc-action-row">
+                    <button class="secondary-button" type="button" data-tsc-content-new>New Toolbox Talk</button>
+                    <button class="primary-button" type="button" data-tsc-announcement-new>New Announcement</button>
+                  </div>
+                </div>
+                <form class="tsc-editor" id="tscContentEditor" hidden>
+                  <input type="hidden" id="tscContentIdInput">
+                  <input type="hidden" id="tscCommunicationTypeInput" value="toolbox_talk">
+                  <label>Title<input id="tscTitleInput" type="text" required></label>
+                  <label>Document ID<input id="tscDocumentIdInput" type="text" required></label>
+                  <label>Revision<input id="tscRevisionInput" type="text" required></label>
+                  <label>Category<input id="tscCategoryInput" type="text"></label>
+                  <label>Document Owner<input id="tscDocumentOwnerInput" type="text"></label>
+                  <label>Department<input id="tscDepartmentInput" type="text"></label>
+                  <label>Applicable Roles<input id="tscApplicableRolesInput" type="text" placeholder="Technicians, Office Staff"></label>
+                  <label>Review Frequency<input id="tscReviewFrequencyInput" type="text" placeholder="Annual"></label>
+                  <label><span id="tscEffectiveDateLabel">Effective Date</span><input id="tscEffectiveDateInput" type="date"></label>
+                  <label><span id="tscReviewDateLabel">Review Date</span><input id="tscReviewDateInput" type="date"></label>
+                  <label>Linked Risk Assessment<input id="tscLinkedRiskInput" type="text"></label>
+                  <label>Linked Method Statement<input id="tscLinkedMethodInput" type="text"></label>
+                  <label>Linked Competency<input id="tscLinkedCompetencyInput" type="text"></label>
+                  <label>Keywords<input id="tscKeywordsInput" type="text"></label>
+                  <label>Source Document<input id="tscSourceDocumentInput" type="text"></label>
+                  <label>Author<input id="tscAuthorInput" type="text"></label>
+                  <label class="full">Summary<textarea id="tscSummaryInput" rows="3"></textarea></label>
+                  <label class="full"><span id="tscFullContentLabel">Full Content</span><textarea id="tscFullContentInput" rows="8" required></textarea></label>
+                  <div class="tsc-editor-actions">
+                    <button class="secondary-button" type="button" data-tsc-content-cancel>Cancel</button>
+                    <button class="secondary-button" type="button" data-tsc-content-save-draft>Save Draft</button>
+                    <button class="primary-button" type="button" data-tsc-content-submit>Submit for Approval</button>
+                  </div>
+                </form>
+                <form class="tsc-editor" id="tscAnnouncementEditor" hidden>
+                  <input type="hidden" id="tscAnnouncementContentIdInput">
+                  <div class="full">
+                    <span class="tsc-eyebrow">New Announcement</span>
+                    <h3 id="tscAnnouncementEditorTitle">New Announcement</h3>
+                    <p class="tsc-status-guide">Write the announcement, choose who should receive it, then send or save as draft.</p>
+                  </div>
+                  <label>Title<input id="tscAnnouncementTitleInput" type="text" required></label>
+                  <label>Audience
+                    <select id="tscAnnouncementAudienceInput">
+                      <option value="All Technicians">All active technicians</option>
+                      <option value="Selected Technicians">Selected technicians</option>
+                    </select>
+                  </label>
+                  <label id="tscAnnouncementSelectedStaffLabel" class="full" hidden>Selected technicians
+                    <select id="tscAnnouncementSelectedStaffInput" multiple size="5"></select>
+                  </label>
+                  <label>Acknowledgement required
+                    <select id="tscAnnouncementAckInput">
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                    </select>
+                  </label>
+                  <label>Optional expiry date<input id="tscAnnouncementExpiryInput" type="date"></label>
+                  <label class="full">Message<textarea id="tscAnnouncementMessageInput" rows="8" required></textarea></label>
+                  <div class="tsc-issue-confirm full" id="tscAnnouncementConfirmation">
+                    Select the audience to preview who will receive this announcement.
+                  </div>
+                  <div class="tsc-editor-actions">
+                    <button class="secondary-button" type="button" data-tsc-announcement-cancel>Cancel</button>
+                    <button class="secondary-button" type="button" data-tsc-announcement-save-draft>Save Draft</button>
+                    <button class="primary-button" type="button" data-tsc-announcement-send>Send Announcement</button>
+                  </div>
+                </form>
+                <form class="tsc-editor" id="tscIssueWizard" hidden>
+                  <input type="hidden" id="tscIssueContentIdInput">
+                  <div class="full">
+                    <span class="tsc-eyebrow">Issue Toolbox Talk</span>
+                    <h3 id="tscIssueWizardTitle">Issue Toolbox Talk</h3>
+                    <p id="tscIssueWizardSummary">Only published Toolbox Talks can be issued.</p>
+                  </div>
+                  <label>Audience
+                    <select id="tscIssueAudienceInput">
+                    <option value="All Technicians">All Technicians</option>
+                    <option value="Selected Technicians">Selected Technicians</option>
+                    <option value="Surveyors">Surveyors</option>
+                    <option value="Office Staff">Office Staff</option>
+                    <option value="Managers">Managers</option>
+                    <option value="Directors">Directors</option>
+                  </select>
+                  </label>
+                  <label id="tscIssueSelectedStaffLabel" class="full" hidden>Selected Technicians
+                    <select id="tscIssueSelectedStaffInput" multiple size="5"></select>
+                  </label>
+                  <label>Issue Date<input id="tscIssueDateInput" type="date"></label>
+                  <label><span id="tscIssueDueDateLabel">Due Date</span><input id="tscIssueDueDateInput" type="date"></label>
+                  <label><span id="tscIssueAckLabel">Daily Reminder</span>
+                    <select id="tscIssueReminderInput">
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                    </select>
+                  </label>
+                  <label class="full">Office Notes<textarea id="tscIssueNotesInput" rows="3"></textarea></label>
+                  <div class="tsc-issue-confirm full" id="tscIssueConfirmation">
+                    Select the audience and due date to preview the issue before confirming.
+                  </div>
+                  <div class="tsc-editor-actions">
+                    <button class="secondary-button" type="button" data-tsc-issue-cancel>Cancel</button>
+                    <button class="primary-button" type="button" data-tsc-issue-save>Confirm Issue</button>
+                  </div>
+                </form>
+                <div class="table-shell tsc-table-shell">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Title</th>
+                        <th>Document ID</th>
+                        <th>Revision</th>
+                        <th>Status</th>
+                        <th>Review Date</th>
+                        <th>Last Updated</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tscContentTableBody">
+                      <tr><td colspan="8">No Toolbox Talks have been created yet.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="tsc-section-heading compact">
+                  <div>
+                    <span class="tsc-eyebrow">Published Revisions</span>
+                    <h3>Read-Only Revision Register</h3>
+                  </div>
+                  <span class="tsc-soft-badge">Immutable evidence</span>
+                </div>
+                <div class="table-shell tsc-table-shell">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Document ID</th>
+                        <th>Revision</th>
+                        <th>Publication Date</th>
+                        <th>Published By</th>
+                        <th>Effective Date</th>
+                        <th>Review Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tscPublishedRevisionTableBody">
+                      <tr><td colspan="8">No published revisions yet.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+
+            <div class="tsc-tab-panel" data-tsc-panel="communications">
+              <section class="work-panel">
+                <div class="tsc-section-heading">
+                  <div>
+                    <span class="tsc-eyebrow">Communications</span>
+                    <h3>Toolbox Talk Communications</h3>
+                    <p>Monitor issued Toolbox Talks, outstanding employees and completed acknowledgements.</p>
+                  </div>
+                  <span class="tsc-soft-badge">Operational</span>
+                </div>
+                <div class="table-shell tsc-table-shell">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Toolbox Talk</th>
+                        <th>Audience</th>
+                        <th>Issue Date</th>
+                        <th>Due Date</th>
+                        <th>Progress</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tscCommunicationTableBody">
+                      <tr><td colspan="7">No Toolbox Talks have been issued yet.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="work-panel tsc-detail-panel" data-tsc-communication-detail hidden>
+                <div class="tsc-section-heading">
+                  <div>
+                    <span class="tsc-eyebrow">Manage Communication</span>
+                    <h3 id="tscDetailTitle">Toolbox Talk</h3>
+                    <p id="tscDetailDescription">Review progress, outstanding employees, evidence and useful audit activity.</p>
+                  </div>
+                  <span class="tsc-soft-badge">Live progress</span>
+                </div>
+                <div class="tsc-detail-summary" id="tscDetailSummary"></div>
+                <div class="tsc-people-columns">
+                  <article>
+                    <h4 id="tscOutstandingHeading">Outstanding Employees</h4>
+                    <div id="tscOutstandingEmployees" class="tsc-person-list">No outstanding employees.</div>
+                  </article>
+                  <article>
+                    <h4 id="tscCompletedHeading">Completed Employees</h4>
+                    <div id="tscCompletedEmployees" class="tsc-person-list">No completed employees.</div>
+                  </article>
+                </div>
+                <div class="table-shell tsc-table-shell">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Employee</th>
+                        <th>Evidence</th>
+                        <th>Status</th>
+                        <th>Submitted</th>
+                        <th>Result</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tscManageEvidenceTableBody">
+                      <tr><td colspan="5">No evidence recorded yet.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <details class="work-panel tsc-architecture-reference">
+                <summary>Architecture reference</summary>
+                <p>Governance data is retained for audit and future workflow expansion. Normal users should work from the communication summary above.</p>
+                <div class="tsc-section-heading compact">
+                  <div>
+                    <span class="tsc-eyebrow">Issue Records</span>
+                    <h3>Issue Campaign Register</h3>
+                    <p>Read-only structural register for future issue campaigns. No live issuing workflow is active in this phase.</p>
+                  </div>
+                  <span class="tsc-soft-badge">Inactive workflow</span>
+                </div>
+                <div class="table-shell tsc-table-shell">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Issue ID</th>
+                        <th>Content</th>
+                        <th>Audience</th>
+                        <th>Issued</th>
+                        <th>Due</th>
+                        <th>Status</th>
+                        <th>Assignments</th>
+                        <th>Evidence</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tscIssueRecordTableBody">
+                      <tr><td colspan="8">No issue records yet.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="tsc-section-heading compact">
+                  <div>
+                    <span class="tsc-eyebrow">Assignment Records</span>
+                    <h3>Employee Obligation Register</h3>
+                    <p>Assignments remain separate from evidence records. Each assignment may later hold multiple evidence records.</p>
+                  </div>
+                  <span class="tsc-soft-badge">Separate from evidence</span>
+                </div>
+                <div class="table-shell tsc-table-shell">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Assignment ID</th>
+                        <th>Issue ID</th>
+                        <th>Employee</th>
+                        <th>Status</th>
+                        <th>Due</th>
+                        <th>Opened</th>
+                        <th>Completed</th>
+                        <th>Evidence Records</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tscAssignmentRecordTableBody">
+                  <tr><td colspan="8">No assignment records yet.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="tsc-section-heading compact">
+                  <div>
+                    <span class="tsc-eyebrow">Assignment Preparation</span>
+                    <h3>Role-Based Assignment Model</h3>
+                    <p>This prepares future issuing only. Assignments represent obligations. Evidence records will hold proof separately.</p>
+                  </div>
+                  <span class="tsc-soft-badge">Model only</span>
+                </div>
+                <div class="tsc-feature-grid" id="tscAssignmentModelGrid">
+                  <article><strong>All Technicians</strong><p>Prepared audience group for future issue workflow.</p></article>
+                  <article><strong>Surveyors</strong><p>Prepared future audience group.</p></article>
+                  <article><strong>Office Staff</strong><p>Prepared audience group for internal controlled documents.</p></article>
+                  <article><strong>Managers</strong><p>Prepared future approval and assignment group.</p></article>
+                  <article><strong>Directors</strong><p>Prepared restricted audience group.</p></article>
+                  <article><strong>Selected Individuals</strong><p>Prepared staffId-based assignment model.</p></article>
+                </div>
+                <div class="tsc-section-heading compact">
+                  <div>
+                    <span class="tsc-eyebrow">Assignment Record</span>
+                    <h3>Obligation Data Model</h3>
+                    <p>Prepared fields only. No live assignment workflow is active in this phase.</p>
+                  </div>
+                  <span class="tsc-soft-badge">Obligation only</span>
+                </div>
+                <div class="table-shell tsc-table-shell">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Field</th>
+                        <th>Contract Key</th>
+                        <th>Purpose</th>
+                        <th>Default</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tscAssignmentModelTableBody">
+                      <tr><td colspan="4">Assignment model fields prepared.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+              <section class="work-panel tsc-detail-panel">
+                <div class="tsc-section-heading">
+                  <div>
+                    <span class="tsc-eyebrow">Evidence Summary</span>
+                    <h3>Evidence Record Foundation</h3>
+                    <p>Evidence is a separate first-class entity. One assignment may hold zero, one or multiple evidence records.</p>
+                  </div>
+                  <span class="tsc-soft-badge">Separate entity</span>
+                </div>
+                <div class="tsc-feature-grid compact">
+                  <article><strong>Acknowledgement</strong><p>Future proof that exact wording and published revision were seen.</p></article>
+                  <article><strong>Knowledge Check</strong><p>Future quiz result, score and pass/fail evidence.</p></article>
+                  <article><strong>Supervisor Verification</strong><p>Future manager or supervisor confirmation record.</p></article>
+                  <article><strong>Certificate</strong><p>Future uploaded document or certificate evidence.</p></article>
+                </div>
+                <div class="table-shell tsc-table-shell">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Employee</th>
+                        <th>Evidence Type</th>
+                        <th>Status</th>
+                        <th>Submitted</th>
+                        <th>Verified</th>
+                        <th>Result</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tscEvidenceTableBody">
+                      <tr><td colspan="7">No evidence records yet. Future assignments may hold multiple evidence records.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              <section class="work-panel tsc-detail-panel">
+                <div class="tsc-section-heading">
+                  <div>
+                    <span class="tsc-eyebrow">Universal Audit</span>
+                    <h3>Audit Log Structure</h3>
+                    <p>Append-only audit events prepared for Training, Safety & Compliance and future Kingswood modules.</p>
+                  </div>
+                  <span class="tsc-soft-badge">Append-only</span>
+                </div>
+                <div class="table-shell tsc-table-shell">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date &amp; Time</th>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Module</th>
+                        <th>Action</th>
+                        <th>Affected Record</th>
+                        <th>Record ID</th>
+                        <th>Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tscAuditTableBody">
+                      <tr><td colspan="8">No audit events recorded yet.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+
+            <div class="tsc-tab-panel" data-tsc-panel="training">
+              <section class="work-panel tsc-feature-panel">
+                <div class="tsc-section-heading">
+                  <div>
+                    <span class="tsc-eyebrow">Training</span>
+                    <h3>Training Structure</h3>
+                    <p>This area will reference the existing Training Matrix rather than creating a second training database.</p>
+                  </div>
+                </div>
+                <div class="tsc-feature-grid">
+                  <article><strong>Training Matrix</strong><p>Existing source of truth for employee training.</p></article>
+                  <article><strong>Certificates</strong><p>Prepared for linked certificate access.</p></article>
+                  <article><strong>Competencies</strong><p>Prepared for future competency structure.</p></article>
+                  <article><strong>Training Expiry</strong><p>Prepared for future expiry summaries.</p></article>
+                  <article><strong>CPD</strong><p>Reserved for future CPD records.</p></article>
+                  <article><strong>Outstanding Assignments</strong><p>Future Staff Management view will reference assignment obligations.</p></article>
+                  <article><strong>Evidence History</strong><p>Future Staff Management view will reference acknowledgement, quiz, verification and certificate evidence.</p></article>
+                </div>
+              </section>
+            </div>
+
+            <div class="tsc-tab-panel" data-tsc-panel="compliance">
+              <section class="work-panel tsc-feature-panel">
+                <div class="tsc-section-heading">
+                  <div>
+                    <span class="tsc-eyebrow">Compliance</span>
+                    <h3>Compliance Structure</h3>
+                    <p>This area prepares operational compliance communication tracking without duplicating the existing company-level Compliance Centre.</p>
+                  </div>
+                  <span class="tsc-soft-badge">Future exports reserved</span>
+                </div>
+                <div class="tsc-compliance-grid">
+                  <article><span>Outstanding</span><strong>0</strong><p>Future action queue</p></article>
+                  <article><span>Completed</span><strong>0</strong><p>Future completion records</p></article>
+                  <article><span>Overdue</span><strong>0</strong><p>Future overdue tracking</p></article>
+                  <article><span>Audit History</span><strong>Ready</strong><p>Immutable history structure planned</p></article>
+                  <article><span>Exports</span><strong>Future</strong><p>Reserved for later reporting phase</p></article>
+                </div>
+              </section>
             </div>
           </section>
 
@@ -1222,9 +1961,83 @@
 
           <section class="section-panel" id="history" data-title="Job History">
             <div class="panel-heading">
-              <h2>Property Job History</h2>
+              <div>
+                <h2>Property Job History</h2>
+                <p class="panel-note">Search, filter and review completed job records without loading the whole history at once.</p>
+              </div>
+            </div>
+            <div class="history-toolbar" aria-label="Job History search and filters">
+              <label class="history-search-field">
+                Search Job History
+                <span class="history-search-control">
+                  <input id="historySearch" type="search" placeholder="Address, postcode, job ref, client, technician, report ID">
+                  <button class="secondary-button compact-button" type="button" id="historyClearSearch">Clear</button>
+                </span>
+              </label>
+              <label>
+                Status
+                <select id="historyStatusFilter">
+                  <option value="all">All</option>
+                  <option value="completed">Completed</option>
+                  <option value="awaiting-report">Awaiting Report</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="follow-up-required">Follow-up Required</option>
+                </select>
+              </label>
+              <label>
+                Date
+                <select id="historyDateFilter">
+                  <option value="all">All Dates</option>
+                  <option value="this-week">This Week</option>
+                  <option value="this-month">This Month</option>
+                  <option value="last-3-months">Last 3 Months</option>
+                  <option value="this-year">This Year</option>
+                </select>
+              </label>
+              <label>
+                Technician
+                <select id="historyTechnicianFilter">
+                  <option value="all">All Technicians</option>
+                </select>
+              </label>
+              <label>
+                Client
+                <select id="historyClientFilter">
+                  <option value="all">All Clients</option>
+                </select>
+              </label>
+              <label>
+                Sort
+                <select id="historySort">
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                  <option value="client-az">Client A-Z</option>
+                  <option value="client-za">Client Z-A</option>
+                  <option value="technician-az">Technician A-Z</option>
+                  <option value="property-az">Property A-Z</option>
+                </select>
+              </label>
+              <label>
+                Rows
+                <select id="historyPageSize">
+                  <option value="15">15</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </label>
+              <button class="secondary-button" type="button" id="historyResetFilters">Reset Filters</button>
+            </div>
+            <div class="history-results-bar" aria-live="polite">
+              <span id="historyResultSummary">Showing 0 jobs</span>
+              <span id="historyPageSummary">Page 1 of 1</span>
             </div>
             <div id="historyList" class="stack-list"></div>
+            <nav class="history-pagination" aria-label="Job History pagination">
+              <button class="secondary-button" type="button" id="historyPrevPage">Previous</button>
+              <span id="historyPageIndicator">Page 1 of 1</span>
+              <button class="secondary-button" type="button" id="historyNextPage">Next</button>
+            </nav>
           </section>
 
           <section class="section-panel" id="notifications" data-title="Notifications">
@@ -1232,6 +2045,28 @@
               <h2>Notifications</h2>
             </div>
             <div id="notificationsList" class="stack-list"></div>
+          </section>
+
+          <section class="section-panel" id="directors" data-title="Directors’ Area">
+            <div class="module-card directors-lock-panel" id="directorsLockPanel">
+              <span class="status warning">Restricted</span>
+              <h2>Directors’ Area</h2>
+              <p id="directorAccessMessage" role="alert">This area is restricted to Kevin Eastman and Alex Lancaster.</p>
+            </div>
+            <div class="directors-workspace hidden" id="directorsWorkspace">
+              <div class="section-heading-row">
+                <div>
+                  <h2>Company Oversight</h2>
+                </div>
+              </div>
+              <div class="directors-tabs" role="tablist" aria-label="Directors Area sections">
+                <button class="directors-tab active" type="button" data-director-tab="overview">Company Overview</button>
+                <button class="directors-tab" type="button" data-director-tab="absence">Absence and Holidays</button>
+                <button class="directors-tab" type="button" data-director-tab="payroll">Payroll</button>
+                <button class="directors-tab" type="button" data-director-tab="company-details">Company Details</button>
+              </div>
+              <div id="directorsContent" class="directors-content"></div>
+            </div>
           </section>
 
           <section class="section-panel" id="settings" data-title="Settings">
@@ -1242,6 +2077,14 @@
               <strong>Feed the command centre from here.</strong>
               <p>Use this area to add the real Kingswood data that drives the dashboard, diary, compliance reminders, staff records, vehicle alerts, RAMS, documents, clients, and reporting.</p>
             </div>
+            <section class="work-panel theme-test-launch-panel">
+              <div>
+                <span class="settings-kicker">Preview only</span>
+                <h2>Weather & Seasonal Header Test Mode</h2>
+                <p class="panel-note">Preview standard, sunny, rain, snow and seasonal header styles without changing the real Orpington weather feed.</p>
+              </div>
+              <button class="primary-button" type="button" data-settings-action="themes">Open Theme Test Mode</button>
+            </section>
             <section class="work-panel reset-panel">
               <div class="panel-heading">
                 <div>
@@ -1521,6 +2364,96 @@
       </form>
     </dialog>
 
+    <dialog id="attendanceDialog">
+      <form method="dialog" id="attendanceForm">
+        <div class="dialog-header">
+          <h2 id="attendanceDialogTitle">Log Attendance</h2>
+          <button class="icon-button" value="cancel" aria-label="Close" type="submit" formnovalidate>x</button>
+        </div>
+        <input id="attendanceRecordIndex" type="hidden">
+        <input id="attendanceStaffName" type="hidden">
+        <div class="data-fields attendance-form-grid">
+          <label>
+            Employee
+            <input id="attendanceEmployeeDisplay" type="text" readonly>
+          </label>
+          <label>
+            Attendance type
+            <select id="attendanceTypeInput" required>
+              <option value="Sick">Sick</option>
+              <option value="Late">Late</option>
+              <option value="Absent">Absent</option>
+              <option value="Other Authorised Absence">Other Authorised Absence</option>
+              <option value="Unauthorised Absence">Unauthorised Absence</option>
+            </select>
+          </label>
+          <label>
+            Start date
+            <input id="attendanceStartDate" type="date" required>
+          </label>
+          <label class="attendance-range-field">
+            End date
+            <input id="attendanceEndDate" type="date">
+          </label>
+          <label class="attendance-ongoing-field">
+            Ongoing
+            <select id="attendanceOngoingInput">
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+          </label>
+          <label class="attendance-return-field">
+            Return date
+            <input id="attendanceReturnDate" type="date">
+          </label>
+          <label class="attendance-day-field">
+            Day type
+            <select id="attendanceDayType">
+              <option value="Full day">Full day</option>
+              <option value="Half day">Half day</option>
+              <option value="Partial day">Partial day</option>
+            </select>
+          </label>
+          <label class="attendance-days-field">
+            Working days affected
+            <input id="attendanceWorkingDays" type="number" step="0.5" min="0" readonly>
+          </label>
+          <label class="attendance-late-field">
+            Scheduled start time
+            <input id="attendanceScheduledStart" type="time">
+          </label>
+          <label class="attendance-late-field">
+            Actual arrival time
+            <input id="attendanceActualArrival" type="time">
+          </label>
+          <label class="attendance-late-field">
+            Minutes late
+            <input id="attendanceMinutesLate" type="number" min="0" step="1">
+          </label>
+          <label class="full-width">
+            Office note
+            <textarea id="attendanceOfficeNote" rows="3" placeholder="Office note. Do not record detailed medical history."></textarea>
+          </label>
+          <label>
+            Confidential note
+            <select id="attendanceConfidentialNote">
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+          </label>
+          <label id="attendanceCorrectionReasonWrap" class="full-width hidden">
+            Reason for correction
+            <textarea id="attendanceCorrectionReason" rows="2" placeholder="Required when correcting, closing or voiding an existing attendance record."></textarea>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel" type="submit" formnovalidate>Cancel</button>
+          <button class="danger-button hidden" id="attendanceVoidButton" value="void" type="submit">Void record</button>
+          <button class="primary-button" id="attendanceSaveButton" value="default" type="submit">Save Attendance</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="valuationGraphDialog">
       <div class="valuation-graph-dialog">
         <div class="dialog-header">
@@ -1549,6 +2482,6 @@
     </dialog>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="app.js?v=179"></script>
+    <script src="app.js?v=259"></script>
   </body>
 </html>

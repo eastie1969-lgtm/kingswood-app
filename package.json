@@ -5,7 +5,21 @@
   "description": "Kingswood Connect central command centre.",
   "scripts": {
     "start": "node .preview-server.cjs",
-    "check": "node --check app.js && node --check .preview-server.cjs"
+    "check": "node --check app.js && node --check .preview-server.cjs",
+    "test:phase09a": "node scripts/phase-09a-vehicle-assignment-tests.cjs",
+    "smoke:phase09a": "node scripts/phase-09a-browser-smoke.cjs",
+    "test:phase09b": "node scripts/phase-09b-weekly-vehicle-check-tests.cjs",
+    "smoke:phase09b": "node scripts/phase-09b-browser-smoke.cjs",
+    "test:phase09c": "node scripts/phase-09c-office-vehicle-review-tests.cjs",
+    "smoke:phase09c": "node scripts/phase-09c-browser-smoke.cjs",
+    "test:phase09d": "node scripts/phase-09d-vehicle-documents-tests.cjs",
+    "smoke:phase09d": "node scripts/phase-09d-browser-smoke.cjs",
+    "test:phase09-staff-compliance": "node scripts/contracts/phase-09-staff-compliance-records-test.js",
+    "smoke:phase09-staff-compliance": "node scripts/contracts/phase-09-staff-compliance-browser-smoke.js",
+    "test:phase10": "node scripts/contracts/phase-10-directors-area-test.js && node scripts/contracts/phase-10-holiday-entitlement-classification-test.js",
+    "smoke:phase10": "node scripts/contracts/phase-10-directors-area-browser-smoke.js",
+    "demo:phase10-payroll": "node scripts/contracts/phase-10-payroll-sample-demo.js",
+    "smoke:phase12-sidebar": "node scripts/contracts/phase-12-sidebar-grouping-smoke.js"
   },
   "engines": {
     "node": ">=20"

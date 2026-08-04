@@ -7,7 +7,7 @@ const finesPendingStorageKey = "kingswood-fines-pending";
 const oneDrivePendingStorageKey = "kingswood-hub-onedrive-pending";
 const oneDriveLastSavedStorageKey = "kingswood-hub-onedrive-last-saved";
 const oneDriveAutoSyncIntervalMs = 30000;
-const appVersion = "182";
+const appVersion = "259";
 const reviewModeParam = "review";
 const reviewMode = new URLSearchParams(window.location.search).get(reviewModeParam) === "1";
 let selectedStaffIndex = 0;
@@ -19,6 +19,14 @@ let assetDocumentDraft = [];
 let activeTrainingFilter = "all";
 let activeTrainingYear = String(new Date().getFullYear());
 let activeComplianceFilter = "all";
+let activeHolidayPlannerMonth = localIsoDate().slice(0, 7);
+let activeDirectorTab = "overview";
+let directorsAreaState = null;
+let activeDirectorPayrollPeriod = "";
+let activeDirectorPayrollFocus = "";
+let activeDirectorPerformancePeriod = "this-month";
+let activeDirectorPerformanceTechnician = "";
+let expandedHolidayPlannerDay = "";
 let oneDriveLiveDataLoaded = false;
 let oneDriveAutoSyncTimer = null;
 let oneDriveAutoSyncRunning = false;
@@ -28,6 +36,12 @@ let trackingMoveTimer = null;
 let selectedTrackingVehicleId = "kw-test-1";
 let technicianGeofenceTestMode = true;
 let technicianGeofenceTestLocations = {};
+let lastWeatherCode = null;
+const weatherThemeStorageKey = "kingswood-header-weather-preview";
+const seasonalThemeStorageKey = "kingswood-header-seasonal-preview";
+const christmasThemeEndDateStorageKey = "kingswood-header-christmas-end-date";
+let weatherThemePreviewValue = "live";
+let seasonalThemePreviewValue = "none";
 const technicianGeofenceRadiusMiles = 0.5;
 let testTrackingVehicles = [
   {
@@ -386,10 +400,69 @@ let holidayRequests = [
   { name: "Dan", from: "2026-08-03", to: "2026-08-07", days: 5, status: "Declined" }
 ];
 
+let staffNotifications = [];
+let tscMasterContent = [];
+let tscPublishedRevisions = [];
+let tscIssueRecords = [];
+let tscAssignmentRecords = [];
+let tscEvidenceRecords = [];
+let universalAuditEvents = [];
+let selectedTscIssueId = "";
+let tscIssueSaveInProgress = false;
 let companyHolidays = [];
 let leaveAllowanceResetYear = "";
 
+const tscCommunicationTypes = Object.freeze({
+  toolbox_talk: Object.freeze({
+    communicationType: "toolbox_talk",
+    displayName: "Toolbox Talk",
+    status: "active"
+  }),
+  announcement: Object.freeze({
+    communicationType: "announcement",
+    displayName: "Announcement",
+    status: "active"
+  })
+});
+const TSC_TOOLBOX_TALK_COMMUNICATION_TYPE = "toolbox_talk";
+const TSC_ANNOUNCEMENT_COMMUNICATION_TYPE = "announcement";
+
 const ukBankHolidays = [
+  { title: "New Year's Day substitute day", date: "2022-01-03", type: "Bank holiday" },
+  { title: "Good Friday", date: "2022-04-15", type: "Bank holiday" },
+  { title: "Easter Monday", date: "2022-04-18", type: "Bank holiday" },
+  { title: "Early May bank holiday", date: "2022-05-02", type: "Bank holiday" },
+  { title: "Spring bank holiday", date: "2022-06-02", type: "Bank holiday" },
+  { title: "Platinum Jubilee bank holiday", date: "2022-06-03", type: "Bank holiday" },
+  { title: "Summer bank holiday", date: "2022-08-29", type: "Bank holiday" },
+  { title: "State Funeral of Queen Elizabeth II", date: "2022-09-19", type: "Bank holiday" },
+  { title: "Boxing Day", date: "2022-12-26", type: "Bank holiday" },
+  { title: "Christmas Day substitute day", date: "2022-12-27", type: "Bank holiday" },
+  { title: "New Year's Day substitute day", date: "2023-01-02", type: "Bank holiday" },
+  { title: "Good Friday", date: "2023-04-07", type: "Bank holiday" },
+  { title: "Easter Monday", date: "2023-04-10", type: "Bank holiday" },
+  { title: "Early May bank holiday", date: "2023-05-01", type: "Bank holiday" },
+  { title: "Bank holiday for the coronation of King Charles III", date: "2023-05-08", type: "Bank holiday" },
+  { title: "Spring bank holiday", date: "2023-05-29", type: "Bank holiday" },
+  { title: "Summer bank holiday", date: "2023-08-28", type: "Bank holiday" },
+  { title: "Christmas Day", date: "2023-12-25", type: "Bank holiday" },
+  { title: "Boxing Day", date: "2023-12-26", type: "Bank holiday" },
+  { title: "New Year's Day", date: "2024-01-01", type: "Bank holiday" },
+  { title: "Good Friday", date: "2024-03-29", type: "Bank holiday" },
+  { title: "Easter Monday", date: "2024-04-01", type: "Bank holiday" },
+  { title: "Early May bank holiday", date: "2024-05-06", type: "Bank holiday" },
+  { title: "Spring bank holiday", date: "2024-05-27", type: "Bank holiday" },
+  { title: "Summer bank holiday", date: "2024-08-26", type: "Bank holiday" },
+  { title: "Christmas Day", date: "2024-12-25", type: "Bank holiday" },
+  { title: "Boxing Day", date: "2024-12-26", type: "Bank holiday" },
+  { title: "New Year's Day", date: "2025-01-01", type: "Bank holiday" },
+  { title: "Good Friday", date: "2025-04-18", type: "Bank holiday" },
+  { title: "Easter Monday", date: "2025-04-21", type: "Bank holiday" },
+  { title: "Early May bank holiday", date: "2025-05-05", type: "Bank holiday" },
+  { title: "Spring bank holiday", date: "2025-05-26", type: "Bank holiday" },
+  { title: "Summer bank holiday", date: "2025-08-25", type: "Bank holiday" },
+  { title: "Christmas Day", date: "2025-12-25", type: "Bank holiday" },
+  { title: "Boxing Day", date: "2025-12-26", type: "Bank holiday" },
   { title: "New Year's Day", date: "2026-01-01", type: "Bank holiday" },
   { title: "Good Friday", date: "2026-04-03", type: "Bank holiday" },
   { title: "Easter Monday", date: "2026-04-06", type: "Bank holiday" },
@@ -405,7 +478,31 @@ const ukBankHolidays = [
   { title: "Spring bank holiday", date: "2027-05-31", type: "Bank holiday" },
   { title: "Summer bank holiday", date: "2027-08-30", type: "Bank holiday" },
   { title: "Christmas Day substitute day", date: "2027-12-27", type: "Bank holiday" },
-  { title: "Boxing Day substitute day", date: "2027-12-28", type: "Bank holiday" }
+  { title: "Boxing Day substitute day", date: "2027-12-28", type: "Bank holiday" },
+  { title: "New Year's Day substitute day", date: "2028-01-03", type: "Bank holiday" },
+  { title: "Good Friday", date: "2028-04-14", type: "Bank holiday" },
+  { title: "Easter Monday", date: "2028-04-17", type: "Bank holiday" },
+  { title: "Early May bank holiday", date: "2028-05-01", type: "Bank holiday" },
+  { title: "Spring bank holiday", date: "2028-05-29", type: "Bank holiday" },
+  { title: "Summer bank holiday", date: "2028-08-28", type: "Bank holiday" },
+  { title: "Christmas Day", date: "2028-12-25", type: "Bank holiday" },
+  { title: "Boxing Day", date: "2028-12-26", type: "Bank holiday" },
+  { title: "New Year's Day", date: "2029-01-01", type: "Bank holiday" },
+  { title: "Good Friday", date: "2029-03-30", type: "Bank holiday" },
+  { title: "Easter Monday", date: "2029-04-02", type: "Bank holiday" },
+  { title: "Early May bank holiday", date: "2029-05-07", type: "Bank holiday" },
+  { title: "Spring bank holiday", date: "2029-05-28", type: "Bank holiday" },
+  { title: "Summer bank holiday", date: "2029-08-27", type: "Bank holiday" },
+  { title: "Christmas Day", date: "2029-12-25", type: "Bank holiday" },
+  { title: "Boxing Day", date: "2029-12-26", type: "Bank holiday" },
+  { title: "New Year's Day", date: "2030-01-01", type: "Bank holiday" },
+  { title: "Good Friday", date: "2030-04-19", type: "Bank holiday" },
+  { title: "Easter Monday", date: "2030-04-22", type: "Bank holiday" },
+  { title: "Early May bank holiday", date: "2030-05-06", type: "Bank holiday" },
+  { title: "Spring bank holiday", date: "2030-05-27", type: "Bank holiday" },
+  { title: "Summer bank holiday", date: "2030-08-26", type: "Bank holiday" },
+  { title: "Christmas Day", date: "2030-12-25", type: "Bank holiday" },
+  { title: "Boxing Day", date: "2030-12-26", type: "Bank holiday" }
 ];
 
 let trainingMatrix = [
@@ -617,6 +714,7 @@ const settings = [
   { id: "reports", title: "Report Templates", description: "Standard report layouts" },
   { id: "rams", title: "RAMS Templates", description: "Reusable RAMS document templates" },
   { id: "branding", title: "Company Branding", description: "Logo, colours, and document footer details" },
+  { id: "themes", title: "Header Theme Preview", description: "Safely preview weather and seasonal header styles" },
   { id: "storage", title: "Data Storage", description: "OneDrive-backed Hub storage status" }
 ];
 
@@ -624,6 +722,8 @@ const dashboardCardMeta = {
   jobsTodayCount: ["calendar", "Booked in for today", "jobs"],
   jobsTomorrowCount: ["calendar", "Next working day", "jobs"],
   reportsDueCount: ["file-text", "Reports waiting", "reports"],
+  ramsToSendDashboardCount: ["file-check", "RAMS awaiting issue", "RAMS"],
+  urgentAttentionCount: ["alert", "Items needing action", "items"],
   vehicleAlertCount: ["truck", "Vehicle items to check", "alerts"],
   motReminderCount: ["clipboard", "MOT dates due soon", "MOTs"],
   insuranceReminderCount: ["shield", "Insurance dates due soon", "items"],
@@ -643,6 +743,7 @@ const settingsCardMeta = [
   ["file-text", () => `${reportTemplates.length} templates`],
   ["file-check", () => `${ramsTemplates.length} templates`],
   ["palette", () => "Logo added"],
+  ["palette", () => "Preview only"],
   ["database", () => "OneDrive"]
 ];
 
@@ -697,6 +798,28 @@ const sickCallWorkInjury = document.querySelector("#sickCallWorkInjury");
 const sickCallIncidentNote = document.querySelector("#sickCallIncidentNote");
 const sickCallInjuryWrap = document.querySelector("#sickCallInjuryWrap");
 const sickCallIncidentWrap = document.querySelector("#sickCallIncidentWrap");
+const attendanceDialog = document.querySelector("#attendanceDialog");
+const attendanceForm = document.querySelector("#attendanceForm");
+const attendanceDialogTitle = document.querySelector("#attendanceDialogTitle");
+const attendanceRecordIndex = document.querySelector("#attendanceRecordIndex");
+const attendanceStaffName = document.querySelector("#attendanceStaffName");
+const attendanceEmployeeDisplay = document.querySelector("#attendanceEmployeeDisplay");
+const attendanceTypeInput = document.querySelector("#attendanceTypeInput");
+const attendanceStartDate = document.querySelector("#attendanceStartDate");
+const attendanceEndDate = document.querySelector("#attendanceEndDate");
+const attendanceOngoingInput = document.querySelector("#attendanceOngoingInput");
+const attendanceReturnDate = document.querySelector("#attendanceReturnDate");
+const attendanceDayType = document.querySelector("#attendanceDayType");
+const attendanceWorkingDays = document.querySelector("#attendanceWorkingDays");
+const attendanceScheduledStart = document.querySelector("#attendanceScheduledStart");
+const attendanceActualArrival = document.querySelector("#attendanceActualArrival");
+const attendanceMinutesLate = document.querySelector("#attendanceMinutesLate");
+const attendanceOfficeNote = document.querySelector("#attendanceOfficeNote");
+const attendanceConfidentialNote = document.querySelector("#attendanceConfidentialNote");
+const attendanceCorrectionReasonWrap = document.querySelector("#attendanceCorrectionReasonWrap");
+const attendanceCorrectionReason = document.querySelector("#attendanceCorrectionReason");
+const attendanceVoidButton = document.querySelector("#attendanceVoidButton");
+const attendanceSaveButton = document.querySelector("#attendanceSaveButton");
 const valuationGraphDialog = document.querySelector("#valuationGraphDialog");
 const valuationGraphContent = document.querySelector("#valuationGraphContent");
 const valuationGraphSubtitle = document.querySelector("#valuationGraphSubtitle");
@@ -759,6 +882,8 @@ const storageStatus = document.querySelector("#storageStatus");
 const syncNowButton = document.querySelector("#syncNowButton");
 const staffOneDriveStatus = document.querySelector("#staffOneDriveStatus");
 const liveDateTime = document.querySelector("#liveDateTime");
+const liveTime = document.querySelector("#liveTime");
+const liveDate = document.querySelector("#liveDate");
 const weatherCurrent = document.querySelector("#weatherCurrent");
 const weatherSummary = document.querySelector("#weatherSummary");
 const authScreen = document.querySelector("#authScreen");
@@ -930,9 +1055,11 @@ const dataModels = {
     get: () => vehicles,
     set: (items) => { vehicles = items; },
     fields: [
+      ["vehicleId", "Vehicle ID", "readonly-vehicle-id"],
       ["registration", "Registration"],
       ["vehicle", "Vehicle"],
       ["driver", "Assigned driver", "staff-select"],
+      ["status", "Vehicle status"],
       ["mot", "MOT expiry", "date"],
       ["service", "Service due", "date"],
       ["insurance", "Insurance expiry", "date"],
@@ -991,6 +1118,7 @@ const dataModels = {
       ["postcode", "Postcode"],
       ["arkRef", "Ark job ref"],
       ["client", "Client"],
+      ["mainClient", "Valuation group", "valuation-group-select"],
       ["technician", "Technician", "staff-select"],
       ["completed", "Completed? y/n"],
       ["reportReceived", "Report received? y/n"],
@@ -1077,6 +1205,7 @@ const dataModels = {
       ["completedDate", "Completed date", "date"],
       ["expiryDate", "Expiry date", "date"],
       ["noExpiry", "No expiry", "checkbox"],
+      ["lifecycleStatus", "Lifecycle status", "training-lifecycle-select"],
       ["trainingDocument", "Certificate / document", "training-document"],
       ["notes", "Notes", "textarea"]
     ]
@@ -1312,6 +1441,29 @@ function vehicleIdFromRegistration(registration = "") {
   return match?.vehicleId || match?.registration || "";
 }
 
+function normaliseVehicleRegistration(value = "") {
+  return String(value || "").toUpperCase().replace(/\s+/g, "").replace(/[^A-Z0-9]/g, "");
+}
+
+function stableVehicleIdForUi(vehicle = {}) {
+  if (String(vehicle.vehicleId || "").startsWith("VEH-")) return vehicle.vehicleId;
+  const registration = normaliseVehicleRegistration(vehicle.registration || vehicle.reg || vehicle.numberPlate);
+  if (registration) return `VEH-${registration}`;
+  const descriptor = String(vehicle.vehicle || "vehicle").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `VEH-${descriptor || Date.now()}`;
+}
+
+function normaliseVehicleForUi(vehicle = {}) {
+  return {
+    ...vehicle,
+    vehicleId: stableVehicleIdForUi(vehicle),
+    status: vehicle.status || "Active",
+    assignedStaffId: vehicle.assignedStaffId || vehicle.assignedDriverStaffId || vehicle.staffId || "",
+    assignedTechnicianId: vehicle.assignedTechnicianId || vehicle.technicianId || "",
+    assignmentStatus: vehicle.assignmentStatus || (vehicle.assignedStaffId || vehicle.assignedTechnicianId ? "Active" : "")
+  };
+}
+
 function staffNameFromId(staffId = "") {
   if (!staffId) return "";
   return staffProfiles.find((staff) => staff.staffId === staffId)?.name || "";
@@ -1500,15 +1652,46 @@ function installNavIcons() {
   });
 }
 
+function setSidebarGroupOpen(group, open) {
+  if (!group) return;
+  const toggle = group.querySelector(".nav-group-toggle");
+  const panel = group.querySelector(".nav-group-panel");
+  group.classList.toggle("open", open);
+  toggle?.setAttribute("aria-expanded", open ? "true" : "false");
+  if (panel) panel.hidden = !open;
+}
+
+function syncSidebarGroupsForSection(sectionId) {
+  const activeGroup = sectionId ? document.querySelector(`.nav-group .nav-button[data-section="${CSS.escape(sectionId)}"]`)?.closest(".nav-group") : null;
+  document.querySelectorAll(".nav-group").forEach((group) => {
+    setSidebarGroupOpen(group, group === activeGroup);
+  });
+}
+
 function updateLiveDateTime() {
-  liveDateTime.textContent = new Intl.DateTimeFormat("en-GB", {
+  const now = new Date();
+  if (liveTime) {
+    liveTime.textContent = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(now);
+  }
+  if (liveDate) {
+    liveDate.textContent = new Intl.DateTimeFormat("en-GB", {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+      year: "numeric"
+    }).format(now);
+  }
+  if (liveDateTime) liveDateTime.textContent = new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "2-digit",
     month: "long",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit"
-  }).format(new Date());
+  }).format(now);
 }
 
 function weatherDescription(code) {
@@ -1553,12 +1736,618 @@ async function updateOrpingtonWeather() {
     const rainChance = Number(data?.daily?.precipitation_probability_max?.[0]);
     const rainText = Number.isFinite(rainChance) ? ` | Rain ${rainChance}%` : "";
 
+    lastWeatherCode = data?.current?.weather_code;
     weatherCurrent.textContent = `${currentTemp}°C ${description}`;
     weatherSummary.textContent = `H ${high}° / L ${low}°${rainText}`;
+    applyDashboardHeaderTheme(lastWeatherCode);
   } catch {
     weatherCurrent.textContent = "Weather unavailable";
     weatherSummary.textContent = "Will refresh automatically";
+    applyDashboardHeaderTheme();
   }
+}
+
+function applyDashboardHeaderTheme(weatherCode = lastWeatherCode) {
+  const topbar = document.querySelector(".topbar");
+  if (!topbar) return;
+  if (weatherCode !== undefined && weatherCode !== null) {
+    lastWeatherCode = weatherCode;
+  }
+  topbar.dataset.headerTheme = resolveHeaderTheme(lastWeatherCode);
+  topbar.dataset.headerMode = isHeaderPreviewMode() ? "preview" : "live";
+  syncHeaderSceneEffects(topbar);
+  updateHeaderPreviewBadge();
+}
+
+function syncHeaderSceneEffects(topbar) {
+  syncSunnyEffect(topbar);
+  syncRainEffect(topbar);
+  syncSnowEffect(topbar);
+  syncEasterPetals(topbar);
+  syncHalloweenEffects(topbar);
+}
+
+function syncSunnyEffect(topbar) {
+  const weatherLayer = topbar?.querySelector(".scene-weather");
+  if (!weatherLayer) return;
+  const shouldShowSunny =
+    topbar.dataset.headerTheme === "clear" &&
+    selectedSeasonalThemePreview() === "none";
+  topbar.classList.toggle("sunny-preview-active", shouldShowSunny);
+  if (!shouldShowSunny) {
+    weatherLayer.querySelectorAll(".sunny-light-layer").forEach((layer) => layer.remove());
+    return;
+  }
+  if (weatherLayer.querySelector(".sunny-light-layer")) return;
+  const layer = document.createElement("span");
+  layer.className = "sunny-light-layer";
+  weatherLayer.appendChild(layer);
+}
+
+function syncRainEffect(topbar) {
+  const weatherLayer = topbar?.querySelector(".scene-weather");
+  if (!weatherLayer) return;
+  const shouldShowRain =
+    topbar.dataset.headerTheme === "rain" &&
+    selectedSeasonalThemePreview() === "none";
+  topbar.classList.toggle("rain-preview-active", shouldShowRain);
+  topbar.classList.toggle("rain-effect-active", shouldShowRain);
+  if (!shouldShowRain) {
+    weatherLayer.querySelectorAll(".rain-layer").forEach((layer) => layer.remove());
+    return;
+  }
+  if (
+    weatherLayer.querySelectorAll(".rain-layer").length === 3 &&
+    weatherLayer.querySelectorAll(".rain-drop").length === rainDropLayout.length
+  ) {
+    return;
+  }
+  weatherLayer.querySelectorAll(".rain-layer").forEach((layer) => layer.remove());
+  const layers = {
+    background: document.createElement("span"),
+    midground: document.createElement("span"),
+    foreground: document.createElement("span")
+  };
+  Object.entries(layers).forEach(([name, layer]) => {
+    layer.className = `rain-layer rain-${name}`;
+    weatherLayer.appendChild(layer);
+  });
+  rainDropLayout.forEach((dropData) => {
+    const drop = document.createElement("span");
+    drop.className = "rain-drop";
+    Object.entries(dropData.styles).forEach(([key, value]) => {
+      drop.style.setProperty(key, value);
+    });
+    layers[dropData.layer].appendChild(drop);
+  });
+}
+
+function syncSnowEffect(topbar) {
+  const weatherLayer = topbar?.querySelector(".scene-weather");
+  if (!weatherLayer) return;
+  const shouldShowSnow =
+    topbar.dataset.headerTheme === "snow" &&
+    selectedSeasonalThemePreview() === "none";
+  topbar.classList.toggle("snow-preview-active", shouldShowSnow);
+  if (!shouldShowSnow) {
+    weatherLayer.querySelectorAll(".weather-snow-layer").forEach((layer) => layer.remove());
+    return;
+  }
+  if (
+    weatherLayer.querySelectorAll(".weather-snow-layer").length === 3 &&
+    weatherLayer.querySelectorAll(".weather-snow-flake").length === snowFlakeLayout.length
+  ) {
+    return;
+  }
+  weatherLayer.querySelectorAll(".weather-snow-layer").forEach((layer) => layer.remove());
+  const layers = {
+    background: document.createElement("span"),
+    midground: document.createElement("span"),
+    foreground: document.createElement("span")
+  };
+  Object.entries(layers).forEach(([name, layer]) => {
+    layer.className = `weather-snow-layer weather-snow-${name}`;
+    weatherLayer.appendChild(layer);
+  });
+  snowFlakeLayout.forEach((flakeData) => {
+    const flake = document.createElement("span");
+    flake.className = "weather-snow-flake";
+    Object.entries(flakeData.styles).forEach(([key, value]) => {
+      flake.style.setProperty(key, value);
+    });
+    layers[flakeData.layer].appendChild(flake);
+  });
+}
+
+function syncEasterPetals(topbar) {
+  const weatherLayer = topbar?.querySelector(".scene-weather");
+  if (!weatherLayer) return;
+  if (topbar.dataset.headerTheme !== "easter") {
+    weatherLayer.querySelectorAll(".easter-petal").forEach((petal) => petal.remove());
+    return;
+  }
+  const existing = weatherLayer.querySelectorAll(".easter-petal");
+  if (existing.length === easterPetalLayout.length) return;
+  weatherLayer.querySelectorAll(".easter-petal").forEach((petal) => petal.remove());
+  easterPetalLayout.forEach((petalData) => {
+    const petal = document.createElement("span");
+    petal.className = `easter-petal ${petalData.depth}`;
+    Object.entries(petalData.styles).forEach(([key, value]) => {
+      petal.style.setProperty(key, value);
+    });
+    weatherLayer.appendChild(petal);
+  });
+}
+
+function syncHalloweenEffects(topbar) {
+  const weatherLayer = topbar?.querySelector(".scene-weather");
+  if (!weatherLayer) return;
+  if (topbar.dataset.headerTheme !== "halloween") {
+    weatherLayer.querySelectorAll(".halloween-mist, .halloween-glow, .halloween-bat").forEach((item) => item.remove());
+    return;
+  }
+  const existingBats = weatherLayer.querySelectorAll(".halloween-bat");
+  const hasMist = Boolean(weatherLayer.querySelector(".halloween-mist"));
+  const hasGlow = Boolean(weatherLayer.querySelector(".halloween-glow"));
+  if (existingBats.length === halloweenBatLayout.length && hasMist && hasGlow) return;
+  weatherLayer.querySelectorAll(".halloween-mist, .halloween-glow, .halloween-bat").forEach((item) => item.remove());
+  const mist = document.createElement("span");
+  mist.className = "halloween-mist";
+  weatherLayer.appendChild(mist);
+  const glow = document.createElement("span");
+  glow.className = "halloween-glow";
+  weatherLayer.appendChild(glow);
+  halloweenBatLayout.forEach((batData) => {
+    const bat = document.createElement("span");
+    bat.className = "halloween-bat";
+    Object.entries(batData).forEach(([key, value]) => {
+      bat.style.setProperty(key, value);
+    });
+    weatherLayer.appendChild(bat);
+  });
+}
+
+function buildRainDropLayout() {
+  const drops = [];
+  const addDrops = (layer, count, options) => {
+    for (let index = 0; index < count; index += 1) {
+      const left = (options.leftSeed + index * options.leftStep) % 104;
+      const length = options.minLength + ((index * options.lengthStep) % options.lengthRange);
+      const opacity = (options.minOpacity + ((index * options.opacityStep) % options.opacityRange)) / 100;
+      const duration = (options.minDuration + ((index * options.durationStep) % options.durationRange)) / 100;
+      const delay = -((index * options.delayStep) % options.delayRange) / 100;
+      const drift = options.drift - ((index * 3) % options.driftVariance);
+      drops.push({
+        layer,
+        styles: {
+          "--left": `${left}%`,
+          "--h": `${length}px`,
+          "--w": `${options.width + ((index * options.widthStep) % options.widthRange) / 10}px`,
+          "--angle": `${options.angle + ((index * options.angleStep) % options.angleRange) - options.angleOffset}deg`,
+          "--opacity": opacity.toFixed(2),
+          "--duration": `${duration.toFixed(2)}s`,
+          "--delay": `${delay.toFixed(2)}s`,
+          "--drift": `${drift}px`
+        }
+      });
+    }
+  };
+  addDrops("background", 46, {
+    leftSeed: 3,
+    leftStep: 19,
+    minLength: 9,
+    lengthRange: 8,
+    lengthStep: 5,
+    width: .6,
+    widthRange: 4,
+    widthStep: 1,
+    angle: 10,
+    angleRange: 7,
+    angleStep: 2,
+    angleOffset: 2,
+    minOpacity: 10,
+    opacityRange: 10,
+    opacityStep: 7,
+    minDuration: 165,
+    durationRange: 80,
+    durationStep: 17,
+    delayRange: 260,
+    delayStep: 31,
+    drift: -30,
+    driftVariance: 10
+  });
+  addDrops("midground", 28, {
+    leftSeed: 7,
+    leftStep: 29,
+    minLength: 15,
+    lengthRange: 13,
+    lengthStep: 7,
+    width: .8,
+    widthRange: 5,
+    widthStep: 2,
+    angle: 12,
+    angleRange: 9,
+    angleStep: 4,
+    angleOffset: 3,
+    minOpacity: 22,
+    opacityRange: 18,
+    opacityStep: 11,
+    minDuration: 105,
+    durationRange: 58,
+    durationStep: 19,
+    delayRange: 210,
+    delayStep: 37,
+    drift: -40,
+    driftVariance: 14
+  });
+  addDrops("foreground", 9, {
+    leftSeed: 11,
+    leftStep: 41,
+    minLength: 26,
+    lengthRange: 16,
+    lengthStep: 9,
+    width: 1,
+    widthRange: 6,
+    widthStep: 3,
+    angle: 13,
+    angleRange: 11,
+    angleStep: 5,
+    angleOffset: 4,
+    minOpacity: 30,
+    opacityRange: 18,
+    opacityStep: 13,
+    minDuration: 78,
+    durationRange: 34,
+    durationStep: 17,
+    delayRange: 180,
+    delayStep: 43,
+    drift: -52,
+    driftVariance: 18
+  });
+  return drops;
+}
+
+const rainDropLayout = buildRainDropLayout();
+
+function buildSnowFlakeLayout() {
+  const flakes = [];
+  const addFlakes = (layer, count, options) => {
+    for (let index = 0; index < count; index += 1) {
+      const left = (options.leftSeed + index * options.leftStep) % 104;
+      const size = options.minSize + ((index * options.sizeStep) % options.sizeRange) / 10;
+      const opacity = (options.minOpacity + ((index * options.opacityStep) % options.opacityRange)) / 100;
+      const duration = (options.minDuration + ((index * options.durationStep) % options.durationRange)) / 10;
+      const delay = -((index * options.delayStep) % options.delayRange) / 10;
+      const driftA = options.driftA - ((index * 5) % options.driftVariance);
+      const driftB = options.driftB + ((index * 7) % options.driftVariance);
+      const endX = options.endX - ((index * 3) % options.endVariance);
+      flakes.push({
+        layer,
+        styles: {
+          "--left": `${left}%`,
+          "--size": `${size.toFixed(1)}px`,
+          "--opacity": opacity.toFixed(2),
+          "--duration": `${duration.toFixed(1)}s`,
+          "--delay": `${delay.toFixed(1)}s`,
+          "--drift-a": `${driftA}px`,
+          "--drift-b": `${driftB}px`,
+          "--end-x": `${endX}px`,
+          "--blur": `${options.blur}px`,
+          "--scale": (options.scale + ((index * options.scaleStep) % options.scaleRange) / 100).toFixed(2),
+          "--spin": `${options.spin + ((index * options.spinStep) % options.spinRange)}deg`
+        }
+      });
+    }
+  };
+  addFlakes("background", 34, {
+    leftSeed: 2,
+    leftStep: 17,
+    minSize: 18,
+    sizeRange: 12,
+    sizeStep: 5,
+    minOpacity: 14,
+    opacityRange: 13,
+    opacityStep: 7,
+    minDuration: 210,
+    durationRange: 95,
+    durationStep: 19,
+    delayRange: 280,
+    delayStep: 31,
+    driftA: 12,
+    driftB: -8,
+    endX: 20,
+    driftVariance: 24,
+    endVariance: 18,
+    blur: .2,
+    scale: .7,
+    scaleRange: 18,
+    scaleStep: 5,
+    spin: 55,
+    spinRange: 80,
+    spinStep: 11
+  });
+  addFlakes("midground", 22, {
+    leftSeed: 8,
+    leftStep: 29,
+    minSize: 24,
+    sizeRange: 16,
+    sizeStep: 7,
+    minOpacity: 25,
+    opacityRange: 18,
+    opacityStep: 9,
+    minDuration: 155,
+    durationRange: 70,
+    durationStep: 17,
+    delayRange: 230,
+    delayStep: 37,
+    driftA: -16,
+    driftB: 18,
+    endX: -24,
+    driftVariance: 34,
+    endVariance: 25,
+    blur: .35,
+    scale: .84,
+    scaleRange: 22,
+    scaleStep: 7,
+    spin: 70,
+    spinRange: 110,
+    spinStep: 13
+  });
+  addFlakes("foreground", 8, {
+    leftSeed: 13,
+    leftStep: 43,
+    minSize: 34,
+    sizeRange: 18,
+    sizeStep: 9,
+    minOpacity: 34,
+    opacityRange: 15,
+    opacityStep: 8,
+    minDuration: 115,
+    durationRange: 44,
+    durationStep: 13,
+    delayRange: 170,
+    delayStep: 41,
+    driftA: 22,
+    driftB: -18,
+    endX: 30,
+    driftVariance: 36,
+    endVariance: 28,
+    blur: .85,
+    scale: .94,
+    scaleRange: 18,
+    scaleStep: 6,
+    spin: 95,
+    spinRange: 140,
+    spinStep: 17
+  });
+  return flakes;
+}
+
+const snowFlakeLayout = buildSnowFlakeLayout();
+
+const easterPetalLayout = [
+  { depth: "depth-far", styles: { "--left": "8%", "--w": "4px", "--h": "7px", "--opacity": ".34", "--scale": ".78", "--duration": "24s", "--delay": "-15s", "--mid-x": "18px", "--late-x": "4px", "--end-x": "26px", "--start-rot": "12deg", "--mid-rot": "88deg", "--late-rot": "170deg", "--end-rot": "252deg" } },
+  { depth: "depth-mid", styles: { "--left": "18%", "--w": "5px", "--h": "8px", "--opacity": ".44", "--scale": ".9", "--duration": "19s", "--delay": "-9s", "--mid-x": "-12px", "--late-x": "10px", "--end-x": "-18px", "--start-rot": "-24deg", "--mid-rot": "54deg", "--late-rot": "138deg", "--end-rot": "230deg" } },
+  { depth: "depth-near", styles: { "--left": "29%", "--w": "7px", "--h": "11px", "--opacity": ".58", "--scale": "1", "--duration": "16s", "--delay": "-4s", "--mid-x": "22px", "--late-x": "-7px", "--end-x": "34px", "--start-rot": "34deg", "--mid-rot": "116deg", "--late-rot": "204deg", "--end-rot": "306deg" } },
+  { depth: "depth-far", styles: { "--left": "38%", "--w": "4px", "--h": "7px", "--opacity": ".3", "--scale": ".72", "--duration": "28s", "--delay": "-21s", "--mid-x": "-8px", "--late-x": "-20px", "--end-x": "-4px", "--start-rot": "6deg", "--mid-rot": "68deg", "--late-rot": "142deg", "--end-rot": "216deg" } },
+  { depth: "depth-mid", styles: { "--left": "49%", "--w": "6px", "--h": "9px", "--opacity": ".42", "--scale": ".92", "--duration": "21s", "--delay": "-13s", "--mid-x": "16px", "--late-x": "29px", "--end-x": "10px", "--start-rot": "-18deg", "--mid-rot": "80deg", "--late-rot": "188deg", "--end-rot": "286deg" } },
+  { depth: "depth-near", styles: { "--left": "61%", "--w": "8px", "--h": "12px", "--opacity": ".52", "--scale": "1", "--duration": "17s", "--delay": "-7s", "--mid-x": "-18px", "--late-x": "6px", "--end-x": "-28px", "--start-rot": "22deg", "--mid-rot": "112deg", "--late-rot": "194deg", "--end-rot": "300deg" } },
+  { depth: "depth-far", styles: { "--left": "72%", "--w": "4px", "--h": "7px", "--opacity": ".32", "--scale": ".78", "--duration": "26s", "--delay": "-18s", "--mid-x": "10px", "--late-x": "-10px", "--end-x": "20px", "--start-rot": "-10deg", "--mid-rot": "62deg", "--late-rot": "136deg", "--end-rot": "218deg" } },
+  { depth: "depth-mid", styles: { "--left": "84%", "--w": "5px", "--h": "8px", "--opacity": ".4", "--scale": ".86", "--duration": "20s", "--delay": "-3s", "--mid-x": "-14px", "--late-x": "-2px", "--end-x": "-22px", "--start-rot": "28deg", "--mid-rot": "96deg", "--late-rot": "176deg", "--end-rot": "260deg" } },
+  { depth: "depth-near", styles: { "--left": "93%", "--w": "7px", "--h": "11px", "--opacity": ".5", "--scale": ".96", "--duration": "18s", "--delay": "-11s", "--mid-x": "-26px", "--late-x": "-8px", "--end-x": "-36px", "--start-rot": "-30deg", "--mid-rot": "76deg", "--late-rot": "166deg", "--end-rot": "278deg" } },
+  { depth: "depth-far", styles: { "--left": "54%", "--w": "4px", "--h": "6px", "--opacity": ".28", "--scale": ".68", "--duration": "30s", "--delay": "-26s", "--mid-x": "6px", "--late-x": "18px", "--end-x": "0px", "--start-rot": "14deg", "--mid-rot": "84deg", "--late-rot": "150deg", "--end-rot": "232deg" } },
+  { depth: "depth-mid", styles: { "--left": "12%", "--w": "5px", "--h": "9px", "--opacity": ".38", "--scale": ".84", "--duration": "23s", "--delay": "-1s", "--mid-x": "20px", "--late-x": "-4px", "--end-x": "28px", "--start-rot": "-8deg", "--mid-rot": "70deg", "--late-rot": "162deg", "--end-rot": "244deg" } },
+  { depth: "depth-near", styles: { "--left": "77%", "--w": "7px", "--h": "10px", "--opacity": ".48", "--scale": ".94", "--duration": "15s", "--delay": "-5s", "--mid-x": "15px", "--late-x": "-16px", "--end-x": "24px", "--start-rot": "18deg", "--mid-rot": "120deg", "--late-rot": "210deg", "--end-rot": "318deg" } }
+];
+
+const halloweenBatLayout = [
+  { "--left": "3%", "--top": "31%", "--w": "20px", "--h": "10px", "--opacity": ".5", "--scale": ".88", "--duration": "28s", "--delay": "-18s", "--start-x": "-160px", "--start-y": "2px", "--mid-x": "390px", "--mid-y": "-12px", "--end-x": "760px", "--end-y": "8px", "--start-rot": "-4deg", "--mid-rot": "7deg", "--end-rot": "-6deg" },
+  { "--left": "18%", "--top": "24%", "--w": "16px", "--h": "8px", "--opacity": ".38", "--scale": ".72", "--duration": "34s", "--delay": "-7s", "--start-x": "-190px", "--start-y": "10px", "--mid-x": "260px", "--mid-y": "2px", "--end-x": "640px", "--end-y": "-10px", "--start-rot": "6deg", "--mid-rot": "-5deg", "--end-rot": "4deg" },
+  { "--left": "45%", "--top": "28%", "--w": "18px", "--h": "9px", "--opacity": ".42", "--scale": ".78", "--duration": "31s", "--delay": "-24s", "--start-x": "-120px", "--start-y": "-4px", "--mid-x": "210px", "--mid-y": "15px", "--end-x": "560px", "--end-y": "0px", "--start-rot": "-8deg", "--mid-rot": "8deg", "--end-rot": "-4deg" },
+  { "--left": "70%", "--top": "21%", "--w": "14px", "--h": "7px", "--opacity": ".32", "--scale": ".64", "--duration": "38s", "--delay": "-14s", "--start-x": "-260px", "--start-y": "4px", "--mid-x": "20px", "--mid-y": "-9px", "--end-x": "300px", "--end-y": "5px", "--start-rot": "4deg", "--mid-rot": "-8deg", "--end-rot": "5deg" }
+];
+
+const allowedWeatherThemePreviews = new Set(["live", "standard", "clear", "rain", "snow"]);
+const allowedSeasonalThemePreviews = new Set(["none", "christmas", "easter", "halloween"]);
+
+function isThemePreviewPageActive() {
+  return document.querySelector("#settings")?.classList.contains("active") && activeSettingsPanel === "themes";
+}
+
+function selectedWeatherThemePreview() {
+  const value = isThemePreviewPageActive() ? weatherThemePreviewValue : "live";
+  return allowedWeatherThemePreviews.has(value) ? value : "live";
+}
+
+function selectedSeasonalThemePreview() {
+  const value = isThemePreviewPageActive() ? seasonalThemePreviewValue : "none";
+  return allowedSeasonalThemePreviews.has(value) ? value : "none";
+}
+
+function isHeaderPreviewMode() {
+  const seasonalPreview = selectedSeasonalThemePreview();
+  const weatherPreview = selectedWeatherThemePreview();
+  return (seasonalPreview && seasonalPreview !== "none") || (weatherPreview && weatherPreview !== "live");
+}
+
+function resolveHeaderTheme(weatherCode = lastWeatherCode) {
+  const seasonalPreview = selectedSeasonalThemePreview();
+  if (seasonalPreview && seasonalPreview !== "none") return seasonalPreview;
+  const weatherPreview = selectedWeatherThemePreview();
+  if (weatherPreview && weatherPreview !== "live") return weatherPreview;
+  const seasonalTheme = dashboardSeasonalTheme(new Date());
+  if (seasonalTheme) return seasonalTheme;
+  return dashboardWeatherTheme(weatherCode) || "standard";
+}
+
+function headerThemeLabel(value) {
+  const labels = {
+    live: "Live weather automatic",
+    standard: "Standard Kingswood header",
+    clear: "Sunny",
+    rain: "Rain",
+    snow: "Snow",
+    none: "None",
+    christmas: "Christmas",
+    easter: "Easter",
+    halloween: "Halloween"
+  };
+  return labels[value] || value || "None";
+}
+
+function updateHeaderPreviewBadge() {
+  const badge = document.querySelector("#weatherThemePreviewBadge");
+  if (!badge) return;
+  const weatherPreview = selectedWeatherThemePreview();
+  const seasonalPreview = selectedSeasonalThemePreview();
+  const isPreview = isHeaderPreviewMode();
+  badge.classList.toggle("hidden", !isPreview);
+  if (!isPreview) {
+    badge.textContent = "Preview mode";
+    return;
+  }
+  if (seasonalPreview && seasonalPreview !== "none") {
+    badge.textContent = `Preview: ${headerThemeLabel(seasonalPreview)}`;
+  } else if (weatherPreview && weatherPreview !== "live") {
+    badge.textContent = `Preview: ${headerThemeLabel(weatherPreview)}`;
+  }
+}
+
+function updateHeaderSceneMotionState() {
+  document.body.classList.toggle("header-scene-paused", document.hidden);
+}
+
+function setWeatherThemePreview(value) {
+  weatherThemePreviewValue = allowedWeatherThemePreviews.has(value) ? value : "live";
+  applyDashboardHeaderTheme(lastWeatherCode);
+  updateThemePreviewControls();
+}
+
+function setSeasonalThemePreview(value) {
+  seasonalThemePreviewValue = allowedSeasonalThemePreviews.has(value) ? value : "none";
+  applyDashboardHeaderTheme(lastWeatherCode);
+  updateThemePreviewControls();
+}
+
+function resetHeaderThemePreview() {
+  weatherThemePreviewValue = "live";
+  seasonalThemePreviewValue = "none";
+  applyDashboardHeaderTheme(lastWeatherCode);
+  updateThemePreviewControls();
+}
+
+function clearLegacyHeaderPreviewStorage() {
+  try {
+    localStorage.removeItem(weatherThemeStorageKey);
+    localStorage.removeItem(seasonalThemeStorageKey);
+  } catch {
+    // Ignore private browsing or restricted storage failures.
+  }
+}
+
+function dateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dateFromInputValue(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dateOnly(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function defaultChristmasThemeEndDate(year = new Date().getFullYear()) {
+  const date = new Date(year, 11, 24);
+  date.setDate(date.getDate() - 1);
+  while (date.getDay() === 0 || date.getDay() === 6) {
+    date.setDate(date.getDate() - 1);
+  }
+  return dateInputValue(date);
+}
+
+function christmasThemeEndDate(year = new Date().getFullYear()) {
+  const stored = localStorage.getItem(christmasThemeEndDateStorageKey);
+  const storedDate = dateFromInputValue(stored);
+  if (storedDate && storedDate.getFullYear() === year) return stored;
+  return defaultChristmasThemeEndDate(year);
+}
+
+function setChristmasThemeEndDate(value) {
+  const date = dateFromInputValue(value);
+  if (date && date.getMonth() === 11) {
+    localStorage.setItem(christmasThemeEndDateStorageKey, dateInputValue(date));
+  } else {
+    localStorage.removeItem(christmasThemeEndDateStorageKey);
+  }
+  applyDashboardHeaderTheme(lastWeatherCode);
+  updateThemePreviewControls();
+}
+
+function updateThemePreviewControls() {
+  const weatherSelect = document.querySelector("#weatherThemePreviewSelect");
+  const seasonalSelect = document.querySelector("#seasonalThemePreviewSelect");
+  const christmasEndDateInput = document.querySelector("#christmasThemeEndDateInput");
+  const status = document.querySelector("#themePreviewStatus");
+  if (weatherSelect) weatherSelect.value = selectedWeatherThemePreview();
+  if (seasonalSelect) seasonalSelect.value = selectedSeasonalThemePreview();
+  if (christmasEndDateInput) christmasEndDateInput.value = christmasThemeEndDate();
+  if (status) {
+    const seasonalPreview = selectedSeasonalThemePreview();
+    const weatherPreview = selectedWeatherThemePreview();
+    const active = seasonalPreview !== "none"
+      ? headerThemeLabel(seasonalPreview)
+      : headerThemeLabel(weatherPreview);
+    status.textContent = `Header preview: ${active}. Real Orpington weather data is still unchanged.`;
+  }
+}
+
+function dashboardSeasonalTheme(date) {
+  const current = dateOnly(date);
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const christmasStart = new Date(date.getFullYear(), 11, 1);
+  const christmasEnd = dateFromInputValue(christmasThemeEndDate(date.getFullYear()));
+  if (christmasEnd && current >= christmasStart && current <= christmasEnd) return "christmas";
+
+  const easter = easterSunday(date.getFullYear());
+  const diffDays = Math.round((current - dateOnly(easter)) / 86400000);
+  if (diffDays >= -6 && diffDays <= 1) return "easter";
+
+  if (month === 10 && day >= 29 && day <= 31) return "halloween";
+  return "";
+}
+
+function easterSunday(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31) - 1;
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month, day);
+}
+
+function dashboardWeatherTheme(code) {
+  const value = Number(code);
+  if ([0, 1].includes(value)) return "clear";
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(value)) return "rain";
+  if ([71, 73, 75, 77, 85, 86].includes(value)) return "snow";
+  return "standard";
 }
 
 function greetingForNow(name) {
@@ -1585,7 +2374,7 @@ function applyReviewModeShell() {
   document.body.classList.remove("locked");
   authScreen?.setAttribute("aria-hidden", "true");
   if (userGreeting) userGreeting.textContent = "Review mode - read only";
-  if (signedInUser) signedInUser.textContent = "REVIEW MODE";
+  if (signedInUser) signedInUser.textContent = "Review mode";
   if (lockHubButton) {
     lockHubButton.textContent = "Read only";
     lockHubButton.disabled = true;
@@ -1609,6 +2398,7 @@ function reviewModeBlockedAction(target) {
     "[data-manage]",
     "[data-edit-record]",
     "[data-delete-record]",
+    "[data-training-lifecycle]",
     "[data-approve-holiday]",
     "[data-decline-holiday]",
     "[data-clear-data]",
@@ -1680,10 +2470,11 @@ function unlockHub(name) {
   document.body.classList.remove("locked");
   authScreen?.setAttribute("aria-hidden", "true");
   if (userGreeting) userGreeting.textContent = greetingForNow(name);
-  if (signedInUser) signedInUser.textContent = `Signed in as ${name}`;
+  if (signedInUser) signedInUser.textContent = name;
   if (pinInput) pinInput.value = "";
   if (loginNameInput) loginNameInput.value = name;
   if (pinMessage) pinMessage.textContent = "";
+  syncDirectorsMenuVisibility();
 }
 
 function lockHub() {
@@ -1704,6 +2495,7 @@ function lockHub() {
     loginNameInput.value = "";
     loginNameInput.focus();
   }
+  syncDirectorsMenuVisibility();
 }
 
 function currentUserName() {
@@ -1732,17 +2524,33 @@ function enhanceDashboardCards() {
   document.querySelectorAll(".metric").forEach((metric) => {
     if (metric.querySelector(".metric-heading")) return;
     const value = metric.querySelector("strong");
-    const title = metric.querySelector("span")?.textContent.trim() || "Metric";
+    const title = metric.querySelector(".dashboard-kpi-title")?.textContent.trim()
+      || metric.querySelector("span:not(.dashboard-card-icon)")?.textContent.trim()
+      || metric.querySelector("span")?.textContent.trim()
+      || "Metric";
+    const icon = metric.querySelector(".dashboard-card-icon")?.textContent.trim() || "";
+    const action = metric.querySelector("small")?.textContent.trim() || "";
     const meta = dashboardCardMeta[value.id] || ["dashboard", "Live dashboard count", "items"];
     metric.dataset.countId = value.id;
-    metric.innerHTML = `
-      <div class="metric-heading kw-card-header">
-        <span class="metric-title kw-label">${escapeHtml(title)}</span>
-        <span class="metric-inline kw-sub-label"><i aria-hidden="true"></i><span id="${value.id}Badge">0 ${meta[2]}</span></span>
-      </div>
-      <p class="metric-subtitle kw-card-hint">${escapeHtml(meta[1])}</p>
-      <strong class="metric-value kw-metric" id="${value.id}">${escapeHtml(value.textContent)}</strong>
-    `;
+    if (metric.classList.contains("dashboard-kpi-card")) {
+      metric.innerHTML = `
+        <div class="metric-heading kw-card-header">
+          <span class="metric-title kw-label">${icon ? `<span class="dashboard-card-icon">${escapeHtml(icon)}</span>` : ""}${escapeHtml(title)}</span>
+        </div>
+        <strong class="metric-value kw-metric" id="${value.id}">${escapeHtml(value.textContent)}</strong>
+        ${action ? `<small>${escapeHtml(action)}</small>` : ""}
+      `;
+    } else {
+      metric.innerHTML = `
+        <div class="metric-heading kw-card-header">
+          <span class="metric-title kw-label">${icon ? `<span class="dashboard-card-icon">${escapeHtml(icon)}</span>` : ""}${escapeHtml(title)}</span>
+          <span class="metric-inline kw-sub-label"><i aria-hidden="true"></i><span id="${value.id}Badge">0 ${meta[2]}</span></span>
+        </div>
+        <p class="metric-subtitle kw-card-hint">${escapeHtml(meta[1])}</p>
+        <strong class="metric-value kw-metric" id="${value.id}">${escapeHtml(value.textContent)}</strong>
+        ${action ? `<small>${escapeHtml(action)}</small>` : ""}
+      `;
+    }
   });
 }
 
@@ -1900,6 +2708,7 @@ function buildAdminFeed() {
     staffProfiles,
     attendanceRecords,
     holidayRequests,
+    staffNotifications,
     companyHolidays,
     fines,
     clients: clients.map(asCardObject),
@@ -2097,6 +2906,7 @@ function buildStaffRecordsPayload() {
     approvedHolidays: holidayRequests.filter((request) => request.status === "Approved"),
     sicknessAbsence: attendanceRecords.filter((record) => isSickCallStatus(record.status) || ["Sick", "Absent", "Absent - Called in Sick"].includes(record.status)),
     attendanceRecords,
+    staffNotifications,
     trainingRecords: trainingMatrix,
     companyHolidays
   };
@@ -2242,6 +3052,74 @@ function staffSlug(value) {
     .slice(0, 36) || "staff";
 }
 
+function stablePhase9Hash(parts) {
+  const source = parts
+    .filter((part) => part !== undefined && part !== null && String(part).trim() !== "")
+    .map((part) => String(part).trim().toLowerCase())
+    .join("|");
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).toUpperCase().padStart(8, "0");
+}
+
+function generateTrainingRecordId(record = {}) {
+  return `DOC-TRN-${stablePhase9Hash([
+    "staff-training",
+    record.staffId || record.employee,
+    record.course || record.training || record.name,
+    record.provider,
+    record.completedDate,
+    record.expiryDate || (record.noExpiry ? "no-expiry" : ""),
+    record.certificateNumber || record.licenceNumber
+  ])}`;
+}
+
+function trainingActionId(record = {}) {
+  return `ACT-TRN-${stablePhase9Hash([
+    "staff-training-action",
+    record.trainingRecordId || record.id,
+    record.staffId || record.employee,
+    record.course
+  ])}`;
+}
+
+function syncTrainingExpiryActions() {
+  const now = new Date().toISOString();
+  trainingMatrix.forEach((record) => {
+    const status = trainingStatus(record);
+    const actionId = trainingActionId(record);
+    const existing = actionItems.find((item) => item.actionId === actionId);
+    const needsAction = ["Expired", "Expiring Soon", "Missing / Not Recorded"].includes(status.label);
+    if (!needsAction) {
+      if (existing && !["Closed", "Completed", "Resolved"].includes(existing.status)) {
+        existing.status = "Closed";
+        existing.completedAt = now;
+        existing.auditTrail = [...(existing.auditTrail || []), { action: "Closed by training status", at: now, status: status.label }];
+      }
+      return;
+    }
+    if (existing) return;
+    actionItems.push({
+      actionId,
+      type: "Compliance Expiry",
+      priority: status.label === "Expired" ? "High" : "Medium",
+      title: `${record.course || "Training"} ${status.label}`,
+      description: `${record.employee || "Staff member"} training record requires office review.`,
+      staffId: record.staffId || "",
+      assignedStaffId: record.staffId || "",
+      relatedEntityType: "TrainingRecord",
+      relatedEntityId: record.trainingRecordId || record.id || "",
+      status: "New",
+      raisedAt: now,
+      dueDate: record.expiryDate || "",
+      auditTrail: [{ action: "Created from training status", at: now, status: status.label }]
+    });
+  });
+}
+
 function ensureStaffRecordIds() {
   const used = new Set();
   staffProfiles = staffProfiles.map((staff, index) => {
@@ -2260,17 +3138,26 @@ function ensureStaffRecordIds() {
   }));
   attendanceRecords = attendanceRecords.map((record) => ({
     ...record,
+    attendanceRecordId: record.attendanceRecordId || record.id || generateAttendanceRecordId({ staffId: idByName.get(record.name), name: record.name }, record.date || record.startDate || today),
+    type: record.type || record.attendanceType || record.status || "Present",
     staffId: record.staffId || idByName.get(record.name) || "",
-    year: record.year || String(new Date(record.date || today).getFullYear())
+    year: record.year || String(new Date(record.startDate || record.date || today).getFullYear())
   }));
   trainingMatrix = trainingMatrix.map((record) => {
-    const id = record.id || record.trainingRecordId || `TRN-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const linkedStaff = staffProfiles.find((staff) => staff.staffId === record.staffId)
+      || staffProfiles.find((staff) => staff.name === record.employee);
+    const normalisedRecord = {
+      ...record,
+      staffId: record.staffId || linkedStaff?.staffId || "",
+      employee: record.employee || linkedStaff?.name || ""
+    };
+    const id = record.id || record.trainingRecordId || generateTrainingRecordId(normalisedRecord);
     return {
       ...record,
       id,
       trainingRecordId: id,
-      staffId: record.staffId || idByName.get(record.employee) || "",
-      employee: record.employee || staffProfiles.find((staff) => staff.staffId === record.staffId)?.name || "",
+      staffId: normalisedRecord.staffId || idByName.get(record.employee) || "",
+      employee: normalisedRecord.employee || staffProfiles.find((staff) => staff.staffId === record.staffId)?.name || "",
       course: record.course || record.training || record.name || "",
       provider: record.provider || "",
       certificateNumber: record.certificateNumber || record.licenceNumber || "",
@@ -2278,6 +3165,7 @@ function ensureStaffRecordIds() {
       certificate: record.certificate || record.documentFileName || "",
       documentFileName: record.documentFileName || record.certificate || "",
       oneDriveLocation: record.oneDriveLocation || record.documentLocation || "",
+      lifecycleStatus: record.lifecycleStatus || record.recordStatus || "",
       createdAt: record.createdAt || new Date().toISOString(),
       updatedAt: record.updatedAt || record.createdAt || new Date().toISOString(),
       year: record.year || String(new Date(record.completedDate || record.expiryDate || today).getFullYear())
@@ -2289,13 +3177,24 @@ let ramsItems = loadRams();
 let activeBuiltRamsId = "";
 let proofingReports = [];
 let proofingPhotos = { before: [], after: [] };
+let phase05eCompletedReports = [];
+let phase05eReportRefreshTimer = null;
+let jobDispatchSchedules = [];
+let vehicleInspectionRecords = [];
+let actionItems = [];
+const historyPageSizeStorageKey = "kingswoodJobHistoryPageSize";
+let historyCurrentPage = 1;
+let historySearchDebounceTimer = null;
+let historyExcludedUnusableCount = 0;
 
 function commandData() {
   ensureStaffRecordIds();
   normalisePlannerItems();
   syncStaffTrainingFromMatrix();
+  syncTrainingExpiryActions();
   syncTechniciansFromStaff();
   syncValuationsFromJobs();
+  normaliseTscCommunicationTypes();
   return {
     ramsItems,
     proofingReports,
@@ -2305,9 +3204,18 @@ function commandData() {
     staffProfiles,
     attendanceRecords,
     holidayRequests,
+    tscMasterContent,
+    tscPublishedRevisions,
+    tscIssueRecords,
+    tscAssignmentRecords,
+    tscEvidenceRecords,
+    universalAuditEvents,
     companyHolidays,
     trainingMatrix,
     weeklyPlanner,
+    jobDispatchSchedules,
+    vehicleInspectionRecords,
+    actionItems,
     emailTemplates,
     reportTemplates,
     ramsTemplates,
@@ -2333,9 +3241,19 @@ function applyCommandData(data) {
   if (Array.isArray(data.staffProfiles)) staffProfiles = data.staffProfiles;
   if (Array.isArray(data.attendanceRecords)) attendanceRecords = data.attendanceRecords;
   if (Array.isArray(data.holidayRequests)) holidayRequests = data.holidayRequests;
+  if (Array.isArray(data.staffNotifications)) staffNotifications = data.staffNotifications;
+  if (Array.isArray(data.tscMasterContent)) tscMasterContent = data.tscMasterContent;
+  if (Array.isArray(data.tscPublishedRevisions)) tscPublishedRevisions = data.tscPublishedRevisions;
+  if (Array.isArray(data.tscIssueRecords)) tscIssueRecords = data.tscIssueRecords;
+  if (Array.isArray(data.tscAssignmentRecords)) tscAssignmentRecords = data.tscAssignmentRecords;
+  if (Array.isArray(data.tscEvidenceRecords)) tscEvidenceRecords = data.tscEvidenceRecords;
+  if (Array.isArray(data.universalAuditEvents)) universalAuditEvents = data.universalAuditEvents;
   if (Array.isArray(data.companyHolidays)) companyHolidays = data.companyHolidays;
   if (Array.isArray(data.trainingMatrix)) trainingMatrix = data.trainingMatrix;
   if (Array.isArray(data.weeklyPlanner)) weeklyPlanner = data.weeklyPlanner;
+  if (Array.isArray(data.jobDispatchSchedules)) jobDispatchSchedules = data.jobDispatchSchedules;
+  if (Array.isArray(data.vehicleInspectionRecords)) vehicleInspectionRecords = data.vehicleInspectionRecords;
+  if (Array.isArray(data.actionItems)) actionItems = data.actionItems;
   if (Array.isArray(data.emailTemplates)) emailTemplates = data.emailTemplates;
   if (Array.isArray(data.reportTemplates)) reportTemplates = data.reportTemplates;
   if (Array.isArray(data.ramsTemplates)) ramsTemplates = data.ramsTemplates;
@@ -2349,6 +3267,7 @@ function applyCommandData(data) {
   if (data.integrationFeeds && typeof data.integrationFeeds === "object") integrationFeeds = data.integrationFeeds;
   if (data.leaveAllowanceResetYear) leaveAllowanceResetYear = String(data.leaveAllowanceResetYear);
   ensureStaffRecordIds();
+  normaliseTscCommunicationTypes();
 }
 
 function enforceAnnualLeaveRenewal() {
@@ -2386,6 +3305,42 @@ async function fetchFirstHubApi(path, options = {}) {
   return null;
 }
 
+async function loadPhase05eCompletedReports() {
+  const response = await fetchFirstHubApi("/api/phase-05e/hub-report-status", { cache: "no-store" });
+  if (!response) {
+    phase05eCompletedReports = [];
+    return;
+  }
+
+  try {
+    const data = await response.json();
+    phase05eCompletedReports = Array.isArray(data.completedReports) ? data.completedReports : [];
+  } catch {
+    phase05eCompletedReports = [];
+  }
+}
+
+function phase05eReportKey() {
+  return JSON.stringify(phase05eCompletedReports.map((report) => ({
+    reportId: report.reportId,
+    jobId: report.jobId,
+    status: report.status,
+    oneDriveFolder: report.oneDriveFolder
+  })));
+}
+
+function startPhase05eReportRefresh() {
+  if (phase05eReportRefreshTimer) return;
+  phase05eReportRefreshTimer = setInterval(async () => {
+    if (document.hidden) return;
+    const before = phase05eReportKey();
+    await loadPhase05eCompletedReports();
+    if (phase05eReportKey() !== before) {
+      render();
+    }
+  }, 30000);
+}
+
 function redirectFileViewToHub(apiUrl) {
   if (location.protocol !== "file:" || !apiUrl) return false;
   const hubUrl = new URL(apiUrl);
@@ -2397,8 +3352,10 @@ function redirectFileViewToHub(apiUrl) {
 }
 
 async function loadCommandData() {
+  clearLegacyHeaderPreviewStorage();
   let leaveResetChanged = false;
   startOneDriveAutoSync();
+  startPhase05eReportRefresh();
   updateOneDriveHeaderStatus("OneDrive unavailable", "Checking OneDrive storage");
   if (location.protocol === "file:") {
     try {
@@ -2431,6 +3388,7 @@ async function loadCommandData() {
       oneDriveLiveDataLoaded = false;
       updateOneDriveHeaderStatus("OneDrive unavailable", "Start Kingswood Hub to save to OneDrive");
     }
+    await loadPhase05eCompletedReports();
     render();
     applyInitialSectionFromUrl();
     return;
@@ -2460,6 +3418,7 @@ async function loadCommandData() {
     updateOneDriveHeaderStatus(oneDrivePendingBackup() ? "Local backup pending" : "OneDrive unavailable", "Using local browser backup only");
   }
 
+  await loadPhase05eCompletedReports();
   render();
   applyInitialSectionFromUrl();
 }
@@ -2583,7 +3542,7 @@ function saveRams() {
 
 function asVehicleObject(vehicle) {
   if (Array.isArray(vehicle)) {
-    return {
+    return normaliseVehicleForUi({
       registration: vehicle[0] || "",
       vehicle: vehicle[1] || "",
       driver: vehicle[2] || "",
@@ -2591,9 +3550,9 @@ function asVehicleObject(vehicle) {
       service: vehicle[4] || "",
       insurance: vehicle[5] || "",
       tracker: vehicle[6] || ""
-    };
+    });
   }
-  return vehicle || {};
+  return normaliseVehicleForUi(vehicle || {});
 }
 
 async function saveFineToOneDrive(item) {
@@ -2780,6 +3739,15 @@ function openDataDialog(collection, index = "", seed = {}) {
         </label>
       `;
     }
+    if (type === "readonly-vehicle-id") {
+      const vehicleIdValue = value || (fieldValue(item, "registration") ? escapeHtml(stableVehicleIdForUi(item || {})) : "Generated on save");
+      return `
+        <label>
+          ${label}
+          <input data-field="${key}" type="text" value="${vehicleIdValue}" readonly>
+        </label>
+      `;
+    }
     if (type === "asset-category-select") {
       return renderSelectField(key, label, fieldValue(item, key) || "Power tools", assetCategories);
     }
@@ -2813,6 +3781,9 @@ function openDataDialog(collection, index = "", seed = {}) {
     }
     if (type === "fine-status-select") {
       return renderSelectField(key, label, fieldValue(item, key) || "New", ["New", "Awaiting Driver", "Under Review", "Appealed", "Awaiting Payment", "Paid", "Cancelled"]);
+    }
+    if (type === "training-lifecycle-select") {
+      return renderSelectField(key, label, fieldValue(item, key), ["", "Current", "Missing / Not Recorded", "Not Applicable", "Superseded", "Inactive"], (option) => option || "Calculated from expiry");
     }
     if (type === "holiday-day-type-select") {
       return renderSelectField(key, label, fieldValue(item, key) || "Full day", ["Full day", "Half day"]);
@@ -2920,7 +3891,10 @@ function openDataDialog(collection, index = "", seed = {}) {
       return renderSelectField(key, label, fieldValue(item, key), ["Proofing", "Bird work", "Plumbing", "Bulk clearance", "Rodenticide treatment", "Other"]);
     }
     if (type === "main-client-select") {
-      return renderSelectField(key, label, fieldValue(item, key), ["Ark", "JG Pest Control", "Other"]);
+      return renderSelectField(key, label, fieldValue(item, key), ["Ark", "JG Pest Control", "Private", "Vergo", "Other"]);
+    }
+    if (type === "valuation-group-select") {
+      return renderSelectField(key, label, fieldValue(item, key), ["Ark", "JG Pest Control", "Private", "Vergo", "Other"]);
     }
     if (type === "site-category-select") {
       return renderSelectField(key, label, fieldValue(item, key), ["Residential", "Commercial Kitchen", "Food Premises", "Catering", "Construction Site", "Office", "Warehouse", "External Area", "Other"]);
@@ -3594,7 +4568,7 @@ function dateRangeValues(from, to) {
   const dates = [];
   const cursor = new Date(start);
   while (cursor <= end) {
-    dates.push(cursor.toISOString().slice(0, 10));
+    dates.push(localIsoDate(cursor));
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
@@ -3614,6 +4588,120 @@ function holidayCalculatedDays(item = {}) {
   const dates = workingDateRangeValues(item.from, item.to);
   if (!dates.length) return 0;
   return item.dayType === "Half day" && item.from === item.to ? 0.5 : dates.length;
+}
+
+const managedAttendanceTypes = [
+  "Sick",
+  "Late",
+  "Absent",
+  "Other Authorised Absence",
+  "Unauthorised Absence"
+];
+
+function attendanceRecordId(record = {}) {
+  return record.attendanceRecordId || record.id || "";
+}
+
+function generateAttendanceRecordId(staff = {}, startDate = today) {
+  const stamp = String(startDate || today).replace(/-/g, "");
+  const staffPart = String(staff.staffId || staff.name || "STAFF").replace(/[^A-Z0-9]+/gi, "").slice(-8).toUpperCase() || "STAFF";
+  return `ATT-${stamp}-${staffPart}-${Math.random().toString(16).slice(2, 8).toUpperCase()}`;
+}
+
+function attendanceType(record = {}) {
+  return record.type || record.attendanceType || record.status || "";
+}
+
+function attendanceStart(record = {}) {
+  return record.startDate || record.date || record.from || "";
+}
+
+function attendanceEnd(record = {}) {
+  if (record.ongoing === true || record.ongoing === "Yes") return "";
+  return record.endDate || record.to || record.date || record.startDate || "";
+}
+
+function attendanceIsVoid(record = {}) {
+  return String(record.status || "").toLowerCase() === "void" || record.voided === true;
+}
+
+function attendanceIsOngoing(record = {}) {
+  return record.ongoing === true || record.ongoing === "Yes";
+}
+
+function attendanceMatchesStaff(record = {}, staff = {}) {
+  if (record.staffId && staff.staffId) return record.staffId === staff.staffId;
+  return record.name && staff.name && record.name === staff.name;
+}
+
+function attendanceRecordYear(record = {}) {
+  return String(record.year || attendanceStart(record) || attendanceEnd(record) || "").slice(0, 4);
+}
+
+function attendanceRecordAffectsYear(record = {}, year = String(new Date().getFullYear())) {
+  const start = attendanceStart(record);
+  const end = attendanceEnd(record) || start;
+  const dates = workingDateRangeValues(start, end || start);
+  return dates.some((date) => date.startsWith(String(year))) || attendanceRecordYear(record) === String(year);
+}
+
+function calculateAttendanceWorkingDays(record = {}, year = "") {
+  if (attendanceIsVoid(record)) return 0;
+  const type = attendanceType(record);
+  if (type === "Late") return 0;
+  const stored = Number(record.workingDays ?? record.days);
+  if (Number.isFinite(stored) && stored >= 0 && (!year || String(attendanceStart(record)).startsWith(String(year)))) {
+    return stored;
+  }
+  const start = attendanceStart(record);
+  const end = attendanceIsOngoing(record) ? today : (attendanceEnd(record) || start);
+  const dates = workingDateRangeValues(start, end).filter((date) => !year || date.startsWith(String(year)));
+  if (!dates.length) return 0;
+  if (record.dayType === "Half day" && start === end) return 0.5;
+  return dates.length;
+}
+
+function attendanceDateLabel(record = {}) {
+  const start = attendanceStart(record);
+  const end = attendanceEnd(record);
+  if (!start) return "Date not set";
+  if (attendanceIsOngoing(record)) return `${formatDateUk(start)} to Ongoing`;
+  if (end && end !== start) return `${formatDateUk(start)} to ${formatDateUk(end)}`;
+  return formatDateUk(start);
+}
+
+function staffAttendanceRecords(staff, year = String(new Date().getFullYear()), includeVoid = true) {
+  return attendanceRecords
+    .filter((record) => attendanceMatchesStaff(record, staff))
+    .filter((record) => attendanceRecordAffectsYear(record, year))
+    .filter((record) => includeVoid || !attendanceIsVoid(record))
+    .sort((a, b) => String(attendanceStart(b)).localeCompare(String(attendanceStart(a))));
+}
+
+function annualAttendanceSummary(staff, year = String(new Date().getFullYear())) {
+  const rows = staffAttendanceRecords(staff, year, false);
+  const byType = (type) => rows.filter((record) => attendanceType(record) === type);
+  const sickRows = rows.filter((record) => isSickCallStatus(attendanceType(record)));
+  return {
+    year,
+    sickDays: sickRows.reduce((sum, record) => sum + calculateAttendanceWorkingDays(record, year), 0),
+    sicknessOccurrences: sickRows.length,
+    lateOccurrences: byType("Late").length,
+    absentDays: byType("Absent").reduce((sum, record) => sum + calculateAttendanceWorkingDays(record, year), 0),
+    otherAuthorisedAbsenceDays: byType("Other Authorised Absence").reduce((sum, record) => sum + calculateAttendanceWorkingDays(record, year), 0),
+    unauthorisedAbsenceDays: byType("Unauthorised Absence").reduce((sum, record) => sum + calculateAttendanceWorkingDays(record, year), 0)
+  };
+}
+
+function attendanceAuditEntry(action, previousValues, newValues, reason = "") {
+  return {
+    action,
+    by: currentUserName(),
+    at: new Date().toISOString(),
+    previousValues,
+    newValues,
+    reason
+  };
 }
 
 function normaliseHolidayRequestTiming(item = {}) {
@@ -3645,13 +4733,13 @@ function countConsecutiveOccupationalSickDays(name, dateValue) {
   let count = 1;
   const check = new Date(start);
   check.setDate(check.getDate() - 1);
-  while (recordDates.has(check.toISOString().slice(0, 10))) {
+  while (recordDates.has(localIsoDate(check))) {
     count += 1;
     check.setDate(check.getDate() - 1);
   }
   check.setTime(start.getTime());
   check.setDate(check.getDate() + 1);
-  while (recordDates.has(check.toISOString().slice(0, 10))) {
+  while (recordDates.has(localIsoDate(check))) {
     count += 1;
     check.setDate(check.getDate() + 1);
   }
@@ -3750,6 +4838,11 @@ function findPlannerSlot(item) {
   );
 }
 
+function approvedLeaveForTechnicianSlot(technician, date, session = "AM") {
+  return approvedHolidayPlannerEntries(plannerWeekLabelFromStart(plannerWeekStartForDate(date)))
+    .find((entry) => entry.technician === technician && entry.date === date && entry.session === session);
+}
+
 function setDataDialogStatus(message = "", type = "") {
   if (!dataDialogStatus) return;
   dataDialogStatus.textContent = message;
@@ -3803,6 +4896,20 @@ async function addJobToWeeklyPlanner(job) {
     return false;
   }
   const plannerItem = plannerItemForJob(job);
+  const approvedLeave = approvedLeaveForTechnicianSlot(job.technician, job.date, job.slot || "AM");
+  if (approvedLeave) {
+    const decision = await kcAsk({
+      message: `${job.technician} is on approved annual leave on ${formatDateUk(job.date)} for the ${job.slot || "AM"} slot.\n\nYou can continue if this is operationally necessary, but the Weekly Planner will show a leave/job conflict for office review.`,
+      buttons: [
+        { label: "Cancel", value: "cancel", style: "secondary" },
+        { label: "Continue", value: "continue", style: "primary" }
+      ]
+    });
+    if (decision !== "continue") {
+      await kcInfo("Job not sent. Choose another technician or slot, then press Send to Tech App again.");
+      return false;
+    }
+  }
   weeklyPlanner = weeklyPlanner.filter((slot) => !(slot.source === "job-dispatch" && slot.jobNumber && slot.jobNumber === plannerItem.jobNumber));
   const existingIndex = findPlannerSlot(plannerItem);
   if (existingIndex >= 0) {
@@ -3827,6 +4934,285 @@ async function addJobToWeeklyPlanner(job) {
   return true;
 }
 
+function normaliseJobDispatchStatus(value = "") {
+  const status = String(value || "").toLowerCase();
+  if (status.includes("withdrawal acknowledged")) return "Withdrawal acknowledged";
+  if (status.includes("withdrawal") || status.includes("withdrawn")) return "Withdrawal sent";
+  if (status.includes("cancellation acknowledged")) return "Cancellation acknowledged";
+  if (status.includes("cancellation") || status.includes("cancel")) return "Cancellation sent";
+  if (status.includes("change acknowledged")) return "Change acknowledged";
+  if (status.includes("change") || status.includes("changed")) return "Change sent";
+  if (status.includes("unable")) return "Unable";
+  if (status.includes("accept") || status.includes("acknowledged")) return "Accepted";
+  if (status.includes("sent") || status.includes("received") || status.includes("available")) return "Sent to Technician App";
+  return value || "Not sent";
+}
+
+function applyJobDispatchMetadata(job, event = "Sent to Technician App", reason = "") {
+  if (!job) return job;
+  const now = new Date().toISOString();
+  const currentVersion = Number(job.dispatchVersion || 0);
+  const version = currentVersion || 1;
+  const staffId = staffIdFromName(job.technician);
+  job.assignedStaffId = job.assignedStaffId || staffId;
+  job.sentToTech = true;
+  job.publishedToTech = true;
+  job.status = "Sent to Tech";
+  job.dispatchStatus = normaliseJobDispatchStatus(event);
+  job.deliveryStatus = job.dispatchStatus;
+  job.dispatchVersion = version;
+  job.dispatchSentAt = job.dispatchSentAt || job.sentToTechAt || now;
+  job.sentToTechAt = job.sentToTechAt || job.dispatchSentAt;
+  const history = Array.isArray(job.dispatchHistory) ? job.dispatchHistory : [];
+  if (!history.some((item) => item.event === "Dispatch Created" && Number(item.version || 0) === version)) {
+    history.push({
+      event: "Dispatch Created",
+      version,
+      at: now,
+      by: currentUserName(),
+      reason
+    });
+  }
+  job.dispatchHistory = history;
+  return job;
+}
+
+const jobDispatchMaterialFields = ["date", "slot", "number", "title", "client", "mainClient", "address", "postcode", "residentPhone", "technician", "jobDetails", "reportNotes", "photos"];
+
+const jobDispatchMaterialLabels = {
+  date: "Work date",
+  slot: "Appointment slot",
+  number: "Job reference",
+  title: "Work category",
+  client: "Client",
+  mainClient: "Client group",
+  address: "Address",
+  postcode: "Postcode",
+  residentPhone: "Contact telephone",
+  technician: "Technician",
+  jobDetails: "Work description",
+  reportNotes: "Reporting requirements",
+  photos: "Attachments"
+};
+
+function jobDispatchIsSent(job = {}) {
+  const status = String(job.dispatchStatus || job.deliveryStatus || job.status || "").toLowerCase();
+  return Boolean(job.sentToTech || job.publishedToTech)
+    || ["sent", "received", "acknowledged", "accepted", "unable"].some((state) => status.includes(state));
+}
+
+function jobDispatchHasMaterialChange(previousItem = {}, nextItem = {}) {
+  if (!previousItem || !nextItem || !jobDispatchIsSent(previousItem)) return false;
+  return jobDispatchMaterialFields.some((field) => String(previousItem[field] ?? "") !== String(nextItem[field] ?? ""));
+}
+
+function jobDispatchHasTechnicianChange(previousItem = {}, nextItem = {}) {
+  if (!previousItem || !nextItem || !jobDispatchIsSent(previousItem)) return false;
+  return String(previousItem.technician ?? "") !== String(nextItem.technician ?? "")
+    || String(previousItem.assignedStaffId ?? "") !== String(nextItem.assignedStaffId ?? "")
+    || String(previousItem.assignedTechnicianId ?? "") !== String(nextItem.assignedTechnicianId ?? "");
+}
+
+function jobDispatchMaterialChanges(previousItem = {}, nextItem = {}) {
+  if (!previousItem || !nextItem) return [];
+  return jobDispatchMaterialFields
+    .filter((field) => String(previousItem[field] ?? "") !== String(nextItem[field] ?? ""))
+    .map((field) => ({
+      field,
+      label: jobDispatchMaterialLabels[field] || field,
+      previous: String(previousItem[field] ?? "").slice(0, 140),
+      next: String(nextItem[field] ?? "").slice(0, 140)
+    }));
+}
+
+function dispatchJobsForDate(dateValue) {
+  return jobs.filter((job) => String(job.date || job.jobDate || "") === dateValue && String(job.technician || "").trim());
+}
+
+function dispatchStatusTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function plannerDispatchResultsHtml(rows = []) {
+  if (!rows.length) return '<p class="empty-state compact-empty">No sent job instructions for this week yet.</p>';
+  return `
+    <div class="planner-dispatch-header">
+      <span>Technician / job</span>
+      <span>Sent</span>
+      <span>Available</span>
+      <span>Technician response</span>
+      <span>Status</span>
+      <span>Actions</span>
+    </div>
+    ${rows.map((job) => `
+      <div class="planner-dispatch-row">
+        <div><strong>${escapeHtml(job.technician || "Technician")}</strong><br><span>${escapeHtml(job.number || job.title || job.address || "Job")}</span></div>
+        <span>${escapeHtml(dispatchStatusTime(job.dispatchSentAt || job.sentToTechAt))}</span>
+        <span>${escapeHtml(dispatchStatusTime(job.dispatchAvailableAt || job.dispatchReceivedAt))}</span>
+        <span>${escapeHtml(job.technicianUnableReason ? `Unable: ${job.technicianUnableReason}` : job.technicianAcceptedAt || job.dispatchAcknowledgedAt ? `Accepted ${dispatchStatusTime(job.technicianAcceptedAt || job.dispatchAcknowledgedAt)}` : "-")}</span>
+        <span class="status ${job.technicianUnableAt ? "warning" : job.technicianAcceptedAt || job.dispatchAcknowledgedAt ? "ok" : "sent-tech"}">${escapeHtml(job.technicianUnableAt ? "Unable: reason supplied" : normaliseJobDispatchStatus(job.dispatchStatus || "Sent to Technician App"))}</span>
+        <span class="record-actions">
+          <button class="secondary-button" type="button" data-job-dispatch-change="${escapeHtml(job.jobId || job.id || job.number || "")}">Mark changed</button>
+          <button class="danger-button" type="button" data-job-dispatch-cancel="${escapeHtml(job.jobId || job.id || job.number || "")}">Cancel</button>
+        </span>
+      </div>
+    `).join("")}
+  `;
+}
+
+function renderPlannerDispatchResults(selectedWeek = activePlannerWeek || plannerCurrentWeek()) {
+  const panel = document.querySelector("#plannerDispatchResults");
+  if (!panel) return;
+  const selectedWeekStart = plannerWeekStartFromLabel(selectedWeek);
+  const weekDates = new Set(plannerWeekDays(selectedWeekStart).map((day) => day.date));
+  const rows = jobs
+    .filter((job) => (job.sentToTech || job.publishedToTech || job.dispatchStatus) && weekDates.has(String(job.date || job.jobDate || "")))
+    .sort((a, b) => `${a.date || ""}${a.slot || ""}${a.technician || ""}`.localeCompare(`${b.date || ""}${b.slot || ""}${b.technician || ""}`));
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="panel-heading compact-heading">
+      <div>
+        <h3>Technician Delivery Results</h3>
+        <p class="panel-note">Sent instructions and deliberate technician responses for this week.</p>
+      </div>
+    </div>
+    ${plannerDispatchResultsHtml(rows)}
+  `;
+}
+
+async function dispatchJobsViaHelper(payload) {
+  const response = await fetch("/api/phase-07/jobs/dispatch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...payload,
+      officeUserName: currentUserName()
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) throw new Error(result.message || "Job dispatch could not be saved.");
+  return result;
+}
+
+async function sendJobChangeViaHelper(previousItem, item, reason) {
+  const response = await fetch("/api/phase-07/jobs/change", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jobId: previousItem.jobId || previousItem.id || previousItem.number,
+      baseVersion: Number(previousItem.dispatchVersion || 1),
+      reason,
+      previousJob: previousItem,
+      updatedJob: item,
+      officeUserName: currentUserName()
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) throw new Error(result.message || "Job change could not be saved.");
+  return result;
+}
+
+async function cancelJobViaHelper(job, reason) {
+  const response = await fetch("/api/phase-07/jobs/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jobId: job.jobId || job.id || job.number,
+      baseVersion: Number(job.dispatchVersion || 1),
+      reason,
+      officeUserName: currentUserName()
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) throw new Error(result.message || "Job cancellation could not be saved.");
+  return result;
+}
+
+async function reassignJobViaHelper(previousItem, item, reason) {
+  const response = await fetch("/api/phase-07/jobs/reassign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jobId: previousItem.jobId || previousItem.id || previousItem.number,
+      baseVersion: Number(previousItem.dispatchVersion || 1),
+      toStaffId: item.assignedStaffId || staffIdFromName(item.technician),
+      toTechnicianName: item.technician,
+      reason,
+      officeUserName: currentUserName()
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) throw new Error(result.message || "Job reassignment failed.");
+  return result;
+}
+
+function findJobByDispatchId(jobId = "") {
+  const target = String(jobId || "");
+  return jobs.find((job) => String(job.jobId || job.id || job.number || "") === target) || null;
+}
+
+async function markJobDispatchChanged(jobId) {
+  const job = findJobByDispatchId(jobId);
+  if (!job) return;
+  await kcInfo("Open the job record and edit the changed details. The Hub will ask for a change reason before sending the amended version.");
+}
+
+async function cancelJobDispatch(jobId) {
+  const job = findJobByDispatchId(jobId);
+  if (!job) return;
+  const reason = await kcInput("Why is this dispatched job being cancelled?", "Cancellation reason", "");
+  if (!reason || reason === "cancel") return;
+  const confirmed = await kcConfirmAction(`Cancel this dispatched job?\n\n${job.technician || "Technician"}\n${formatDateUk(job.date)} ${job.slot || ""}\n${job.client || ""}\n${job.address || job.postcode || ""}\n\nReason: ${reason}`, "Cancel Job");
+  if (!confirmed) return;
+  try {
+    await cancelJobViaHelper(job, String(reason));
+    await loadCommandData();
+    render();
+    await kcInfo("Cancellation sent to the Technician App.");
+  } catch (error) {
+    await kcInfo(error.message || "Job cancellation failed. No cancellation status has been applied.");
+  }
+}
+
+async function sendScheduleToTechnicians(dateValue, label) {
+  const scheduleJobs = dispatchJobsForDate(dateValue);
+  const scheduleJobIds = scheduleJobs.map((job) => job.jobId || job.id || job.number).filter(Boolean);
+  const existingSchedules = jobDispatchSchedules.filter((schedule) => schedule.date === dateValue || schedule.workDate === dateValue);
+  const previousJobIds = Array.from(new Set(existingSchedules.flatMap((schedule) => Array.isArray(schedule.jobIds) ? schedule.jobIds : [])));
+  const replacingSchedule = existingSchedules.length > 0;
+  const clientList = Array.from(new Set(scheduleJobs.map((job) => job.client || job.mainClient || "Client not set"))).slice(0, 5).join(", ");
+  let replacementReason = "";
+  if (replacingSchedule) {
+    replacementReason = await kcInput(`Why is ${label}'s sent schedule being replaced?`, "Replacement reason", "");
+    if (!replacementReason || replacementReason === "cancel") return false;
+  }
+  const addedCount = scheduleJobIds.filter((jobId) => !previousJobIds.includes(jobId)).length;
+  const removedCount = previousJobIds.filter((jobId) => !scheduleJobIds.includes(jobId)).length;
+  const confirmed = await kcConfirmAction(replacingSchedule
+    ? `Replace ${label}'s sent schedule?\n\nPrevious sent jobs: ${previousJobIds.length}\nReplacement jobs: ${scheduleJobIds.length}\nAdded: ${addedCount}\nRemoved: ${removedCount}\n\nReason: ${replacementReason}\n\nWithdrawn jobs will require technician acknowledgement. Added or changed jobs will create fresh Technician App actions.`
+    : `Send ${label}'s assigned schedule to technicians?\n\n${scheduleJobs.length} job instruction${scheduleJobs.length === 1 ? "" : "s"} will be made visible in the Technician App.${clientList ? `\nClients: ${clientList}` : "\nThis will record an explicit empty schedule if no jobs are assigned."}`, replacingSchedule ? "Replace Schedule" : "Send Schedule");
+  if (!confirmed) return false;
+  try {
+    const result = await dispatchJobsViaHelper(replacingSchedule
+      ? { mode: "replacement", date: dateValue, replaceSchedule: true, reason: replacementReason, jobIds: scheduleJobIds }
+      : { mode: "schedule", date: dateValue });
+    await loadCommandData();
+    render();
+    await kcInfo(replacingSchedule
+      ? `${label}'s replacement schedule sent to the Technician App.`
+      : result.alreadySent
+      ? `${label}'s schedule was already sent. No duplicate dispatch was created.`
+      : `${label}'s schedule sent to the Technician App.`);
+    return true;
+  } catch (error) {
+    await kcInfo(error.message || "Schedule dispatch failed. No sent status has been applied.");
+    return false;
+  }
+}
+
 function removeJobFromWeeklyPlanner(job) {
   if (!job?.number) return;
   weeklyPlanner = weeklyPlanner.filter((slot) => !(slot.source === "job-dispatch" && slot.jobNumber === job.number));
@@ -3835,6 +5221,7 @@ function removeJobFromWeeklyPlanner(job) {
 function applyApprovedHolidayRequest(request) {
   if (request.status !== "Approved") return;
   normaliseHolidayRequestTiming(request);
+  const requestId = request.id || request.holidayRequestId || "";
   workingDateRangeValues(request.from, request.to).forEach((date) => {
     const existing = attendanceRecords.find((record) => record.name === request.name && record.date === date);
     const holidayRecord = {
@@ -3849,61 +5236,175 @@ function applyApprovedHolidayRequest(request) {
       returnToWorkNotes: "Approved annual leave.",
       fitNote: "",
       source: "holiday",
-      holidayRequestId: request.id || ""
+      holidayRequestId: requestId
     };
     if (existing) Object.assign(existing, holidayRecord);
     else attendanceRecords.push(holidayRecord);
   });
-  addApprovedHolidayToPlanner(request);
 }
 
 function addApprovedHolidayToPlanner(request) {
-  if (request.status !== "Approved") return;
-  normaliseHolidayRequestTiming(request);
-  if (request.id) {
-    weeklyPlanner = weeklyPlanner.filter((slot) => slot.holidayRequestId !== request.id);
-  }
-  workingDateRangeValues(request.from, request.to).forEach((date) => {
-    const sessions = request.dayType === "Half day" ? [request.dayPart || "AM"] : ["AM", "PM"];
-    sessions.forEach((session) => {
-      const item = applyPlannerMetadata({
-        date,
-        technician: request.name,
-        session,
-        type: "Holiday / course / training",
-        task: request.dayType === "Half day" ? `HOLIDAY ${session}` : "HOLIDAY",
-        source: "approved-holiday",
-        holidayRequestId: request.id || "",
-        staffId: request.staffId || ""
-      });
-      const existingIndex = weeklyPlanner.findIndex((slot) =>
-        slot.date === date && slot.technician === request.name && (slot.session || "AM") === session
-      );
-      if (existingIndex >= 0) {
-        weeklyPlanner[existingIndex] = { ...weeklyPlanner[existingIndex], ...item };
-      } else {
-        weeklyPlanner.push(item);
-      }
-    });
+  // Approved leave is derived into the Weekly Planner at render time from
+  // holidayRequests. This legacy hook remains intentionally empty so the
+  // approval workflow keeps calling the same function without creating
+  // duplicate planner availability records.
+  void request;
+}
+
+function staffRecordForNotification(staffId = "", name = "") {
+  return staffProfiles.find((staff) => staffId && staff.staffId === staffId)
+    || staffProfiles.find((staff) => name && staff.name === name)
+    || {};
+}
+
+function staffNotificationId(type = "NOTE", relatedEntityId = "") {
+  const safeType = String(type || "NOTE").replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(0, 10) || "NOTE";
+  const source = relatedEntityId || `${safeType}-${Date.now()}-${Math.random()}`;
+  let hash = 0;
+  String(source).split("").forEach((char) => {
+    hash = ((hash << 5) - hash) + char.charCodeAt(0);
+    hash |= 0;
   });
+  return `NOT-${safeType}-${Math.abs(hash).toString(36).toUpperCase()}`;
+}
+
+function addStaffNotification({
+  type,
+  title,
+  message,
+  staffId = "",
+  name = "",
+  relatedEntityType = "",
+  relatedEntityId = "",
+  status = ""
+}) {
+  const staff = staffRecordForNotification(staffId, name);
+  const resolvedStaffId = staffId || staff.staffId || "";
+  const resolvedName = name || staff.name || "Employee";
+  const notification = {
+    notificationId: staffNotificationId(type, relatedEntityId || `${resolvedStaffId}-${title}-${message}`),
+    type: type || "Information",
+    title: title || "Staff update",
+    message: message || "",
+    createdAt: new Date().toISOString(),
+    readAt: "",
+    status: status || "Unread",
+    staffId: resolvedStaffId,
+    name: resolvedName,
+    employee: resolvedName,
+    relatedEntityType,
+    relatedEntityId
+  };
+  if (!staffNotifications.some((item) => item.notificationId === notification.notificationId)) {
+    staffNotifications.unshift(notification);
+  }
+  return notification;
+}
+
+function staffNotificationStatusClass(status = "") {
+  const normalised = String(status || "").toLowerCase();
+  if (normalised.includes("approved")) return "approved";
+  if (normalised.includes("declined") || normalised.includes("void") || normalised.includes("unauthorised")) return "declined";
+  if (normalised.includes("pending") || normalised.includes("ongoing") || normalised.includes("late")) return "pending";
+  if (normalised.includes("sick") || normalised.includes("absent")) return "declined";
+  if (normalised.includes("cancel")) return "cancelled";
+  return "approved";
+}
+
+function staffNotificationTime(value = "") {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function renderStaffActivityNotifications() {
+  const target = document.querySelector("#staffActivityNotifications");
+  if (!target) return;
+  const items = staffNotifications
+    .filter((item) => ["Holiday Request Submitted", "Holiday Approved", "Holiday Declined", "Attendance Record Added", "Attendance Record Corrected"].includes(item.type))
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    .slice(0, 6);
+  target.innerHTML = items.length ? items.map((item) => `
+    <button class="staff-activity-item" type="button" data-open-staff-notification="${escapeHtml(item.notificationId)}">
+      <span class="staff-activity-time">${escapeHtml(staffNotificationTime(item.createdAt))}</span>
+      <span class="staff-activity-main">
+        <strong>${escapeHtml(item.name || item.employee || "Employee")}</strong>
+        <em>${escapeHtml(item.title || item.type)}</em>
+      </span>
+      <span class="holiday-status ${staffNotificationStatusClass(item.status || item.type)}">${escapeHtml(item.status || "Unread")}</span>
+    </button>
+  `).join("") : '<p class="empty-state compact-empty">No recent leave or attendance activity.</p>';
+}
+
+function openStaffNotification(notificationId) {
+  const item = staffNotifications.find((notification) => notification.notificationId === notificationId);
+  if (!item) return;
+  const staffIndex = staffProfiles.findIndex((staff) =>
+    (item.staffId && staff.staffId === item.staffId) || (item.name && staff.name === item.name)
+  );
+  if (staffIndex >= 0) selectedStaffIndex = staffIndex;
+  activeStaffTab = item.relatedEntityType === "AttendanceRecord" ? "attendance" : "holidays";
+  showSection("staff");
+  renderStaff();
+  setTimeout(() => document.querySelector("#staffProfileTabBody")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
 }
 
 async function approveHolidayRequest(index) {
   const request = holidayRequests[Number(index)];
-  if (!request || request.status !== "Pending") return;
+  if (!request) return;
+  if (request.status !== "Pending") {
+    await kcInfo(`This holiday request is already ${request.status || "not pending"} and cannot be changed.`);
+    return;
+  }
+  const response = await kcInput("Add an optional response to the technician for approving this holiday request.", "Office response");
+  if (response === "cancel") return;
   const previousRequest = { ...request };
-  const previousAttendance = [...attendanceRecords];
   const previousPlanner = [...weeklyPlanner];
+  const previousNotifications = [...staffNotifications];
+  const previousStatus = request.status || "Pending";
+  const decisionAt = new Date().toISOString();
   request.status = "Approved";
+  request.approvedBy = currentUserName();
   request.approvedDate = today;
+  request.decisionDateTime = decisionAt;
+  request.officeResponse = response || "";
   request.declineReason = "";
+  request.workingDays = request.workingDays || request.days || holidayCalculatedDays(request);
+  request.days = request.workingDays;
   request.year = request.year || String(new Date(request.from || today).getFullYear());
-  applyApprovedHolidayRequest(request);
+  request.auditTrail = [
+    ...(Array.isArray(request.auditTrail) ? request.auditTrail : []),
+    {
+      action: "Approved",
+      by: currentUserName(),
+      at: decisionAt,
+      previousStatus,
+      newStatus: "Approved",
+      officeResponse: request.officeResponse
+    }
+  ];
+  addApprovedHolidayToPlanner(request);
+  addStaffNotification({
+    type: "Holiday Approved",
+    title: "Holiday approved",
+    message: `${request.name} leave approved for ${formatDateUk(request.from)} to ${formatDateUk(request.to || request.from)}.`,
+    staffId: request.staffId || "",
+    name: request.name,
+    relatedEntityType: "HolidayRequest",
+    relatedEntityId: request.holidayRequestId || request.id || "",
+    status: "Approved"
+  });
   const saved = await publishIntegrationFeeds();
   if (!saved) {
     Object.assign(request, previousRequest);
-    attendanceRecords = previousAttendance;
     weeklyPlanner = previousPlanner;
+    staffNotifications = previousNotifications;
     render();
     return;
   }
@@ -3913,17 +5414,51 @@ async function approveHolidayRequest(index) {
 
 async function declineHolidayRequest(index) {
   const request = holidayRequests[Number(index)];
-  if (!request || request.status !== "Pending") return;
-  const reason = await kcInput("Add an optional reason for declining this holiday request.", "Decline reason");
-  if (reason === "cancel") return;
+  if (!request) return;
+  if (request.status !== "Pending") {
+    await kcInfo(`This holiday request is already ${request.status || "not pending"} and cannot be changed.`);
+    return;
+  }
+  const response = await kcInput("Add an optional response to the technician for declining this holiday request.", "Office response");
+  if (response === "cancel") return;
   const previousRequest = { ...request };
+  const previousNotifications = [...staffNotifications];
+  const previousStatus = request.status || "Pending";
+  const decisionAt = new Date().toISOString();
   request.status = "Declined";
+  request.declinedBy = currentUserName();
   request.declinedDate = today;
-  request.declineReason = reason || "";
+  request.decisionDateTime = decisionAt;
+  request.officeResponse = response || "";
+  request.declineReason = response || "";
+  request.workingDays = request.workingDays || request.days || holidayCalculatedDays(request);
+  request.days = request.workingDays;
   request.year = request.year || String(new Date(request.from || today).getFullYear());
+  request.auditTrail = [
+    ...(Array.isArray(request.auditTrail) ? request.auditTrail : []),
+    {
+      action: "Declined",
+      by: currentUserName(),
+      at: decisionAt,
+      previousStatus,
+      newStatus: "Declined",
+      officeResponse: request.officeResponse
+    }
+  ];
+  addStaffNotification({
+    type: "Holiday Declined",
+    title: "Holiday declined",
+    message: `${request.name} leave declined for ${formatDateUk(request.from)} to ${formatDateUk(request.to || request.from)}.`,
+    staffId: request.staffId || "",
+    name: request.name,
+    relatedEntityType: "HolidayRequest",
+    relatedEntityId: request.holidayRequestId || request.id || "",
+    status: "Declined"
+  });
   const saved = await publishIntegrationFeeds();
   if (!saved) {
     Object.assign(request, previousRequest);
+    staffNotifications = previousNotifications;
     render();
     return;
   }
@@ -3983,8 +5518,250 @@ async function saveSickCallIn() {
   const existingIndex = attendanceRecords.findIndex((record) => record.name === name && record.date === today);
   if (existingIndex >= 0) attendanceRecords[existingIndex] = { ...attendanceRecords[existingIndex], ...item };
   else attendanceRecords.unshift(item);
+  const staff = staffRecordForNotification("", name);
+  addStaffNotification({
+    type: existingIndex >= 0 ? "Attendance Record Corrected" : "Attendance Record Added",
+    title: existingIndex >= 0 ? "Attendance corrected" : "Attendance recorded",
+    message: `${name} marked as Absent - Called in Sick.`,
+    staffId: staff.staffId || "",
+    name,
+    relatedEntityType: "AttendanceRecord",
+    relatedEntityId: item.attendanceRecordId || `${name}-${today}`,
+    status: item.status
+  });
   await publishIntegrationFeeds();
   render();
+  return true;
+}
+
+function refreshAttendanceDialog() {
+  if (!attendanceTypeInput || !attendanceDialog) return;
+  const type = attendanceTypeInput.value;
+  const isLate = type === "Late";
+  const isSick = type === "Sick";
+  const isOngoing = attendanceOngoingInput?.value === "Yes";
+  attendanceDialog.querySelectorAll(".attendance-range-field, .attendance-return-field, .attendance-day-field, .attendance-days-field")
+    .forEach((field) => field.classList.toggle("hidden", isLate));
+  attendanceDialog.querySelectorAll(".attendance-late-field")
+    .forEach((field) => field.classList.toggle("hidden", !isLate));
+  attendanceDialog.querySelectorAll(".attendance-ongoing-field")
+    .forEach((field) => field.classList.toggle("hidden", !isSick));
+  if (attendanceEndDate) attendanceEndDate.disabled = isLate || isOngoing;
+  if (attendanceReturnDate) attendanceReturnDate.disabled = isLate || isOngoing;
+  if (isLate && attendanceWorkingDays) attendanceWorkingDays.value = "0";
+  if (!isLate) refreshAttendanceWorkingDays();
+}
+
+function refreshAttendanceWorkingDays() {
+  if (!attendanceWorkingDays || !attendanceStartDate) return;
+  const type = attendanceTypeInput?.value || "";
+  if (type === "Late") {
+    attendanceWorkingDays.value = "0";
+    return;
+  }
+  const start = attendanceStartDate.value;
+  const end = attendanceOngoingInput?.value === "Yes" ? today : (attendanceEndDate?.value || start);
+  const dates = workingDateRangeValues(start, end || start);
+  const days = attendanceDayType?.value === "Half day" && start === end ? 0.5 : dates.length;
+  attendanceWorkingDays.value = String(days || 0);
+}
+
+function attendanceFormWorkingDaysFromFields(type, start, end, dayType) {
+  if (type === "Late") return 0;
+  const dates = workingDateRangeValues(start, end || start);
+  if (!dates.length) return 0;
+  return dayType === "Half day" && start === end ? 0.5 : dates.length;
+}
+
+function openAttendanceDialog(staffName, recordIndex = "") {
+  if (!attendanceDialog || !attendanceForm) return;
+  const staff = staffProfiles.find((item) => item.name === staffName) || {};
+  const existing = recordIndex === "" ? null : attendanceRecords[Number(recordIndex)];
+  const record = existing || {
+    name: staffName,
+    staffId: staff.staffId || "",
+    type: "Sick",
+    status: "Sick",
+    startDate: today,
+    date: today,
+    endDate: today,
+    returnDate: "",
+    ongoing: false,
+    dayType: "Full day",
+    workingDays: 1,
+    officeNotes: "",
+    confidentialNote: false
+  };
+
+  attendanceForm.reset();
+  attendanceRecordIndex.value = recordIndex;
+  attendanceStaffName.value = staffName;
+  attendanceEmployeeDisplay.value = staffName;
+  attendanceDialogTitle.textContent = recordIndex === "" ? `Log Attendance - ${staffName}` : `Correct Attendance - ${staffName}`;
+  attendanceTypeInput.value = attendanceType(record) || "Sick";
+  attendanceStartDate.value = attendanceStart(record) || today;
+  attendanceEndDate.value = attendanceEnd(record) || attendanceStartDate.value;
+  attendanceOngoingInput.value = attendanceIsOngoing(record) ? "Yes" : "No";
+  attendanceReturnDate.value = record.returnDate || record.recoveryDate || "";
+  attendanceDayType.value = record.dayType || (record.halfDay ? "Half day" : "Full day");
+  attendanceWorkingDays.value = String(calculateAttendanceWorkingDays(record) || 0);
+  attendanceScheduledStart.value = record.scheduledStartTime || "";
+  attendanceActualArrival.value = record.actualArrivalTime || "";
+  attendanceMinutesLate.value = record.minutesLate || "";
+  attendanceOfficeNote.value = record.officeNotes || record.returnToWorkNotes || record.notes || "";
+  attendanceConfidentialNote.value = record.confidentialNote || record.confidential ? "Yes" : "No";
+  attendanceCorrectionReason.value = "";
+  attendanceCorrectionReasonWrap?.classList.toggle("hidden", recordIndex === "");
+  attendanceVoidButton?.classList.toggle("hidden", recordIndex === "" || attendanceIsVoid(record));
+  attendanceSaveButton.textContent = recordIndex === "" ? "Save Attendance" : (attendanceIsOngoing(record) ? "Save / Close Sickness" : "Save Correction");
+  refreshAttendanceDialog();
+  attendanceDialog.showModal();
+}
+
+function attendanceFormRecordFromFields(previous = null) {
+  const staffName = attendanceStaffName?.value || "";
+  const staff = staffProfiles.find((item) => item.name === staffName) || {};
+  const type = attendanceTypeInput?.value || "Sick";
+  const start = attendanceStartDate?.value || today;
+  const ongoing = type === "Sick" && attendanceOngoingInput?.value === "Yes";
+  const end = type === "Late" || ongoing ? "" : (attendanceEndDate?.value || start);
+  const dayType = type === "Late" ? "Partial day" : (attendanceDayType?.value || "Full day");
+  const workingDays = attendanceFormWorkingDaysFromFields(type, start, ongoing ? today : (end || start), dayType);
+  const now = new Date().toISOString();
+  const id = attendanceRecordId(previous || {}) || generateAttendanceRecordId(staff, start);
+  return {
+    ...(previous || {}),
+    attendanceRecordId: id,
+    id,
+    staffId: staff.staffId || previous?.staffId || "",
+    name: staffName,
+    type,
+    status: type,
+    date: start,
+    startDate: start,
+    endDate: end,
+    returnDate: type === "Sick" && !ongoing ? (attendanceReturnDate?.value || "") : "",
+    recoveryDate: type === "Sick" && !ongoing ? (attendanceReturnDate?.value || end || start) : "",
+    ongoing,
+    dayType,
+    workingDays,
+    days: workingDays,
+    scheduledStartTime: type === "Late" ? (attendanceScheduledStart?.value || "") : "",
+    actualArrivalTime: type === "Late" ? (attendanceActualArrival?.value || "") : "",
+    minutesLate: type === "Late" ? Number(attendanceMinutesLate?.value || 0) : 0,
+    officeNotes: attendanceOfficeNote?.value.trim() || "",
+    confidentialNote: attendanceConfidentialNote?.value === "Yes",
+    recordedBy: previous?.recordedBy || currentUserName(),
+    recordedAt: previous?.recordedAt || now,
+    updatedBy: currentUserName(),
+    updatedAt: now,
+    year: String(new Date(`${start}T00:00:00`).getFullYear()),
+    source: previous?.source || "office-attendance"
+  };
+}
+
+async function saveAttendanceDialog(action = "default") {
+  const index = attendanceRecordIndex?.value || "";
+  const previous = index === "" ? null : attendanceRecords[Number(index)];
+  const previousNotifications = [...staffNotifications];
+  if (action === "void" && !previous) return false;
+  const reason = attendanceCorrectionReason?.value.trim() || "";
+  if (previous && !reason) {
+    await kcInfo("Please enter a reason so the correction audit trail is complete.");
+    return false;
+  }
+
+  if (action === "void") {
+    const next = {
+      ...previous,
+      status: "Void",
+      voided: true,
+      voidedBy: currentUserName(),
+      voidedAt: new Date().toISOString(),
+      updatedBy: currentUserName(),
+      updatedAt: new Date().toISOString(),
+      auditTrail: [
+        ...(Array.isArray(previous.auditTrail) ? previous.auditTrail : []),
+        attendanceAuditEntry("Void", { status: previous.status, voided: previous.voided || false }, { status: "Void", voided: true }, reason)
+      ]
+    };
+    attendanceRecords[Number(index)] = next;
+    addStaffNotification({
+      type: "Attendance Record Corrected",
+      title: "Attendance corrected",
+      message: `${next.name} attendance record was voided.`,
+      staffId: next.staffId || "",
+      name: next.name,
+      relatedEntityType: "AttendanceRecord",
+      relatedEntityId: attendanceRecordId(next),
+      status: "Void"
+    });
+  } else {
+    const next = attendanceFormRecordFromFields(previous);
+    if (!next.name || !next.startDate) {
+      await kcInfo("Please complete the employee and date before saving attendance.");
+      return false;
+    }
+    if (!managedAttendanceTypes.includes(next.type)) {
+      await kcInfo("Please choose a supported attendance type.");
+      return false;
+    }
+    if (next.type !== "Late" && !next.ongoing && next.endDate && next.endDate < next.startDate) {
+      await kcInfo("End date cannot be before the start date.");
+      return false;
+    }
+    if (next.type !== "Late" && Number(next.workingDays) <= 0) {
+      await kcInfo("Attendance must affect at least one working day, or half a working day.");
+      return false;
+    }
+    const previousSnapshot = previous ? {
+      type: previous.type || previous.status,
+      startDate: previous.startDate || previous.date,
+      endDate: previous.endDate || previous.to,
+      returnDate: previous.returnDate || previous.recoveryDate,
+      dayType: previous.dayType,
+      workingDays: previous.workingDays,
+      minutesLate: previous.minutesLate,
+      officeNotes: previous.officeNotes || previous.returnToWorkNotes,
+      confidentialNote: previous.confidentialNote
+    } : null;
+    const newSnapshot = {
+      type: next.type,
+      startDate: next.startDate,
+      endDate: next.endDate,
+      returnDate: next.returnDate,
+      dayType: next.dayType,
+      workingDays: next.workingDays,
+      minutesLate: next.minutesLate,
+      officeNotes: next.officeNotes,
+      confidentialNote: next.confidentialNote
+    };
+    next.auditTrail = [
+      ...(Array.isArray(previous?.auditTrail) ? previous.auditTrail : []),
+      attendanceAuditEntry(previous ? (previous.ongoing && !next.ongoing ? "Closed Ongoing Sickness" : "Corrected") : "Created", previousSnapshot, newSnapshot, reason)
+    ];
+    if (index === "") attendanceRecords.unshift(next);
+    else attendanceRecords[Number(index)] = next;
+    addStaffNotification({
+      type: previous ? "Attendance Record Corrected" : "Attendance Record Added",
+      title: previous ? "Attendance updated" : "Attendance recorded",
+      message: `${next.name} attendance recorded as ${next.status || next.type}.`,
+      staffId: next.staffId || "",
+      name: next.name,
+      relatedEntityType: "AttendanceRecord",
+      relatedEntityId: attendanceRecordId(next),
+      status: next.status || next.type
+    });
+  }
+
+  const saved = await publishIntegrationFeeds();
+  if (!saved) {
+    staffNotifications = previousNotifications;
+    return false;
+  }
+  attendanceDialog?.close();
+  render();
+  await kcInfo(action === "void" ? "Attendance record voided. It remains in the history but is excluded from totals." : "Attendance record saved.");
   return true;
 }
 
@@ -3996,6 +5773,11 @@ async function saveDataDialog(action = "default") {
 
   const previousItem = index === "" ? null : { ...model.get()[Number(index)] };
   const item = index === "" ? {} : { ...previousItem };
+  let sendingToTech = false;
+  let changingSentJob = false;
+  let reassigningSentJob = false;
+  let pendingJobChangeReason = "";
+  let pendingJobReassignmentReason = "";
   model.fields.forEach(([key, , type = "text"]) => {
     const input = dataFields.querySelector(`[data-field="${key}"]`);
     if (!input) return;
@@ -4006,16 +5788,32 @@ async function saveDataDialog(action = "default") {
         : input.value.trim();
   });
   if (collection === "jobs") {
-    const sendingToTech = action === "send-tech";
+    sendingToTech = action === "send-tech";
+    reassigningSentJob = !sendingToTech && jobDispatchHasTechnicianChange(previousItem, item);
+    changingSentJob = !sendingToTech && !reassigningSentJob && jobDispatchHasMaterialChange(previousItem, item);
     if (!(await validateJobDispatchFields(item, sendingToTech))) {
       return false;
     }
-    item.status = sendingToTech ? "Sent to Tech" : "Draft";
+    item.status = sendingToTech || changingSentJob ? "Sent to Tech" : "Draft";
     item.report = item.report || "Not due";
     item.completed = item.completed || "n";
     item.updatedAt = new Date().toISOString();
     if (sendingToTech) {
-      item.sentToTechAt = new Date().toISOString();
+      applyJobDispatchMetadata(item, "Sent");
+    } else if (reassigningSentJob) {
+      const reason = await kcInput("Why is this dispatched job being reassigned?", "Reassignment reason", "");
+      if (!reason || reason === "cancel") return false;
+      pendingJobReassignmentReason = String(reason).trim();
+      const confirmed = await kcConfirmAction(`Reassign this dispatched job?\n\nFrom: ${previousItem.technician || "Current technician"}\nTo: ${item.technician || "Replacement technician"}\n${formatDateUk(item.date)} ${item.slot || ""}\n${item.client || ""}\n${item.address || item.postcode || ""}\n\nReason: ${pendingJobReassignmentReason}\n\nThe original technician will receive a withdrawal notice and the replacement technician will receive the latest job version.`, "Reassign Job");
+      if (!confirmed) return false;
+    } else if (changingSentJob) {
+      const changes = jobDispatchMaterialChanges(previousItem, item);
+      const reason = await kcInput("Why is this dispatched job being changed?", "Change reason", "");
+      if (!reason || reason === "cancel") return false;
+      pendingJobChangeReason = String(reason).trim();
+      const summary = changes.map((change) => `${change.label}: ${change.previous || "-"} -> ${change.next || "-"}`).join("\n");
+      const confirmed = await kcConfirmAction(`Send amended job version?\n\n${item.technician || "Technician"}\n${formatDateUk(item.date)} ${item.slot || ""}\n${item.client || ""}\n${item.address || item.postcode || ""}\n\nChanges:\n${summary}\n\nReason: ${pendingJobChangeReason}`, "Send Change");
+      if (!confirmed) return false;
     } else {
       item.savedAt = item.savedAt || new Date().toISOString();
     }
@@ -4029,7 +5827,7 @@ async function saveDataDialog(action = "default") {
     if (sendingToTech && !(await addJobToWeeklyPlanner(item))) {
       return false;
     }
-    if (!sendingToTech) {
+    if (!sendingToTech && !changingSentJob && !reassigningSentJob) {
       removeJobFromWeeklyPlanner(item);
     }
   }
@@ -4037,6 +5835,17 @@ async function saveDataDialog(action = "default") {
     if (!(await validateAttendanceRecord(item))) {
       return false;
     }
+  }
+  if (collection === "vehicles") {
+    if (!item.registration || !item.vehicle) {
+      await kcInfo("Please complete the vehicle registration and vehicle description.");
+      return false;
+    }
+    const normalisedVehicle = normaliseVehicleForUi(item);
+    Object.assign(item, normalisedVehicle);
+    item.status = item.status || "Active";
+    item.createdAt = item.createdAt || new Date().toISOString();
+    item.updatedAt = new Date().toISOString();
   }
   if (collection === "documents") {
     if (!companyDocumentCategories.includes(item.category)) {
@@ -4120,14 +5929,15 @@ async function saveDataDialog(action = "default") {
       await kcInfo("Please choose an employee and complete the training name and completed date.");
       return false;
     }
-    if (!item.noExpiry && !item.expiryDate) {
+    const lifecycleStatus = String(item.lifecycleStatus || "").trim();
+    if (!item.noExpiry && !item.expiryDate && !["Not Applicable", "Missing / Not Recorded"].includes(lifecycleStatus)) {
       await kcInfo("Please enter an expiry date, or tick No expiry.");
       return false;
     }
-    item.id = item.id || item.trainingRecordId || `TRN-${Date.now()}`;
-    item.trainingRecordId = item.id;
     item.staffId = staff.staffId;
     item.employee = staff.name;
+    item.id = item.id || item.trainingRecordId || generateTrainingRecordId(item);
+    item.trainingRecordId = item.id;
     item.noExpiry = Boolean(item.noExpiry);
     if (item.noExpiry) item.expiryDate = "";
     item.year = item.year || String(new Date(item.completedDate || today).getFullYear());
@@ -4222,6 +6032,32 @@ async function saveDataDialog(action = "default") {
     applyPlannerMetadata(item);
   }
 
+  if (collection === "jobs" && reassigningSentJob) {
+    try {
+      await reassignJobViaHelper(previousItem, item, pendingJobReassignmentReason);
+      await loadCommandData();
+      render();
+      await kcInfo("Job reassigned. The previous technician has been sent a withdrawal notice.");
+      return true;
+    } catch (error) {
+      await kcInfo(error.message || "Job reassignment failed. No reassignment has been sent.");
+      return false;
+    }
+  }
+
+  if (collection === "jobs" && changingSentJob) {
+    try {
+      await sendJobChangeViaHelper(previousItem, item, pendingJobChangeReason);
+      await loadCommandData();
+      render();
+      await kcInfo("Amended job version sent to the Technician App.");
+      return true;
+    } catch (error) {
+      await kcInfo(error.message || "Job change failed. No amended version has been sent.");
+      return false;
+    }
+  }
+
   const items = [...model.get()];
   if (index === "") {
     items.unshift(item);
@@ -4256,7 +6092,14 @@ async function saveDataDialog(action = "default") {
   } else if (collection === "jobs" && action === "send-tech") {
     const saved = await publishIntegrationFeeds();
     if (!saved) return false;
-    await kcInfo("Job sent to tech app.");
+    try {
+      await dispatchJobsViaHelper({ mode: "single", jobId: item.jobId || item.id || item.number });
+      await loadCommandData();
+      await kcInfo("Job sent to the Technician App.");
+    } catch (error) {
+      await kcInfo(error.message || "Job was saved, but the helper did not confirm the Technician App dispatch.");
+      return false;
+    }
   } else if (collection === "jobs" || collection === "planner" || collection === "attendance" || collection === "holidays" || collection === "companyHolidays" || collection === "staff") {
     const saved = await publishIntegrationFeeds();
     if (!saved) return false;
@@ -4508,6 +6351,37 @@ function formatDateUk(dateValue) {
   return `${day}/${month}/${year}`;
 }
 
+function formatLeaveNumber(value) {
+  const number = Number(value || 0);
+  return Number.isInteger(number) ? String(number) : number.toFixed(1).replace(/\.0$/, "");
+}
+
+function formatDateTimeUk(dateValue) {
+  if (!dateValue) return "-";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return formatDateUk(dateValue);
+  return date.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatDateTimeUkShort(dateValue) {
+  if (!dateValue) return "-";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return formatDateTimeUk(dateValue);
+  return date.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).replace(",", "");
+}
+
 function monthKey(dateValue = today) {
   return String(dateValue || "").slice(0, 7);
 }
@@ -4568,7 +6442,7 @@ function normalisePlannerItems() {
 
 function syncAttendanceFromPlanner() {
   const grouped = new Map();
-  weeklyPlanner.forEach((item) => {
+  weeklyPlanner.filter((item) => item.source !== "approved-holiday").forEach((item) => {
     const status = plannerAttendanceStatus(item);
     if (!status || !item.technician || !item.date) return;
     const key = `${item.technician}|${item.date}`;
@@ -4608,44 +6482,84 @@ function isPrivateClient(client) {
   return String(client || "").toLowerCase().includes("private");
 }
 
+function isVergoClient(client) {
+  return String(client || "").toLowerCase().includes("vergo");
+}
+
 function valuationMainClientGroup(item) {
   const mainClient = String(item?.mainClient || "").toLowerCase();
   const text = `${mainClient} ${item?.client || ""} ${item?.type || ""}`.toLowerCase();
 
   if (mainClient.includes("ark")) return "ark";
   if (mainClient.includes("jg") || mainClient.includes("pest control")) return "jg";
+  if (mainClient.includes("vergo")) return "vergo";
   if (mainClient.includes("other") || mainClient.includes("private")) return "other";
 
   if (item?.sourceSheet) return "ark";
   if (item?.source === "Hub job diary") {
     if (text.includes("jg") || text.includes("pest control")) return "jg";
+    if (text.includes("vergo")) return "vergo";
     if (text.includes("other") || text.includes("private")) return "other";
     return "ark";
   }
   if (text.includes("jg") || text.includes("pest control")) return "jg";
+  if (text.includes("vergo")) return "vergo";
   if (text.includes("other")) return "other";
   return "ark";
 }
 
+const clientAccentMap = {
+  "client:jg-pest-control": { key: "jg", label: "JG Pest Control", className: "client-accent-jg", badgeClassName: "jg" },
+  "client:kingswood-direct": { key: "kingswood", label: "Kingswood direct work", className: "client-accent-kingswood", badgeClassName: "kingswood" },
+  "client:vergo": { key: "vergo", label: "Vergo", className: "client-accent-vergo", badgeClassName: "vergo" }
+};
+
+function normaliseClientKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function clientAccentForJob(job = {}) {
+  const clientId = normaliseClientKey(job.clientId || job.mainClientId);
+  const clientName = String(job.client || job.clientName || job.mainClient || "No client").trim();
+  const clientNameKey = normaliseClientKey(clientName);
+  const idMatches = [
+    clientId,
+    clientId ? `client:${clientId}` : ""
+  ];
+  for (const key of idMatches) {
+    if (clientAccentMap[key]) {
+      return { ...clientAccentMap[key], displayName: clientName };
+    }
+  }
+  if (clientNameKey.includes("jg-pest-control") || clientNameKey === "jg" || clientNameKey.startsWith("jg-")) {
+    return { ...clientAccentMap["client:jg-pest-control"], displayName: clientName };
+  }
+  if (clientNameKey.includes("kingswood")) {
+    return { ...clientAccentMap["client:kingswood-direct"], displayName: clientName };
+  }
+  if (clientNameKey.includes("vergo")) {
+    return { ...clientAccentMap["client:vergo"], displayName: clientName };
+  }
+  return { key: "neutral", label: "Other client", className: "client-accent-neutral", badgeClassName: "other", displayName: clientName };
+}
+
 function jobClientType(job) {
-  const text = String(`${job.client || ""} ${job.type || ""}`).toLowerCase();
-  if (text.includes("jg") || text.includes("pest control")) {
-    return { label: "JG", className: "jg" };
-  }
-  if (text.includes("private")) {
-    return { label: "Private", className: "private" };
-  }
-  if (text.includes("ark")) {
-    return { label: "Ark", className: "ark" };
-  }
-  if (job.sourceSheet || job.arkRef) {
-    return { label: "Ark", className: "ark" };
-  }
-  return { label: "Other", className: "other" };
+  const accent = clientAccentForJob(job);
+  return {
+    label: accent.displayName || accent.label,
+    className: accent.badgeClassName || accent.key,
+    accentClassName: accent.className,
+    key: accent.key
+  };
 }
 
 function isAdminPrivateJob(job) {
-  return isPrivateClient(job.client) && !job.sourceSheet;
+  return (isPrivateClient(job.mainClient) || isPrivateClient(job.client)) && !job.sourceSheet;
 }
 
 function monthlyValuationTotals() {
@@ -4654,7 +6568,7 @@ function monthlyValuationTotals() {
 }
 
 function valuationTotalsForMonth(targetMonth) {
-  const totals = { ark: 0, jg: 0, private: 0 };
+  const totals = { ark: 0, jg: 0, private: 0, vergo: 0 };
 
   valuations
     .filter((item) => monthKey(item.date) === targetMonth)
@@ -4666,6 +6580,10 @@ function valuationTotalsForMonth(targetMonth) {
       }
       if (group === "ark") {
         totals.ark += Number(item.cost || 0);
+        return;
+      }
+      if (group === "vergo") {
+        totals.vergo += Number(item.cost || 0);
         return;
       }
       totals.private += Number(item.cost || 0);
@@ -4723,12 +6641,82 @@ function valuationKey(item) {
   ].join("|").toLowerCase().trim();
 }
 
+function phase05eReportForJob(job) {
+  if (!job) return null;
+  if (job.phase05eReport?.reportId) return job.phase05eReport;
+  const jobId = String(job.jobId || job.id || "").trim();
+  const jobReference = String(job.number || job.reference || job.jobReference || "").trim();
+  const matches = phase05eCompletedReports
+    .filter((report) => {
+      return (jobId && report.jobId === jobId) || (jobReference && report.jobReference === jobReference);
+    })
+    .filter((report) => report.reportId && report.oneDriveFolder);
+  if (!matches.length) return null;
+  return matches.sort((a, b) => new Date(b.submittedAt || b.createdAt || b.jobDate || 0) - new Date(a.submittedAt || a.createdAt || a.jobDate || 0))[0];
+}
+
+function phase05eReportJob(report) {
+  return {
+    id: report.jobId,
+    jobId: report.jobId,
+    number: report.jobReference,
+    reference: report.jobReference,
+    date: report.jobDate,
+    slot: report.slot,
+    client: report.clientName,
+    title: report.jobTitle || report.siteName || "Technician job",
+    address: report.address || report.siteName || "",
+    postcode: report.postcode || "",
+    technician: report.technician || "",
+    status: report.status || "Completed - Report Submitted",
+    report: "Report Received",
+    reportNotes: "Authenticated technician report received.",
+    completed: "y",
+    reportReceived: "y",
+    phase05eReadOnly: true,
+    phase05eReport: report
+  };
+}
+
+function phase05eReportJobs() {
+  const unmatchedReports = phase05eCompletedReports
+    .filter((report) => !jobs.some((job) => {
+      const jobId = String(job.jobId || job.id || "").trim();
+      const reference = String(job.number || job.reference || job.jobReference || "").trim();
+      return (jobId && jobId === report.jobId) || (reference && reference === report.jobReference);
+    }));
+  const latestByJob = new Map();
+  unmatchedReports.forEach((report) => {
+    const key = String(report.jobId || report.jobReference || report.reportId || "").trim();
+    if (!key) return;
+    const current = latestByJob.get(key);
+    const reportTime = new Date(report.submittedAt || report.createdAt || report.jobDate || 0).getTime() || 0;
+    const currentTime = new Date(current?.submittedAt || current?.createdAt || current?.jobDate || 0).getTime() || 0;
+    if (!current || reportTime >= currentTime) {
+      latestByJob.set(key, report);
+    }
+  });
+  return [...latestByJob.values()].map(phase05eReportJob);
+}
+
+function dashboardJobSource() {
+  const testTechnicianNames = dashboardTestTechnicianNames();
+  return jobs
+    .concat(phase05eReportJobs())
+    .filter((job) => !isDashboardTestRecord(job))
+    .filter((job) => !testTechnicianNames.has(String(job.technician || "").trim()));
+}
+
 function jobReportReceived(job) {
+  if (phase05eReportForJob(job)) return true;
   const report = String(job.report || "").toLowerCase();
   return report.includes("received") || report.includes("complete") || report.includes("done") || report === "y";
 }
 
 function jobCompleted(job) {
+  if (phase05eReportForJob(job)) {
+    return true;
+  }
   if (isYes(job.completed)) {
     return true;
   }
@@ -4749,6 +6737,11 @@ function splitJobAttachments(value) {
 function renderJobAttachments(job) {
   const attachments = splitJobAttachments(job.photos || job.pictures || job.images || job.evidence);
   if (!attachments.length) {
+    const report = phase05eReportForJob(job);
+    const reportPhotoCount = Number(report?.photoCount);
+    if (Number.isFinite(reportPhotoCount) && reportPhotoCount > 0) {
+      return `<p class="job-detail-empty">Photos submitted: ${escapeHtml(String(reportPhotoCount))}</p>`;
+    }
     return `<p class="job-detail-empty">No pictures have been attached yet.</p>`;
   }
 
@@ -4766,6 +6759,35 @@ function renderJobAttachments(job) {
   `;
 }
 
+function renderCompletedReportMetadata(job) {
+  const report = phase05eReportForJob(job);
+  if (!report) return "";
+
+  const reportId = String(report.reportId || "").trim();
+  const photoCount = Number(report.photoCount);
+  const hasPhotoCount = Number.isFinite(photoCount);
+  const hasRecommendations = report.recommendations ? "Yes" : "No";
+  const actionButtons = [
+    reportId ? `<button class="secondary-button compact-button" type="button" data-view-phase05e-report="${escapeHtml(reportId)}">View Report</button>` : "",
+    reportId && report.oneDriveFolder ? `<button class="secondary-button compact-button" type="button" data-open-report-folder="${escapeHtml(reportId)}">Open OneDrive Folder</button>` : ""
+  ].filter(Boolean).join("");
+
+  return `
+    <section class="job-detail-section job-report-metadata">
+      <h3>Completed Technician Report</h3>
+      <div class="job-report-meta-grid">
+        ${historyMetaItem("Report status", report.status || "Completed - Report Submitted")}
+        ${historyMetaItem("Report ID", reportId)}
+        ${historyMetaItem("Submitted date and time", report.submittedAt ? formatDateTimeUk(report.submittedAt) : "")}
+        ${historyMetaItem("Reporting technician", report.technician || job.technician)}
+        ${historyMetaItem("Photo count", hasPhotoCount ? String(photoCount) : "")}
+        ${historyMetaItem("Recommendations present", hasRecommendations)}
+      </div>
+      ${actionButtons ? `<div class="history-card-actions">${actionButtons}</div>` : ""}
+    </section>
+  `;
+}
+
 function openJobDetail(index) {
   const job = jobs[Number(index)];
   if (!job) return;
@@ -4778,6 +6800,10 @@ function openJobDetail(index) {
 
   jobDetailTitle.textContent = job.address || job.number || "Job Details";
   jobDetailContent.innerHTML = `
+    <div class="job-detail-client-accent ${type.accentClassName}" data-client-accent="${escapeHtml(type.key)}">
+      <span>Client</span>
+      <strong>${escapeHtml(type.label || job.client || "No client")}</strong>
+    </div>
     <div class="job-detail-grid">
       <article>
         <span>Date</span>
@@ -4812,10 +6838,53 @@ function openJobDetail(index) {
       <h3>Report</h3>
       <p>${escapeHtml(reportText)}</p>
     </section>
+    ${renderCompletedReportMetadata(job)}
     <section class="job-detail-section">
       <h3>Pictures</h3>
       ${renderJobAttachments(job)}
     </section>
+  `;
+  jobDetailDialog.showModal();
+}
+
+function openPhase05eReportDetail(reportId) {
+  const report = phase05eCompletedReports.find((item) => item.reportId === reportId);
+  if (!report) return;
+  const job = phase05eReportJob(report);
+  const type = jobClientType(job);
+  jobDetailTitle.textContent = job.address || job.number || "Completed Report";
+  jobDetailContent.innerHTML = `
+    <div class="job-detail-client-accent ${type.accentClassName}" data-client-accent="${escapeHtml(type.key)}">
+      <span>Client</span>
+      <strong>${escapeHtml(type.label || job.client || "No client")}</strong>
+    </div>
+    <div class="job-detail-grid">
+      <article>
+        <span>Date</span>
+        <strong>${formatDateUk(job.date)}</strong>
+      </article>
+      <article>
+        <span>Postcode</span>
+        <strong>${escapeHtml(job.postcode || "-")}</strong>
+      </article>
+      <article>
+        <span>Ref</span>
+        <strong>${escapeHtml(job.number || "-")}</strong>
+      </article>
+      <article>
+        <span>Status</span>
+        <strong><span class="status ok">Completed - Report Submitted</span></strong>
+      </article>
+      <article>
+        <span>Client</span>
+        <strong>${escapeHtml(job.client || "-")}</strong>
+      </article>
+      <article>
+        <span>Technician</span>
+        <strong>${escapeHtml(job.technician || "-")}</strong>
+      </article>
+    </div>
+    ${renderCompletedReportMetadata(job)}
   `;
   jobDetailDialog.showModal();
 }
@@ -4877,6 +6946,7 @@ function syncValuationsFromJobs() {
         postcode: job.postcode || "",
         arkRef: job.number || "",
         client: job.client || "",
+        mainClient: job.mainClient || job.client || "",
         technician: job.technician || "",
         completed: jobCompleted(job) ? "y" : "n",
         reportReceived: jobReportReceived(job) ? "y" : "n",
@@ -4901,6 +6971,10 @@ function syncValuationsFromJobs() {
       existing.technician = job.technician;
       changed = true;
     }
+    if ((job.mainClient || job.client) && existing.mainClient !== (job.mainClient || job.client)) {
+      existing.mainClient = job.mainClient || job.client;
+      changed = true;
+    }
   });
 
   return changed;
@@ -4915,10 +6989,19 @@ function syncValuationClientFilter() {
   const filter = document.querySelector("#valuationClientFilter");
   const current = filter.value;
   const options = valuationClients();
-  filter.innerHTML = '<option value="all">All clients</option>' + options
+  const groupOptions = [
+    ["group:ark", "Ark group"],
+    ["group:jg", "JG Pest Control group"],
+    ["group:private", "Private group"],
+    ["group:vergo", "Vergo group"],
+    ["group:other", "Other group"]
+  ];
+  filter.innerHTML = '<option value="all">All clients</option>'
+    + groupOptions.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")
+    + options
     .map((client) => `<option value="${escapeHtml(client)}">${escapeHtml(client)}</option>`)
     .join("");
-  filter.value = options.includes(current) ? current : "all";
+  filter.value = options.includes(current) || groupOptions.some(([value]) => value === current) ? current : "all";
 }
 
 function setupValuationDateFilters() {
@@ -4968,6 +7051,9 @@ function valuationGroupRows(group, targetMonth = selectedValuationMonthKey()) {
   if (group === "jg") {
     return monthRows.filter((item) => valuationMainClientGroup(item) === "jg");
   }
+  if (group === "vergo") {
+    return monthRows.filter((item) => valuationMainClientGroup(item) === "vergo");
+  }
   if (group === "private") {
     return jobs
       .map((job, jobIndex) => ({ job, jobIndex }))
@@ -5000,6 +7086,7 @@ function valuationGraphTotals(targetMonth = selectedValuationMonthKey()) {
   return {
     ark: valuationTotalForRows(valuationGroupRows("ark", targetMonth)),
     jg: valuationTotalForRows(valuationGroupRows("jg", targetMonth)),
+    vergo: valuationTotalForRows(valuationGroupRows("vergo", targetMonth)),
     other: valuationTotalForRows(valuationGroupRows("other", targetMonth))
   };
 }
@@ -5024,7 +7111,7 @@ function rollingValuationGraphData(endMonth = selectedValuationMonthKey()) {
       label: shortMonthLabel(key),
       fullLabel: monthLabel(`${key}-01`),
       ...totals,
-      total: totals.ark + totals.jg + totals.other
+      total: totals.ark + totals.jg + totals.vergo + totals.other
     };
   });
 }
@@ -5038,7 +7125,9 @@ function filteredValuations() {
     const searchable = `${item.date} ${item.address} ${item.postcode} ${item.arkRef} ${item.client} ${item.technician} ${item.notes}`.toLowerCase();
     const matchesDate = valuationMatchesDateFilters(item);
     const matchesSearch = !term || searchable.includes(term);
-    const matchesClient = client === "all" || item.client === client;
+    const matchesClient = client === "all"
+      || (client.startsWith("group:") && valuationMainClientGroup(item) === client.replace("group:", ""))
+      || item.client === client;
     const matchesStatus =
       status === "all" ||
       (status === "completed" && isYes(item.completed)) ||
@@ -5090,7 +7179,8 @@ function plannerCurrentWeek() {
 
 function plannerVisibleWeeks() {
   const currentStart = plannerCurrentWeekStart();
-  return [0, 7, 14].map((days) => plannerWeekFromStart(datePlusDays(currentStart, days)));
+  const standardWeekStarts = [-7, 0, 7, 14].map((days) => datePlusDays(currentStart, days));
+  return standardWeekStarts.map(plannerWeekFromStart);
 }
 
 function plannerWeekStartFromLabel(weekLabel) {
@@ -5117,8 +7207,15 @@ function syncPlannerWeeks() {
 function renderPlannerWeekTabs(weeks, selectedWeek) {
   const tabs = document.querySelector("#plannerWeekTabs");
   if (!tabs) return;
-  tabs.innerHTML = weeks.map((item, index) => {
-    const label = index === 0 ? "Current week" : index === 1 ? "Next week" : "Following week";
+  const currentStart = plannerCurrentWeekStart();
+  const standardLabels = new Map([
+    [datePlusDays(currentStart, -7), "Previous week"],
+    [currentStart, "Current week"],
+    [datePlusDays(currentStart, 7), "Next week"],
+    [datePlusDays(currentStart, 14), "Following week"]
+  ]);
+  tabs.innerHTML = weeks.map((item) => {
+    const label = standardLabels.get(item.weekStart) || "Planned week";
     return `
       <button class="planner-week-tab ${item.week === selectedWeek ? "active" : ""}" type="button" data-planner-week="${escapeHtml(item.week)}">
         <span>${escapeHtml(label)}</span>
@@ -5174,6 +7271,75 @@ function plannerUnavailableSlotCount(items) {
     .filter(isPlannerItemUnavailable)
     .map((item) => `${item.technician}|${item.date}|${item.session}`)
   ).size;
+}
+
+function plannerStaffForHolidayRequest(request = {}) {
+  return staffProfiles.find((staff) => request.staffId && staff.staffId === request.staffId)
+    || staffProfiles.find((staff) => request.name && staff.name === request.name)
+    || {};
+}
+
+function approvedHolidayPlannerEntries(selectedWeek = plannerCurrentWeek()) {
+  const selectedWeekStart = plannerWeekStartFromLabel(selectedWeek);
+  const weekDates = new Set(plannerWeekDays(selectedWeekStart).map((day) => day.date));
+  return holidayRequests.flatMap((request, index) => {
+    if (holidayPlannerStatus(request) !== "Approved") return [];
+    const staff = plannerStaffForHolidayRequest(request);
+    const technician = staff.name || request.name || "";
+    if (!technician) return [];
+    return workingDateRangeValues(request.from, request.to || request.from)
+      .filter((date) => selectedWeek === "all" || weekDates.has(date))
+      .flatMap((date) => {
+        const sessions = request.dayType === "Half day" ? [request.dayPart || "AM"] : ["AM", "PM"];
+        return sessions.map((session) => ({
+          date,
+          technician,
+          session,
+          fullDay: request.dayType !== "Half day",
+          request,
+          requestIndex: index,
+          staffId: request.staffId || staff.staffId || "",
+          label: request.dayType === "Half day" ? `Annual Leave ${session}` : "Annual Leave"
+        }));
+      });
+  });
+}
+
+function plannerLeaveLookup(entries = []) {
+  const lookup = new Map();
+  entries.forEach((entry) => {
+    const key = `${entry.technician}|${entry.date}|${entry.session}`;
+    if (!lookup.has(key)) lookup.set(key, []);
+    lookup.get(key).push(entry);
+  });
+  return lookup;
+}
+
+function plannerDerivedUnavailableSlotCount(entries = []) {
+  return new Set(entries.map((entry) => `${entry.technician}|${entry.date}|${entry.session}`)).size;
+}
+
+function plannerLeaveIndicator(entry, conflict = false) {
+  if (!entry) return "";
+  const dates = entry.request.to && entry.request.to !== entry.request.from
+    ? `${formatDateUk(entry.request.from)} to ${formatDateUk(entry.request.to)}`
+    : formatDateUk(entry.request.from);
+  const sessionLabel = entry.fullDay ? "" : entry.session || "";
+  return `
+    <button class="planner-leave-indicator${entry.fullDay ? " full-day" : ""}${conflict ? " conflict" : ""}" type="button" data-weekly-leave-open="${entry.requestIndex}" title="${escapeHtml(`${entry.technician} | ${dates}`)}">
+      <span>${escapeHtml(entry.label)}</span>
+      ${sessionLabel ? `<strong>${escapeHtml(sessionLabel)}</strong>` : ""}
+    </button>
+  `;
+}
+
+function plannerLeaveConflictWarning(entry) {
+  if (!entry) return "";
+  return `
+    <div class="planner-conflict-warning" role="note">
+      Approved leave and assigned job
+    </div>
+  `;
 }
 
 function plannerStatusLabel(item) {
@@ -5334,22 +7500,61 @@ function attendanceYear(record) {
   return String(record.date || "").slice(0, 4);
 }
 
-function holidayRequestDaysForYear(request, year) {
-  const dates = workingDateRangeValues(request.from, request.to).filter((date) => date.startsWith(year));
+function normalWorkingWeekdaysForStaff(staff = {}) {
+  if (Array.isArray(staff.normalWorkingWeekdays) && staff.normalWorkingWeekdays.length) {
+    return new Set(staff.normalWorkingWeekdays.map((day) => Number(day)).filter((day) => day >= 0 && day <= 6));
+  }
+  const pattern = String(staff.normalWorkingPattern || "").toLowerCase();
+  if (/mon(day)?\s*(to|-)\s*fri(day)?|monday to friday|weekdays/.test(pattern)) return new Set([1, 2, 3, 4, 5]);
+  const namedDays = [
+    ["sunday", 0],
+    ["monday", 1],
+    ["tuesday", 2],
+    ["wednesday", 3],
+    ["thursday", 4],
+    ["friday", 5],
+    ["saturday", 6]
+  ];
+  const matched = namedDays.filter(([name]) => pattern.includes(name)).map(([, day]) => day);
+  if (matched.length) return new Set(matched);
+  const contractedDays = Math.round(Number(staff.contractedWorkingDaysPerWeek || staff.normalWorkingDays || 5));
+  return new Set([1, 2, 3, 4, 5, 6, 0].slice(0, Math.max(0, Math.min(contractedDays, 7))));
+}
+
+function isoWeekday(dateValue) {
+  const date = new Date(`${dateValue}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? -1 : date.getUTCDay();
+}
+
+function staffBankHolidayDatesForYear(staff = {}, year = String(new Date().getFullYear())) {
+  const weekdays = normalWorkingWeekdaysForStaff(staff);
+  return new Set(ukBankHolidays
+    .filter((holiday) => holiday.date.startsWith(year) && weekdays.has(isoWeekday(holiday.date)))
+    .map((holiday) => holiday.date));
+}
+
+function holidayRequestDaysForYear(request, year, staff = null, excludedDates = new Set()) {
+  const weekdays = staff ? normalWorkingWeekdaysForStaff(staff) : new Set([1, 2, 3, 4, 5]);
+  const dates = workingDateRangeValues(request.from, request.to || request.from)
+    .filter((date) => date.startsWith(year))
+    .filter((date) => weekdays.has(isoWeekday(date)))
+    .filter((date) => !excludedDates.has(date));
   if (!dates.length) return 0;
   if (request.dayType === "Half day" && request.from === request.to && dates.length === 1) return 0.5;
   return Number(request.days) && String(request.from || "").startsWith(year) && String(request.to || "").startsWith(year)
-    ? Number(request.days)
+    ? Math.min(Number(request.days), dates.length)
     : dates.length;
 }
 
 function holidayUsedForYear(name, year = String(new Date().getFullYear())) {
+  const staff = staffProfiles.find((profile) => profile.name === name) || {};
+  const bankHolidayDates = staffBankHolidayDatesForYear(staff, year);
   const approvedRequestIds = new Set();
   const approvedDays = holidayRequests
     .filter((request) => request.name === name && request.status === "Approved")
     .reduce((sum, request) => {
       if (request.id) approvedRequestIds.add(request.id);
-      return sum + holidayRequestDaysForYear(request, year);
+      return sum + holidayRequestDaysForYear(request, year, staff, bankHolidayDates);
     }, 0);
   const legacyDays = attendanceRecords
     .filter((record) =>
@@ -5360,9 +7565,10 @@ function holidayUsedForYear(name, year = String(new Date().getFullYear())) {
       && record.source !== "holiday"
       && record.source !== "approved-holiday"
       && (!record.holidayRequestId || !approvedRequestIds.has(record.holidayRequestId))
+      && !bankHolidayDates.has(record.date)
     )
     .reduce((sum, record) => sum + (record.dayType === "Half day" ? 0.5 : 1), 0);
-  return approvedDays + legacyDays + companyHolidayDaysForYear(year);
+  return approvedDays + legacyDays + bankHolidayDates.size;
 }
 
 function companyHolidayDatesForYear(year = String(new Date().getFullYear())) {
@@ -5418,14 +7624,15 @@ function totalSickDaysForYear(year = String(new Date().getFullYear())) {
 function staffLeaveSummary(staff, year = String(new Date().getFullYear())) {
   const allowance = Number(staff.holidayAllowance || 28);
   const taken = holidayUsedForYear(staff.name, year);
-  const companyBankDeductions = companyHolidayDaysForYear(year);
+  const companyBankDeductions = staffBankHolidayDatesForYear(staff, year).size;
+  const attendanceSummary = annualAttendanceSummary(staff, year);
   return {
     year,
     holidayAllowance: allowance,
     holidayTaken: taken,
     companyBankDeductions,
     holidayRemaining: allowance - taken,
-    sickDays: sicknessDaysForYear(staff.name, year)
+    sickDays: attendanceSummary.sickDays
   };
 }
 
@@ -5609,6 +7816,14 @@ function openStaffDetail(index) {
 }
 
 function trainingStatus(record) {
+  const lifecycleStatus = String(record.lifecycleStatus || record.recordStatus || "").trim();
+  if (["Not Applicable", "Superseded", "Inactive", "Missing / Not Recorded"].includes(lifecycleStatus)) {
+    return {
+      label: lifecycleStatus,
+      className: lifecycleStatus === "Missing / Not Recorded" ? "warning" : "muted",
+      days: 9999
+    };
+  }
   if (record.noExpiry) {
     return { label: "No Expiry", className: "ok", days: 9999 };
   }
@@ -5659,11 +7874,18 @@ function syncTechniciansFromStaff() {
       const existing = existingByName[staff.name] || {};
       return {
         name: staff.name,
+        staffId: staff.staffId || existing.staffId || "",
+        technicianId: staff.technicianId || existing.technicianId || "",
+        status: staff.status || existing.status || "Active",
         role: staff.role,
         phone: staff.phone,
+        assignedVehicleId: existing.assignedVehicleId || staff.assignedVehicleId || "",
         van: staff.assignedVan || existing.van || "",
         location: existing.location || "Set location",
-        training: staff.trainingRecords || existing.training || ""
+        training: staff.trainingRecords || existing.training || "",
+        appAccessStatus: existing.appAccessStatus || "Active",
+        lastAppActivityAt: existing.lastAppActivityAt || "",
+        pinSet: existing.pinSet !== false
       };
     });
 }
@@ -5731,21 +7953,78 @@ function renderSummary() {
   document.querySelector("#needsSendingCount").textContent = ramsItems.filter(ramsNeedsAction).length;
 }
 
+function syncDashboardJobFilters(defaultDate = today) {
+  const dateFilter = document.querySelector("#dashboardJobDateFilter");
+  const techFilter = document.querySelector("#dashboardTechnicianFilter");
+  const statusFilter = document.querySelector("#dashboardStatusFilter");
+  const dashboardJobs = dashboardJobSource();
+
+  if (dateFilter && !dateFilter.value) {
+    dateFilter.value = defaultDate;
+  }
+
+  if (techFilter) {
+    const selected = techFilter.value || "all";
+    const technicianNames = Array.from(new Set(
+      technicians
+        .filter((tech) => !isDashboardTestRecord(tech))
+        .map((tech) => tech.name)
+        .concat(dashboardJobs.map((job) => job.technician))
+        .filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b));
+    techFilter.innerHTML = '<option value="all">All technicians</option>'
+      + technicianNames.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+    techFilter.value = technicianNames.includes(selected) ? selected : "all";
+  }
+
+  if (statusFilter) {
+    const selected = statusFilter.value || "all";
+    const statusNames = Array.from(new Set(dashboardJobs.map(dashboardJobStatusLabel).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    statusFilter.innerHTML = '<option value="all">All statuses</option>'
+      + statusNames.map((status) => `<option value="${escapeHtml(status)}">${escapeHtml(status)}</option>`).join("");
+    statusFilter.value = statusNames.includes(selected) ? selected : "all";
+  }
+}
+
 function renderDashboard() {
   enhanceDashboardCards();
   const valuationTotals = monthlyValuationTotals();
   const gateJobs = reportGateJobs();
-  document.querySelector("#jobsTodayCount").textContent = jobs.filter((job) => job.date === today).length;
-  document.querySelector("#jobsTomorrowCount").textContent = jobs.filter((job) => job.date === tomorrow).length;
-  document.querySelector("#reportsDueCount").textContent = jobs.filter((job) => job.report === "Awaiting").length;
+  const dashboardJobs = dashboardJobSource();
+  const dashboardVehicles = vehicles.filter((vehicle) => !isDashboardTestRecord(vehicle));
+  const todayJobs = dashboardJobs.filter((job) => job.date === today);
+  const tomorrowJobs = dashboardJobs.filter((job) => job.date === tomorrow);
+  syncDashboardJobFilters(today);
+  const dashboardDate = document.querySelector("#dashboardJobDateFilter")?.value || today;
+  const dashboardTechnician = document.querySelector("#dashboardTechnicianFilter")?.value || "all";
+  const dashboardStatus = document.querySelector("#dashboardStatusFilter")?.value || "all";
+  const dashboardDiaryJobs = dashboardJobs
+    .filter((job) => job.date === dashboardDate)
+    .filter((job) => dashboardTechnician === "all" || job.technician === dashboardTechnician)
+    .filter((job) => dashboardStatus === "all" || dashboardJobStatusLabel(job) === dashboardStatus)
+    .sort((a, b) => `${a.slot || a.jobSlot || a.session || ""}${a.number || ""}`.localeCompare(`${b.slot || b.jobSlot || b.session || ""}${b.number || ""}`));
+  const awaitingReports = dashboardJobs.filter((job) => job.report === "Awaiting" || !jobReportReceived(job));
+  const vehicleAlerts = dashboardVehicles.filter((vehicle) => vehicle.tracker !== "Active" || isReminderDate(vehicle.mot) || isReminderDate(vehicle.insurance) || isReminderDate(vehicle.service));
+  const ramsNeedingAction = ramsItems.filter(ramsNeedsAction);
+  const pendingHolidayRequests = holidayRequests.filter((request) => request.status === "Pending");
+  document.querySelector("#jobsTodayCount").textContent = todayJobs.length;
+  document.querySelector("#jobsTomorrowCount").textContent = tomorrowJobs.length;
+  document.querySelector("#reportsDueCount").textContent = awaitingReports.length;
+  const ramsDashboardCount = document.querySelector("#ramsToSendDashboardCount");
+  if (ramsDashboardCount) ramsDashboardCount.textContent = ramsNeedingAction.length;
   document.querySelector("#valuationMonthLabel").textContent = monthLabel();
   document.querySelector("#valuationDueLabel").textContent = ` | Valuation due ${lastWorkingDayOfMonth()}`;
   document.querySelector("#arkMonthTotal").textContent = money(valuationTotals.ark);
   document.querySelector("#jgMonthTotal").textContent = money(valuationTotals.jg);
   document.querySelector("#privateMonthTotal").textContent = money(valuationTotals.private);
-  document.querySelector("#vehicleAlertCount").textContent = vehicles.filter((vehicle) => vehicle.tracker !== "Active" || isReminderDate(vehicle.mot) || isReminderDate(vehicle.insurance)).length;
-  document.querySelector("#motReminderCount").textContent = vehicles.filter((vehicle) => isReminderDate(vehicle.mot)).length;
-  document.querySelector("#insuranceReminderCount").textContent = vehicles.filter((vehicle) => isReminderDate(vehicle.insurance)).length;
+  document.querySelector("#vergoMonthTotal").textContent = money(valuationTotals.vergo);
+  const valuationDashboardMonthTotal = document.querySelector("#valuationDashboardMonthTotal");
+  if (valuationDashboardMonthTotal) {
+    valuationDashboardMonthTotal.textContent = money(valuationTotals.ark + valuationTotals.jg + valuationTotals.private + valuationTotals.vergo);
+  }
+  document.querySelector("#vehicleAlertCount").textContent = vehicleAlerts.length;
+  document.querySelector("#motReminderCount").textContent = dashboardVehicles.filter((vehicle) => isReminderDate(vehicle.mot)).length;
+  document.querySelector("#insuranceReminderCount").textContent = dashboardVehicles.filter((vehicle) => isReminderDate(vehicle.insurance)).length;
   const documentSummary = companyDocumentReminderSummary();
   const criticalDocumentAlertCount = document.querySelector("#criticalDocumentAlertCount");
   const expiredDocumentAlertCount = document.querySelector("#expiredDocumentAlertCount");
@@ -5757,23 +8036,99 @@ function renderDashboard() {
   if (trainingExpiredDashboardCount) trainingExpiredDashboardCount.textContent = trainingRows.filter((record) => record.status.className === "urgent").length;
   if (trainingThirtyDayDashboardCount) trainingThirtyDayDashboardCount.textContent = trainingRows.filter((record) => !record.noExpiry && record.status.days >= 0 && record.status.days <= 30).length;
   const compliance = complianceRecords().map((item) => ({ ...item, status: complianceStatus(item) }));
-  document.querySelector("#complianceDueCount").textContent = compliance.filter((item) => Number.isFinite(item.status.days) && item.status.days >= 0 && item.status.days <= 30).length;
-  document.querySelector("#complianceOverdueCount").textContent = compliance.filter((item) => item.status.className === "red").length;
+  const complianceDueSoon = compliance.filter((item) => Number.isFinite(item.status.days) && item.status.days >= 0 && item.status.days <= 30);
+  const complianceOverdue = compliance.filter((item) => item.status.className === "red");
+  document.querySelector("#complianceDueCount").textContent = complianceDueSoon.length;
+  document.querySelector("#complianceOverdueCount").textContent = complianceOverdue.length;
   document.querySelector("#fineDeadlineCount").textContent = fines.filter(isFineDeadlineSoon).length;
   document.querySelector("#openFineCount").textContent = fines.filter(isFineOpen).length;
   const todayAttendance = staffProfiles.map((staff) => attendanceFor(staff.name, today));
   document.querySelector("#staffAvailableCount").textContent = todayAttendance.filter((record) => !isUnavailableStatus(record.status)).length;
   document.querySelector("#staffUnavailableCount").textContent = todayAttendance.filter((record) => isUnavailableStatus(record.status)).length;
+  const urgentAttentionCount = gateJobs.length
+    + ramsNeedingAction.length
+    + complianceOverdue.length
+    + vehicleAlerts.length
+    + fines.filter(isFineDeadlineSoon).length
+    + pendingHolidayRequests.length;
+  const urgentAttentionTarget = document.querySelector("#urgentAttentionCount");
+  if (urgentAttentionTarget) urgentAttentionTarget.textContent = urgentAttentionCount;
+  setDashboardKpiAlertState("#urgentAttentionCount", urgentAttentionCount, "overdue");
+  setDashboardKpiAlertState("#reportsDueCount", awaitingReports.length, "warning");
+  setDashboardKpiAlertState("#ramsToSendDashboardCount", ramsNeedingAction.length, "warning");
   renderDashboardHolidayRequests();
+  if (document.body.dataset.activeSection === "dashboard") {
+    startDashboardRevolutAutoRefresh({ immediate: true });
+  }
 
-  const dashboardJobs = jobs
-    .filter((job) => job.date === today || job.date === tomorrow)
+  const todayJobsTarget = document.querySelector("#dashboardTodayJobs");
+  if (todayJobsTarget) {
+    const emptyDiaryMessage = dashboardDate === today && dashboardTechnician === "all" && dashboardStatus === "all"
+      ? "No jobs scheduled for today."
+      : "No jobs match this view.";
+    todayJobsTarget.innerHTML = dashboardDiaryJobs.length
+      ? dashboardDiaryJobs
+        .slice(0, 10)
+        .map((job) => dashboardJobRow(job))
+        .join("")
+      : `<tr><td colspan="8"><p class="empty-state compact-empty">${emptyDiaryMessage}</p></td></tr>`;
+  }
+
+  const techStatusTarget = document.querySelector("#dashboardTechnicianStatus");
+  if (techStatusTarget) {
+    const visibleTechnicians = technicians.filter((tech) => !isDashboardTestRecord(tech));
+    const technicianStates = visibleTechnicians.map((tech) => dashboardTechnicianState(tech));
+    const connectedCount = technicianStates.filter((item) => item.state.key === "connected").length;
+    const offlineCount = technicianStates.filter((item) => item.state.key === "offline").length;
+    const onJobCount = technicianStates.filter((item) => item.currentJob).length;
+    techStatusTarget.innerHTML = visibleTechnicians.length
+      ? `
+        <div class="dashboard-tech-summary" aria-label="Technician status summary">
+          <strong>${connectedCount} connected</strong>
+          <span>${offlineCount} offline</span>
+          <span>${onJobCount} on jobs</span>
+        </div>
+        <div class="dashboard-tech-list">
+          ${technicianStates
+            .slice(0, 8)
+            .map(({ tech, currentJob, state }) => dashboardTechnicianRow(tech, currentJob, state))
+            .join("")}
+        </div>
+      `
+      : '<p class="empty-state compact-empty">No technicians loaded yet.</p>';
+  }
+
+  const notificationTarget = document.querySelector("#dashboardNotifications");
+  if (notificationTarget) {
+    const notificationRows = [
+      pendingHolidayRequests.length ? ["Holiday requests", `${pendingHolidayRequests.length} pending request${pendingHolidayRequests.length === 1 ? "" : "s"}`, "warning"] : null,
+      trainingRows.filter((record) => record.status.className === "urgent").length ? ["Training expired", `${trainingRows.filter((record) => record.status.className === "urgent").length} expired record${trainingRows.filter((record) => record.status.className === "urgent").length === 1 ? "" : "s"}`, "urgent"] : null,
+      complianceOverdue.length ? ["Compliance overdue", `${complianceOverdue.length} overdue item${complianceOverdue.length === 1 ? "" : "s"}`, "urgent"] : null
+    ].filter(Boolean);
+    notificationTarget.innerHTML = notificationRows.length
+      ? notificationRows.map(([title, detail, badge]) => dashboardAlertRow(title, detail, badge)).join("")
+      : '<p class="empty-state compact-empty">No urgent notifications.</p>';
+  }
+
+  const vehicleAlertTarget = document.querySelector("#dashboardVehicleAlerts");
+  if (vehicleAlertTarget) {
+    vehicleAlertTarget.innerHTML = vehicleAlerts.length
+      ? vehicleAlerts
+        .slice(0, 5)
+        .map((vehicle) => {
+          const issue = vehicle.tracker !== "Active" ? "Tracker check" : isReminderDate(vehicle.mot) ? "MOT reminder" : isReminderDate(vehicle.service) ? "Service reminder" : "Insurance reminder";
+          return dashboardAlertRow(vehicle.registration || vehicle.vehicle || "Vehicle", `${issue} | ${vehicle.driver || "No driver"}`, "warning");
+        })
+        .join("")
+      : '<p class="empty-state compact-empty">No vehicle alerts.</p>';
+  }
+
+  document.querySelector("#dashboardJobs").innerHTML = todayJobs.concat(tomorrowJobs)
     .map((job) => listRow(`${job.number} - ${job.title}`, `${job.date} | ${job.client} | ${job.technician}`, job.status))
     .join("");
-  document.querySelector("#dashboardJobs").innerHTML = dashboardJobs;
 
   document.querySelector("#technicianLocations").innerHTML = technicians
-    .map((tech) => listRow(tech.name, `${tech.location} | ${tech.van}`, "Last update today"))
+    .map((tech) => listRow(tech.name, `${tech.location || "Location not available"} | ${tech.van || "No van"}`, tech.appStatus || "Not connected"))
     .join("");
 
   document.querySelector("#reportGateList").innerHTML = gateJobs.length
@@ -5791,10 +8146,245 @@ function renderDashboard() {
     .filter((item) => item.status.className !== "green")
     .sort((a, b) => a.status.days - b.status.days)
     .slice(0, 6)
-    .map((item) => listRow(`${item.complianceType} - ${item.title}`, `${item.responsiblePerson} | ${item.noExpiry ? "No expiry" : `Due ${formatDateUk(item.expiryDate)}`}`, item.status.label))
-    .join("");
+    .map((item) => dashboardAlertRow(`${item.complianceType} - ${item.title}`, `${item.responsiblePerson} | ${item.noExpiry ? "No expiry" : `Due ${formatDateUk(item.expiryDate)}`}`, item.status.className === "red" ? "urgent" : "warning"))
+    .join("") || '<p class="empty-state compact-empty">No compliance reminders.</p>';
 
   updateDashboardBadges();
+}
+
+let dashboardRevolutBalanceLoading = false;
+let dashboardRevolutBalanceLoadedAt = 0;
+let dashboardRevolutBalanceTimer = null;
+let dashboardRevolutLastSuccess = null;
+const dashboardRevolutRefreshIntervalMs = 5 * 60 * 1000;
+
+function setRevolutLowBalanceState(card, availableBalance) {
+  if (!card) return false;
+  const isLowBalance = Number.isFinite(Number(availableBalance)) && Number(availableBalance) < 100;
+  card.classList.toggle("is-low-balance", isLowBalance);
+  return isLowBalance;
+}
+
+function setDashboardRevolutText(balanceText, statusText, updatedText) {
+  const balanceTarget = document.querySelector("#dashboardRevolutBalance");
+  const statusTarget = document.querySelector("#dashboardRevolutStatus");
+  const updatedTarget = document.querySelector("#dashboardRevolutUpdated");
+  if (balanceTarget) balanceTarget.textContent = balanceText;
+  if (statusTarget) {
+    statusTarget.textContent = statusText === "Low balance" ? "Low balance" : "";
+    statusTarget.classList.toggle("hidden", statusText !== "Low balance");
+  }
+  if (updatedTarget) updatedTarget.textContent = updatedText;
+}
+
+async function refreshDashboardRevolutBalance(options = {}) {
+  const manual = options.manual === true;
+  const force = options.force === true;
+  const card = document.querySelector("#dashboardRevolutCard");
+  if (!card) return;
+  if (!isDirectorLocalUser()) {
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+  const now = Date.now();
+  if (!force && !manual && dashboardRevolutBalanceLoadedAt && now - dashboardRevolutBalanceLoadedAt < 60000) return;
+  if (dashboardRevolutBalanceLoading) return;
+
+  dashboardRevolutBalanceLoading = true;
+  setDashboardRevolutText(
+    document.querySelector("#dashboardRevolutBalance")?.textContent || "Unavailable",
+    "",
+    document.querySelector("#dashboardRevolutUpdated")?.textContent || "Last updated: not yet"
+  );
+
+  try {
+    const response = await fetch("/api/revolut/gbp-balance", {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "X-Kingswood-User": currentUserName()
+      }
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.message || "Revolut balance is unavailable.");
+    }
+    dashboardRevolutBalanceLoadedAt = Date.now();
+    const updatedLabel = payload.lastUpdatedAt
+      ? `Last updated: ${formatDateTimeUkShort(payload.lastUpdatedAt)}`
+      : "Last updated: just now";
+    if (!payload.connected) {
+      setRevolutLowBalanceState(card, NaN);
+      setDashboardRevolutText("Unavailable", "", "Last updated: not yet");
+    } else if (!payload.activeGbpAccountFound || !Number.isFinite(Number(payload.availableBalance))) {
+      setRevolutLowBalanceState(card, NaN);
+      setDashboardRevolutText("Unavailable", "", updatedLabel);
+    } else {
+      const isLowBalance = setRevolutLowBalanceState(card, payload.availableBalance);
+      dashboardRevolutLastSuccess = {
+        balanceText: money(payload.availableBalance),
+        statusText: isLowBalance ? "Low balance" : payload.status || "Connected",
+        updatedText: updatedLabel,
+        availableBalance: payload.availableBalance
+      };
+      setDashboardRevolutText(dashboardRevolutLastSuccess.balanceText, dashboardRevolutLastSuccess.statusText, dashboardRevolutLastSuccess.updatedText);
+    }
+  } catch (error) {
+    if (dashboardRevolutLastSuccess) {
+      setRevolutLowBalanceState(card, dashboardRevolutLastSuccess.availableBalance);
+      setDashboardRevolutText(dashboardRevolutLastSuccess.balanceText, dashboardRevolutLastSuccess.statusText, dashboardRevolutLastSuccess.updatedText);
+    } else {
+      setRevolutLowBalanceState(card, NaN);
+      setDashboardRevolutText("Unavailable", "", "Last updated: not yet");
+    }
+  } finally {
+    dashboardRevolutBalanceLoading = false;
+  }
+}
+
+function startDashboardRevolutAutoRefresh(options = {}) {
+  const card = document.querySelector("#dashboardRevolutCard");
+  if (!card || !isDirectorLocalUser()) return;
+  if (options.immediate) {
+    refreshDashboardRevolutBalance({ force: true });
+  }
+  if (dashboardRevolutBalanceTimer) return;
+  dashboardRevolutBalanceTimer = window.setInterval(() => {
+    if (document.body.dataset.activeSection !== "dashboard") {
+      stopDashboardRevolutAutoRefresh();
+      return;
+    }
+    refreshDashboardRevolutBalance({ force: true });
+  }, dashboardRevolutRefreshIntervalMs);
+}
+
+function stopDashboardRevolutAutoRefresh() {
+  if (document.body.dataset.activeSection !== "dashboard") {
+    document.querySelector("#dashboardRevolutCard")?.classList.add("hidden");
+  }
+  if (!dashboardRevolutBalanceTimer) return;
+  window.clearInterval(dashboardRevolutBalanceTimer);
+  dashboardRevolutBalanceTimer = null;
+}
+
+function setDashboardKpiAlertState(selector, count, alertClassName) {
+  const card = document.querySelector(selector)?.closest(".dashboard-kpi-card");
+  if (!card) return;
+  card.classList.remove("normal", "warning", "overdue", "has-alert");
+  if (Number(count) > 0) {
+    card.classList.add(alertClassName, "has-alert");
+  } else {
+    card.classList.add("normal");
+  }
+}
+
+function dashboardJobRow(job) {
+  const slot = job.slot || job.jobSlot || job.session || "No slot";
+  const postcode = job.postcode || postcodeFromText(job.address) || "No postcode";
+  const status = dashboardJobStatusLabel(job);
+  const badgeClassName = dashboardStatusClass(status);
+  const clientType = jobClientType(job);
+  const action = job.phase05eReadOnly && job.phase05eReport?.reportId
+    ? `<button class="secondary-button compact-alert-button" type="button" data-open-phase05e-report="${escapeHtml(job.phase05eReport.reportId)}">Open</button>`
+    : '<button class="secondary-button compact-alert-button" type="button" data-jump-section="diary">Open</button>';
+  return `
+    <tr class="dashboard-job-row ${clientType.accentClassName}" data-client-accent="${escapeHtml(clientType.key)}">
+      <td><span class="dashboard-row-slot">${escapeHtml(slot)}</span></td>
+      <td><strong>${escapeHtml(job.number || job.reference || "No ref")}</strong></td>
+      <td><span class="job-client-badge ${clientType.className}">${escapeHtml(clientType.label || job.client || "No client")}</span></td>
+      <td><strong>${escapeHtml(job.title || job.address || "Job")}</strong></td>
+      <td>${escapeHtml(postcode)}</td>
+      <td>${escapeHtml(job.technician || "Unassigned")}</td>
+      <td><span class="status ${badgeClassName}">${escapeHtml(status)}</span></td>
+      <td>${action}</td>
+    </tr>
+  `;
+}
+
+function dashboardJobStatusLabel(job) {
+  if (phase05eReportForJob(job)) return "Completed - Report Submitted";
+  if (job.status) return job.status;
+  if (job.report === "Awaiting" || !jobReportReceived(job)) return "Awaiting report";
+  if (job.sentToTech || job.publishedToTech) return "Sent to Tech";
+  return "Booked";
+}
+
+function dashboardStatusClass(status) {
+  const normalised = String(status || "").toLowerCase();
+  if (normalised.includes("urgent") || normalised.includes("not completed") || normalised.includes("overdue") || normalised.includes("attention")) return "urgent";
+  if (normalised.includes("awaiting") || normalised.includes("rams") || normalised.includes("draft") || normalised.includes("saved")) return "warning";
+  if (normalised.includes("complete") || normalised.includes("sent") || normalised.includes("booked")) return "ok";
+  return "warning";
+}
+
+function isDashboardTestRecord(record) {
+  const status = String(record?.status || "").toLowerCase();
+  return record?.isTestRecord === true || status === "archived test" || status === "test only";
+}
+
+function dashboardTestTechnicianNames() {
+  return new Set(
+    technicians
+      .concat(staffProfiles)
+      .filter((record) => isDashboardTestRecord(record))
+      .map((record) => String(record.name || "").trim())
+      .filter(Boolean)
+  );
+}
+
+function dashboardTechnicianState(tech) {
+  const currentJob = jobs
+    .filter((job) => job.technician === tech.name && job.date >= today)
+    .sort((a, b) => `${a.date || ""}${a.slot || ""}`.localeCompare(`${b.date || ""}${b.slot || ""}`))[0];
+  const attendance = attendanceFor(tech.name, today);
+  const unavailable = isUnavailableStatus(attendance.status);
+  const appStatus = tech.appStatus || tech.connectionStatus || "Not connected";
+  const normalisedStatus = String(appStatus || "").toLowerCase();
+  let state = { key: "uncertain", label: "Status unknown", className: "attention" };
+  if (normalisedStatus.includes("fault") || normalisedStatus.includes("error")) {
+    state = { key: "fault", label: "Fault", className: "urgent" };
+  } else if (unavailable || normalisedStatus.includes("offline") || normalisedStatus.includes("not connected") || normalisedStatus.includes("disconnected")) {
+    state = { key: "offline", label: "Offline", className: "offline" };
+  } else if (normalisedStatus.includes("connected") || normalisedStatus.includes("online") || normalisedStatus.includes("active") || normalisedStatus.includes("available")) {
+    state = { key: "connected", label: currentJob ? "On job" : "Available", className: "online" };
+  }
+  return { tech, currentJob, state };
+}
+
+function dashboardTechnicianRow(tech, currentJob, state) {
+  const locationStatus = tech.locationStatus || tech.location || "Location not available";
+  return `
+    <article class="dashboard-row dashboard-tech-row">
+      <span class="dashboard-status-dot ${state.className}"></span>
+      <div class="dashboard-row-main">
+        <strong>${escapeHtml(tech.name || "Technician")}</strong>
+        <p>${escapeHtml(currentJob ? `${currentJob.slot || "Job"} | ${currentJob.postcode || postcodeFromText(currentJob.address) || currentJob.client || "Next job"}` : "No current job loaded")}</p>
+      </div>
+      <div class="dashboard-row-meta">
+        <span>${escapeHtml(state.label)}</span>
+        <small>${escapeHtml(locationStatus)}</small>
+      </div>
+    </article>
+  `;
+}
+
+function dashboardAlertRow(title, detail, badgeClassName = "warning") {
+  const label = badgeClassName === "urgent" ? "Action" : "Check";
+  return `
+    <article class="dashboard-row dashboard-alert-row">
+      <div class="dashboard-row-main">
+        <strong>${escapeHtml(title)}</strong>
+        <p>${escapeHtml(detail)}</p>
+      </div>
+      <span class="status ${badgeClassName}">${label}</span>
+    </article>
+  `;
+}
+
+function postcodeFromText(value) {
+  const match = String(value || "").toUpperCase().match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/);
+  return match ? match[0] : "";
 }
 
 function renderDashboardHolidayRequests() {
@@ -5809,9 +8399,10 @@ function renderDashboardHolidayRequests() {
 function holidayRequestRow(request, index, dashboardMode = false) {
   const staffIndex = staffProfiles.findIndex((staff) => staff.staffId === request.staffId || staff.name === request.name);
   const dates = `${formatDateUk(request.from)} to ${formatDateUk(request.to)}`;
-  const submitted = request.submittedDate ? formatDateUk(request.submittedDate) : "Not recorded";
-  const days = request.days || holidayCalculatedDays(request) || workingDateRangeValues(request.from, request.to).length || 0;
-  const dayTypeLabel = request.dayType === "Half day" ? ` | ${request.dayPart || "AM"} half day` : "";
+  const submittedValue = request.submittedAt || request.submittedDate || request.createdAt || "";
+  const submitted = submittedValue ? formatDateUk(String(submittedValue).slice(0, 10)) : "Not recorded";
+  const days = request.workingDays || request.days || holidayCalculatedDays(request) || workingDateRangeValues(request.from, request.to).length || 0;
+  const dayTypeLabel = request.dayType === "Half day" || request.halfDay === true ? ` | ${request.dayPart || "AM"} half day` : "";
   const status = request.status || "Pending";
   const actions = status === "Pending"
     ? `
@@ -5824,8 +8415,11 @@ function holidayRequestRow(request, index, dashboardMode = false) {
       <div>
         <strong>${escapeHtml(request.name || "Technician")}</strong>
         <p>${escapeHtml(`${dates}${dayTypeLabel} | ${days} day${Number(days) === 1 ? "" : "s"} | Submitted ${submitted}`)}</p>
-        ${request.notes ? `<p>${escapeHtml(request.notes)}</p>` : ""}
-        ${status === "Declined" && request.declineReason ? `<p>Reason: ${escapeHtml(request.declineReason)}</p>` : ""}
+        ${request.technicianNote || request.notes ? `<p>Technician note: ${escapeHtml(request.technicianNote || request.notes)}</p>` : ""}
+        ${request.createdBy ? `<p>Created by: ${escapeHtml(request.createdBy)}</p>` : ""}
+        ${request.officeResponse ? `<p>Office response: ${escapeHtml(request.officeResponse)}</p>` : ""}
+        ${request.approvedBy ? `<p>Approved by ${escapeHtml(request.approvedBy)} on ${escapeHtml(formatDateUk(String(request.decisionDateTime || request.approvedDate || "").slice(0, 10)))}</p>` : ""}
+        ${request.declinedBy ? `<p>Declined by ${escapeHtml(request.declinedBy)} on ${escapeHtml(formatDateUk(String(request.decisionDateTime || request.declinedDate || "").slice(0, 10)))}</p>` : ""}
         <div class="record-actions">
           ${actions}
           ${staffIndex >= 0 ? `<button class="secondary-button" type="button" data-view-staff="${staffIndex}">${dashboardMode ? "Open profile" : "Profile"}</button>` : ""}
@@ -6821,17 +9415,622 @@ function renderJobs() {
   }).join("");
 }
 
+function activeTechnicianAssignmentOptions() {
+  return staffProfiles
+    .filter((staff) => staff.role === "Technician" && staff.status !== "Left" && staff.staffId && staff.technicianId)
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+}
+
+function vehicleAssignedTechnician(vehicle = {}) {
+  const staffId = vehicle.assignedStaffId || vehicle.assignedDriverStaffId || "";
+  const technicianId = vehicle.assignedTechnicianId || "";
+  return staffProfiles.find((staff) =>
+    (staffId && staff.staffId === staffId)
+    || (technicianId && staff.technicianId === technicianId)
+  ) || null;
+}
+
+function vehicleAssignmentSelect(vehicle = {}, index = 0) {
+  const assigned = vehicleAssignedTechnician(vehicle);
+  const selected = assigned ? `${assigned.staffId}|${assigned.technicianId}` : "";
+  const options = activeTechnicianAssignmentOptions();
+  return `
+    <div class="vehicle-assignment-control">
+      <select data-vehicle-assignment-index="${index}" aria-label="Assigned technician for ${escapeHtml(vehicle.registration || "vehicle")}">
+        <option value="">Not assigned</option>
+        ${options.map((staff) => {
+          const value = `${staff.staffId}|${staff.technicianId}`;
+          return `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(staff.name)}</option>`;
+        }).join("")}
+      </select>
+      ${selected ? `<button class="secondary-button compact-button" type="button" data-remove-vehicle-assignment="${index}">Remove</button>` : ""}
+    </div>
+  `;
+}
+
+const vehicleInspectionReviewStatuses = ["Awaiting Review", "Action Required", "In Progress", "Resolved", "No Action Required", "Reviewed"];
+const vehicleDefectReviewStatuses = ["Awaiting Review", "Action Required", "In Progress", "Resolved", "No Action Required"];
+const vehicleDocumentTypes = ["MOT", "Insurance", "Road Tax", "Breakdown Cover", "Lease / Finance", "V5C / Registration", "Service Record", "Repair Record", "Inspection Record", "Warranty", "Recovery Information", "Other"];
+const vehicleMaintenanceEventTypes = ["Service", "Repair", "Maintenance", "Inspection", "MOT", "Tyres", "Breakdown", "Other"];
+const vehicleDocumentReminderDays = 60;
+let activeVehicleRecordId = "";
+let vehicleDocumentDraft = null;
+let vehicleMaintenanceDraft = null;
+
+function vehicleInspectionDefects(inspection = {}) {
+  return Array.isArray(inspection.defects) ? inspection.defects : [];
+}
+
+function vehicleDocumentsFor(vehicle = {}) {
+  return Array.isArray(vehicle.vehicleDocuments) ? vehicle.vehicleDocuments : [];
+}
+
+function vehicleMaintenanceFor(vehicle = {}) {
+  return Array.isArray(vehicle.maintenanceRecords) ? vehicle.maintenanceRecords : [];
+}
+
+function vehicleDocumentStatusUi(documentRecord = {}) {
+  const status = String(documentRecord.status || "");
+  if (["Superseded", "Inactive", "Not Applicable"].includes(status)) {
+    return { label: status, className: status === "Superseded" ? "warning" : "ok", days: Infinity };
+  }
+  if (documentRecord.noExpiry || !documentRecord.expiryDate) return { label: "Current", className: "ok", days: Infinity };
+  const days = daysUntil(documentRecord.expiryDate);
+  if (days < 0) return { label: "Expired", className: "urgent", days };
+  if (days <= Number(documentRecord.reminderDays || vehicleDocumentReminderDays)) return { label: "Expiring Soon", className: "warning", days };
+  return { label: "Current", className: "ok", days };
+}
+
+function vehicleDocumentTypeOptions(value = "") {
+  return vehicleDocumentTypes.map((type) => `<option value="${escapeHtml(type)}" ${type === value ? "selected" : ""}>${escapeHtml(type)}</option>`).join("");
+}
+
+function vehicleMaintenanceTypeOptions(value = "") {
+  return vehicleMaintenanceEventTypes.map((type) => `<option value="${escapeHtml(type)}" ${type === value ? "selected" : ""}>${escapeHtml(type)}</option>`).join("");
+}
+
+function readVehicleRecordFile(file) {
+  return new Promise((resolve) => {
+    if (!file) {
+      resolve(null);
+      return;
+    }
+    const allowed = /^(application\/pdf|image\/jpeg|image\/png|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|application\/msword|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|application\/vnd\.ms-excel)$/i;
+    const allowedName = /\.(pdf|png|jpe?g|docx?|xlsx?)$/i.test(file.name || "");
+    if (!allowed.test(file.type || "") && !allowedName) {
+      resolve({ error: "Please add a PDF, image, Word or Excel file." });
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      resolve({ error: "Vehicle document files must be 15MB or smaller." });
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      resolve({
+        id: crypto.randomUUID(),
+        name: file.name || `vehicle-document-${Date.now()}`,
+        mimeType: file.type || "application/octet-stream",
+        fileSize: file.size || 0,
+        dataUrl: reader.result,
+        addedAt: new Date().toISOString()
+      });
+    });
+    reader.readAsDataURL(file);
+  });
+}
+
+function vehicleInspectionReviewStatus(inspection = {}) {
+  return inspection.officeReviewStatus || inspection.reviewStatus || "Awaiting Review";
+}
+
+function vehicleInspectionSortValue(inspection = {}) {
+  const status = vehicleInspectionReviewStatus(inspection);
+  const defects = vehicleInspectionDefects(inspection);
+  const priority = inspection.safetyCritical ? 0 : status === "Awaiting Review" ? 1 : defects.length ? 2 : 3;
+  return `${priority}-${9999999999999 - Date.parse(inspection.submittedAt || inspection.inspectionDateTime || 0)}`;
+}
+
+function filteredVehicleInspectionRecords() {
+  const filter = document.querySelector("#vehicleInspectionReviewFilter")?.value || "awaiting";
+  return [...vehicleInspectionRecords]
+    .filter((inspection) => {
+      const status = vehicleInspectionReviewStatus(inspection);
+      const defects = vehicleInspectionDefects(inspection);
+      if (filter === "awaiting") return status === "Awaiting Review";
+      if (filter === "safety") return inspection.safetyCritical;
+      if (filter === "defects") return defects.length > 0;
+      if (filter === "no-defects") return defects.length === 0;
+      if (filter === "reviewed") return status !== "Awaiting Review";
+      return true;
+    })
+    .sort((a, b) => vehicleInspectionSortValue(a).localeCompare(vehicleInspectionSortValue(b)));
+}
+
+function vehicleInspectionStatusClass(status = "") {
+  const label = String(status || "");
+  if (label === "Resolved" || label === "No Action Required" || label === "Reviewed") return "ok";
+  if (label === "In Progress") return "warning";
+  if (label === "Action Required") return "urgent";
+  return "warning";
+}
+
+function vehicleInspectionStatusOptions(value = "", statuses = vehicleInspectionReviewStatuses) {
+  const selectedValue = value || statuses[0];
+  return statuses.map((status) => `<option value="${escapeHtml(status)}" ${status === selectedValue ? "selected" : ""}>${escapeHtml(status)}</option>`).join("");
+}
+
+function vehicleInspectionLinkedAction(defect = {}, inspection = {}) {
+  return actionItems.find((item) =>
+    (defect.defectId && item.actionId === defect.defectId)
+    || (item.inspectionId === inspection.inspectionId && item.vehicleId === inspection.vehicleId && item.title?.includes(defect.label || ""))
+  ) || null;
+}
+
+function renderVehicleInspectionReviews() {
+  const tableBody = document.querySelector("#vehicleInspectionReviewTableBody");
+  if (!tableBody) return;
+  const rows = filteredVehicleInspectionRecords();
+  tableBody.innerHTML = rows.map((inspection) => {
+    const defects = vehicleInspectionDefects(inspection);
+    const status = vehicleInspectionReviewStatus(inspection);
+    return `
+      <tr>
+        <td><strong>${escapeHtml(inspection.inspectionWeekStart ? formatDateUk(inspection.inspectionWeekStart) : inspection.inspectionId || "-")}</strong><br><span class="meta">${escapeHtml(inspection.inspectionId || "")}</span></td>
+        <td>${escapeHtml(inspection.registration || inspection.vehicleSnapshot?.registration || "-")}<br><span class="meta">${escapeHtml(inspection.vehicle || inspection.vehicleSnapshot?.vehicle || "")}</span></td>
+        <td>${escapeHtml(inspection.technicianName || inspection.technicianId || "-")}</td>
+        <td>${escapeHtml(inspection.submittedAt ? formatDateTimeUk(inspection.submittedAt) : "-")}</td>
+        <td><span class="status ${defects.length ? "urgent" : "ok"}">${defects.length ? `${defects.length} defect${defects.length === 1 ? "" : "s"}` : "No defects"}</span>${inspection.safetyCritical ? '<br><span class="status urgent">Safety-critical</span>' : ""}</td>
+        <td><span class="status ${vehicleInspectionStatusClass(status)}">${escapeHtml(status)}</span></td>
+        <td><button class="secondary-button compact-button" type="button" data-view-vehicle-inspection="${escapeHtml(inspection.inspectionId || "")}">Review</button></td>
+      </tr>
+    `;
+  }).join("") || '<tr><td colspan="7">No submitted vehicle checks match this filter.</td></tr>';
+}
+
+function renderVehicleRecordDetail(vehicleId = activeVehicleRecordId) {
+  const detail = document.querySelector("#vehicleRecordDetail");
+  if (!detail) return;
+  activeVehicleRecordId = vehicleId || "";
+  if (!activeVehicleRecordId) {
+    detail.innerHTML = "";
+    return;
+  }
+  const vehicle = vehicles.map(asVehicleObject).find((item) => item.vehicleId === activeVehicleRecordId);
+  if (!vehicle) {
+    detail.innerHTML = "";
+    return;
+  }
+  const assigned = vehicleAssignedTechnician(vehicle);
+  const documents = vehicleDocumentsFor(vehicle).map((documentRecord) => ({ ...documentRecord, statusInfo: vehicleDocumentStatusUi(documentRecord) }));
+  const maintenance = vehicleMaintenanceFor(vehicle).sort((a, b) => String(b.date || b.recordedAt || "").localeCompare(String(a.date || a.recordedAt || "")));
+  const inspections = vehicleInspectionRecords.filter((record) => record.vehicleId === vehicle.vehicleId).sort((a, b) => String(b.submittedAt || "").localeCompare(String(a.submittedAt || "")));
+  const defectIds = inspections.flatMap((record) => vehicleInspectionDefects(record).map((defect) => defect.defectId));
+  const auditRows = universalAuditEvents
+    .filter((event) =>
+      event.entityId === vehicle.vehicleId
+      || documents.some((documentRecord) => documentRecord.documentId === event.entityId)
+      || maintenance.some((record) => record.maintenanceId === event.entityId)
+      || inspections.some((record) => record.inspectionId === event.entityId)
+      || defectIds.includes(event.entityId)
+    )
+    .slice(-10)
+    .reverse();
+  detail.innerHTML = `
+    <article class="vehicle-record-card">
+      <div class="panel-heading compact-panel-heading">
+        <div>
+          <h3>${escapeHtml(vehicle.registration || "Vehicle Record")}</h3>
+          <p class="section-support">${escapeHtml(vehicle.vehicle || "Vehicle")} | ${escapeHtml(vehicle.vehicleId || "")}</p>
+        </div>
+        <button class="secondary-button compact-button" type="button" data-close-vehicle-record>Close</button>
+      </div>
+      <div class="vehicle-record-grid">
+        <div class="vehicle-record-field"><span>Assignment</span><strong>${escapeHtml(assigned?.name || "Not assigned")}</strong></div>
+        <div class="vehicle-record-field"><span>Status</span><strong>${escapeHtml(vehicle.status || "Active")}</strong></div>
+        <div class="vehicle-record-field"><span>MOT</span><strong>${escapeHtml(vehicle.mot ? formatDateUk(vehicle.mot) : "Not set")}</strong></div>
+        <div class="vehicle-record-field"><span>Insurance</span><strong>${escapeHtml(vehicle.insurance ? formatDateUk(vehicle.insurance) : "Not set")}</strong></div>
+        <div class="vehicle-record-field"><span>Documents</span><strong>${documents.length} record${documents.length === 1 ? "" : "s"}</strong></div>
+        <div class="vehicle-record-field"><span>Inspections</span><strong>${inspections.length} submitted</strong></div>
+      </div>
+      <h4>Vehicle Documents</h4>
+      <div class="vehicle-document-list">
+        ${documents.map((documentRecord) => `
+          <article class="vehicle-document-row">
+            <div class="vehicle-record-actions">
+              <strong>${escapeHtml(documentRecord.title || documentRecord.documentType || "Vehicle document")}</strong>
+              <span class="status ${documentRecord.statusInfo.className}">${escapeHtml(documentRecord.statusInfo.label)}</span>
+            </div>
+            <p class="meta">${escapeHtml(documentRecord.documentType || "Other")} | ${documentRecord.expiryDate ? `Expires ${formatDateUk(documentRecord.expiryDate)}` : "No expiry"}${documentRecord.reference ? ` | Ref ${documentRecord.reference}` : ""}</p>
+            <p class="meta">${escapeHtml(documentRecord.fileName || documentRecord.originalFileName || "No file attached")}${documentRecord.version ? ` | v${documentRecord.version}` : ""}</p>
+            <div class="vehicle-record-actions">
+              ${documentRecord.storageLocation ? `<button class="secondary-button compact-button" type="button" data-open-vehicle-document="${escapeHtml(documentRecord.documentId)}">Open</button>` : ""}
+              <label class="secondary-button compact-button">
+                Replace
+                <input class="visually-hidden" type="file" data-replace-vehicle-document="${escapeHtml(documentRecord.documentId)}" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,image/*,application/pdf">
+              </label>
+              ${documentRecord.status !== "Superseded" ? `<button class="danger-button compact-button" type="button" data-supersede-vehicle-document="${escapeHtml(documentRecord.documentId)}">Supersede</button>` : ""}
+            </div>
+          </article>
+        `).join("") || '<p class="empty-state compact-empty">No vehicle documents recorded.</p>'}
+      </div>
+      <form class="vehicle-record-form" data-vehicle-document-form="${escapeHtml(vehicle.vehicleId)}">
+        <h4>Add Vehicle Document</h4>
+        <div class="vehicle-form-grid">
+          <label>Type<select name="documentType">${vehicleDocumentTypeOptions()}</select></label>
+          <label>Title<input name="title" required></label>
+          <label>Issue date<input name="issueDate" type="date"></label>
+          <label>Expiry date<input name="expiryDate" type="date"></label>
+          <label>Reference / policy<input name="reference"></label>
+          <label>Reminder days<input name="reminderDays" type="number" min="1" value="${vehicleDocumentReminderDays}"></label>
+        </div>
+        <label>Note<textarea name="notes"></textarea></label>
+        <label>Document file<input type="file" data-vehicle-document-file accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,image/*,application/pdf"></label>
+        <p class="meta" id="vehicleDocumentDraftLabel">${vehicleDocumentDraft ? escapeHtml(vehicleDocumentDraft.name) : "No file selected."}</p>
+        <button class="primary-button compact-button" type="submit">Save Document</button>
+      </form>
+      <h4>Service, Repair and Maintenance</h4>
+      <div class="vehicle-maintenance-list">
+        ${maintenance.map((record) => `
+          <article class="vehicle-maintenance-row">
+            <strong>${escapeHtml(record.eventType || "Vehicle event")} - ${escapeHtml(record.date ? formatDateUk(record.date) : "No date")}</strong>
+            <p>${escapeHtml(record.description || "")}</p>
+            <p class="meta">${escapeHtml(record.supplier || "No supplier")}${record.mileage ? ` | ${record.mileage} miles` : ""}${record.followUpDate ? ` | Follow-up ${formatDateUk(record.followUpDate)}` : ""}${record.evidence?.fileName ? ` | Evidence ${record.evidence.fileName}` : ""}</p>
+          </article>
+        `).join("") || '<p class="empty-state compact-empty">No service or maintenance history recorded.</p>'}
+      </div>
+      <form class="vehicle-record-form" data-vehicle-maintenance-form="${escapeHtml(vehicle.vehicleId)}">
+        <h4>Add Service / Repair Record</h4>
+        <div class="vehicle-form-grid">
+          <label>Event type<select name="eventType">${vehicleMaintenanceTypeOptions()}</select></label>
+          <label>Date<input name="date" type="date" required></label>
+          <label>Mileage<input name="mileage" type="number" min="0"></label>
+          <label>Supplier / garage<input name="supplier"></label>
+          <label>Cost<input name="cost" type="number" min="0" step="0.01"></label>
+          <label>Follow-up date<input name="followUpDate" type="date"></label>
+        </div>
+        <label>Description<textarea name="description" required></textarea></label>
+        <label>Office note<textarea name="officeNote"></textarea></label>
+        <label>Evidence file<input type="file" data-vehicle-maintenance-file accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,image/*,application/pdf"></label>
+        <p class="meta" id="vehicleMaintenanceDraftLabel">${vehicleMaintenanceDraft ? escapeHtml(vehicleMaintenanceDraft.name) : "No evidence selected."}</p>
+        <button class="secondary-button compact-button" type="submit">Save Service / Repair</button>
+      </form>
+      <h4>Weekly Inspection History</h4>
+      <div class="vehicle-checklist-summary">
+        ${inspections.map((record) => `<div class="vehicle-checklist-row"><strong>${escapeHtml(record.inspectionWeekStart ? formatDateUk(record.inspectionWeekStart) : record.inspectionId)}</strong><span class="status ${record.safetyCritical ? "urgent" : vehicleInspectionDefects(record).length ? "warning" : "ok"}">${vehicleInspectionDefects(record).length ? `${vehicleInspectionDefects(record).length} defect${vehicleInspectionDefects(record).length === 1 ? "" : "s"}` : "No defects"}</span><p class="meta">${escapeHtml(record.submittedAt ? formatDateTimeUk(record.submittedAt) : "")}</p></div>`).join("") || '<p class="empty-state compact-empty">No weekly inspections submitted for this vehicle.</p>'}
+      </div>
+      <h4>Audit</h4>
+      <div class="vehicle-audit-list">
+        ${auditRows.map((event) => `<div class="vehicle-audit-row"><strong>${escapeHtml(event.action || "Audit event")}</strong><br><span class="meta">${escapeHtml(event.performedAt ? formatDateTimeUk(event.performedAt) : "")} | ${escapeHtml(event.performedByUserId || "-")}</span></div>`).join("") || '<p class="empty-state compact-empty">No vehicle audit activity yet.</p>'}
+      </div>
+    </article>
+  `;
+}
+
+function renderVehicleInspectionDetail(inspectionId = "") {
+  const detail = document.querySelector("#vehicleInspectionReviewDetail");
+  if (!detail) return;
+  const inspection = vehicleInspectionRecords.find((record) => record.inspectionId === inspectionId);
+  if (!inspection) {
+    detail.innerHTML = "";
+    return;
+  }
+  const defects = vehicleInspectionDefects(inspection);
+  const auditRows = universalAuditEvents
+    .filter((event) => event.entityId === inspection.inspectionId || defects.some((defect) => defect.defectId === event.entityId))
+    .slice(-8)
+    .reverse();
+  detail.innerHTML = `
+    <article class="vehicle-review-card">
+      <h4>${escapeHtml(inspection.registration || "Vehicle check")} - ${escapeHtml(inspection.inspectionWeekStart ? formatDateUk(inspection.inspectionWeekStart) : inspection.inspectionId || "")}</h4>
+      <div class="vehicle-review-grid">
+        <div class="vehicle-review-field"><span>Vehicle</span><strong>${escapeHtml(`${inspection.registration || "-"} ${inspection.vehicle ? "| " + inspection.vehicle : ""}`)}</strong></div>
+        <div class="vehicle-review-field"><span>Technician</span><strong>${escapeHtml(inspection.technicianName || inspection.technicianId || "-")}</strong></div>
+        <div class="vehicle-review-field"><span>Submitted</span><strong>${escapeHtml(inspection.submittedAt ? formatDateTimeUk(inspection.submittedAt) : "-")}</strong></div>
+        <div class="vehicle-review-field"><span>Mileage</span><strong>${escapeHtml(String(inspection.currentMileage || "-"))}</strong></div>
+      </div>
+      <form class="vehicle-review-form" data-vehicle-inspection-review-form="${escapeHtml(inspection.inspectionId || "")}">
+        <label>
+          Office review status
+          <select name="officeReviewStatus">${vehicleInspectionStatusOptions(vehicleInspectionReviewStatus(inspection))}</select>
+        </label>
+        <label>
+          Office review note
+          <textarea name="officeReviewNote" placeholder="Add review note">${escapeHtml(inspection.officeReviewNote || "")}</textarea>
+        </label>
+        <button class="primary-button compact-button" type="submit">Save Review</button>
+      </form>
+      <h4>Checklist</h4>
+      <div class="vehicle-checklist-summary">
+        ${(Array.isArray(inspection.checklist) ? inspection.checklist : []).map((answer) => `
+          <div class="vehicle-checklist-row">
+            <strong>${escapeHtml(answer.label || answer.itemId || "Checklist item")}</strong>
+            <span class="status ${answer.result === "Defect" ? "urgent" : answer.result === "Pass" ? "ok" : "warning"}">${escapeHtml(answer.result || "-")}</span>
+            ${answer.explanation ? `<p class="meta">${escapeHtml(answer.explanation)}</p>` : ""}
+          </div>
+        `).join("") || '<p class="empty-state">No checklist answers stored.</p>'}
+      </div>
+      <h4>Defects</h4>
+      <div class="vehicle-defect-list">
+        ${defects.map((defect) => {
+          const linkedAction = vehicleInspectionLinkedAction(defect, inspection);
+          return `
+            <article class="vehicle-defect-card ${defect.safetyCritical ? "safety-critical" : ""}">
+              <strong>${escapeHtml(defect.label || defect.itemId || "Vehicle defect")}</strong>
+              <span class="status ${defect.safetyCritical ? "urgent" : "warning"}">${defect.safetyCritical ? "Safety-critical" : "Defect"}</span>
+              <p>${escapeHtml(defect.explanation || "No explanation supplied.")}</p>
+              <p class="meta">${defect.photoAttached ? `Photo: ${escapeHtml(defect.photoName || "Attached")}` : "No photo attached"}${linkedAction ? ` | Action: ${escapeHtml(linkedAction.status || "New")}` : ""}</p>
+              <form class="vehicle-defect-review-form" data-vehicle-defect-review-form="${escapeHtml(inspection.inspectionId || "")}" data-defect-id="${escapeHtml(defect.defectId || "")}">
+                <label>
+                  Defect status
+                  <select name="status">${vehicleInspectionStatusOptions(defect.reviewStatus || defect.status || "Awaiting Review", vehicleDefectReviewStatuses)}</select>
+                </label>
+                <label>
+                  Responsible person
+                  <input name="responsiblePerson" value="${escapeHtml(defect.responsiblePerson || "")}" placeholder="Office owner">
+                </label>
+                <label>
+                  Target date
+                  <input name="targetDate" type="date" value="${escapeHtml(defect.targetDate || "")}">
+                </label>
+                <label>
+                  Office assessment / resolution note
+                  <textarea name="resolutionNote" placeholder="Record office action or resolution">${escapeHtml(defect.resolutionNote || defect.officeAssessment || "")}</textarea>
+                </label>
+                <button class="secondary-button compact-button" type="submit">Save Defect</button>
+              </form>
+            </article>
+          `;
+        }).join("") || '<p class="empty-state">No defects were reported on this check.</p>'}
+      </div>
+      <h4>Audit</h4>
+      <div class="vehicle-audit-list">
+        ${auditRows.map((event) => `<div class="vehicle-audit-row"><strong>${escapeHtml(event.action || "Audit event")}</strong><br><span class="meta">${escapeHtml(event.performedAt ? formatDateTimeUk(event.performedAt) : "")} | ${escapeHtml(event.performedByUserId || "-")}</span></div>`).join("") || '<p class="empty-state">No vehicle review audit events yet.</p>'}
+      </div>
+    </article>
+  `;
+}
+
 function renderVehicles() {
-  document.querySelector("#vehiclesTableBody").innerHTML = vehicles.map((vehicle, index) => `
+  document.querySelector("#vehiclesTableBody").innerHTML = vehicles.map((rawVehicle, index) => {
+    const vehicle = asVehicleObject(rawVehicle);
+    const assigned = vehicleAssignedTechnician(vehicle);
+    return `
     <tr>
-      <td><strong>${vehicle.registration}</strong></td>
-      <td>${vehicle.vehicle}</td>
-      <td>${vehicle.driver}</td>
-      <td><span class="status ${isReminderDate(vehicle.mot) ? "warning" : "ok"}">${vehicle.mot}</span></td>
-      <td><span class="status ${isReminderDate(vehicle.insurance) ? "warning" : "ok"}">${vehicle.insurance}</span></td>
-      <td><span class="status ${vehicle.tracker === "Active" ? "ok" : "warning"}">${vehicle.tracker}</span><div class="record-actions">${recordButtons("vehicles", index)}</div></td>
+      <td><strong>${escapeHtml(vehicle.registration)}</strong><br><span class="meta">${escapeHtml(vehicle.vehicleId)}</span></td>
+      <td>${escapeHtml(vehicle.vehicle)}</td>
+      <td>${escapeHtml(vehicle.driver || assigned?.name || "-")}</td>
+      <td><span class="status ${isReminderDate(vehicle.mot) ? "warning" : "ok"}">${escapeHtml(vehicle.mot || "-")}</span></td>
+      <td><span class="status ${isReminderDate(vehicle.insurance) ? "warning" : "ok"}">${escapeHtml(vehicle.insurance || "-")}</span></td>
+      <td><span class="status ${vehicle.tracker === "Active" ? "ok" : "warning"}">${escapeHtml(vehicle.tracker || "-")}</span></td>
+      <td>${vehicleAssignmentSelect(vehicle, index)}</td>
+      <td><div class="record-actions"><button class="secondary-button" type="button" data-view-vehicle-record="${escapeHtml(vehicle.vehicleId || "")}">View</button>${recordButtons("vehicles", index)}</div></td>
     </tr>
-  `).join("");
+  `;
+  }).join("") || '<tr><td colspan="8">No vehicles have been added yet.</td></tr>';
+  if (activeVehicleRecordId) renderVehicleRecordDetail(activeVehicleRecordId);
+  renderVehicleInspectionReviews();
+}
+
+async function refreshVehicleInspectionReviews() {
+  await loadCommandData();
+  renderVehicles();
+}
+
+async function saveVehicleInspectionReview(form) {
+  const inspectionId = form.dataset.vehicleInspectionReviewForm;
+  const payload = Object.fromEntries(new FormData(form).entries());
+  try {
+    const response = await fetch("/api/phase-09c/vehicle-inspections/review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        inspectionId,
+        officeReviewStatus: payload.officeReviewStatus,
+        officeReviewNote: payload.officeReviewNote,
+        officeUserName: currentUserName()
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.message || "Vehicle inspection review could not be saved.");
+    await loadCommandData();
+    renderVehicles();
+    renderVehicleInspectionDetail(inspectionId);
+    await kcInfo("Vehicle inspection review saved.");
+  } catch (error) {
+    await kcInfo(error.message || "Vehicle inspection review could not be saved.");
+  }
+}
+
+async function saveVehicleDefectReview(form) {
+  const inspectionId = form.dataset.vehicleDefectReviewForm;
+  const defectId = form.dataset.defectId;
+  const payload = Object.fromEntries(new FormData(form).entries());
+  try {
+    const response = await fetch("/api/phase-09c/vehicle-defects/review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        inspectionId,
+        defectId,
+        status: payload.status,
+        responsiblePerson: payload.responsiblePerson,
+        targetDate: payload.targetDate,
+        resolutionNote: payload.resolutionNote,
+        officeUserName: currentUserName()
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.message || "Vehicle defect review could not be saved.");
+    await loadCommandData();
+    renderVehicles();
+    renderVehicleInspectionDetail(inspectionId);
+    await kcInfo("Vehicle defect review saved.");
+  } catch (error) {
+    await kcInfo(error.message || "Vehicle defect review could not be saved.");
+  }
+}
+
+async function saveVehicleDocument(form) {
+  const vehicleId = form.dataset.vehicleDocumentForm;
+  const payload = Object.fromEntries(new FormData(form).entries());
+  try {
+    const response = await fetch("/api/phase-09d/vehicle-documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vehicleId,
+        ...payload,
+        reminderDays: Number(payload.reminderDays || vehicleDocumentReminderDays),
+        document: vehicleDocumentDraft,
+        officeUserName: currentUserName()
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.message || "Vehicle document could not be saved.");
+    vehicleDocumentDraft = null;
+    await loadCommandData();
+    renderVehicles();
+    renderVehicleRecordDetail(vehicleId);
+    await kcInfo("Vehicle document saved.");
+  } catch (error) {
+    await kcInfo(error.message || "Vehicle document could not be saved.");
+  }
+}
+
+async function saveVehicleMaintenance(form) {
+  const vehicleId = form.dataset.vehicleMaintenanceForm;
+  const payload = Object.fromEntries(new FormData(form).entries());
+  try {
+    const response = await fetch("/api/phase-09d/vehicle-maintenance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vehicleId,
+        ...payload,
+        evidence: vehicleMaintenanceDraft,
+        officeUserName: currentUserName()
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.message || "Vehicle maintenance record could not be saved.");
+    vehicleMaintenanceDraft = null;
+    await loadCommandData();
+    renderVehicles();
+    renderVehicleRecordDetail(vehicleId);
+    await kcInfo("Vehicle service or repair record saved.");
+  } catch (error) {
+    await kcInfo(error.message || "Vehicle service or repair record could not be saved.");
+  }
+}
+
+async function supersedeVehicleDocument(documentId) {
+  const confirmed = await kcConfirmAction("Mark this vehicle document as superseded? The historic record will be retained.", "Supersede Document", true);
+  if (!confirmed) return;
+  try {
+    const response = await fetch("/api/phase-09d/vehicle-documents/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vehicleId: activeVehicleRecordId,
+        documentId,
+        action: "supersede",
+        officeUserName: currentUserName()
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.message || "Vehicle document could not be superseded.");
+    await loadCommandData();
+    renderVehicles();
+    renderVehicleRecordDetail(activeVehicleRecordId);
+    await kcInfo("Vehicle document marked as superseded.");
+  } catch (error) {
+    await kcInfo(error.message || "Vehicle document could not be superseded.");
+  }
+}
+
+async function replaceVehicleDocument(documentId, file) {
+  const entry = await readVehicleRecordFile(file);
+  if (!entry || entry.error) {
+    await kcInfo(entry?.error || "Please select a replacement vehicle document.");
+    return;
+  }
+  try {
+    const response = await fetch("/api/phase-09d/vehicle-documents/replace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vehicleId: activeVehicleRecordId,
+        documentId,
+        document: entry,
+        officeUserName: currentUserName()
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.message || "Vehicle document could not be replaced.");
+    await loadCommandData();
+    renderVehicles();
+    renderVehicleRecordDetail(activeVehicleRecordId);
+    await kcInfo("Vehicle document replaced. Previous evidence has been retained in the record history.");
+  } catch (error) {
+    await kcInfo(error.message || "Vehicle document could not be replaced.");
+  }
+}
+
+async function openVehicleDocument(documentId) {
+  const vehicle = vehicles.map(asVehicleObject).find((item) => item.vehicleId === activeVehicleRecordId);
+  const documentRecord = vehicleDocumentsFor(vehicle).find((item) => item.documentId === documentId);
+  if (!documentRecord?.storageLocation) {
+    await kcInfo("No saved file location is available for this vehicle document.");
+    return;
+  }
+  window.open(localFileUrl(documentRecord.storageLocation), "_blank", "noopener");
+}
+
+async function updateVehicleAssignment(index, assignmentValue = "") {
+  const vehicle = asVehicleObject(vehicles[Number(index)] || {});
+  if (!vehicle.vehicleId) {
+    await kcInfo("This vehicle needs a stable Vehicle ID before it can be assigned.");
+    renderVehicles();
+    return false;
+  }
+  const [staffId = "", technicianId = ""] = String(assignmentValue || "").split("|");
+  const selectedStaff = staffProfiles.find((staff) => staff.staffId === staffId && staff.technicianId === technicianId);
+  const existing = vehicleAssignedTechnician(vehicle);
+  const removing = !staffId && !technicianId;
+  const message = removing
+    ? `Remove the technician assignment from ${vehicle.registration || vehicle.vehicle}?`
+    : existing
+      ? `Change ${vehicle.registration || vehicle.vehicle} from ${existing.name} to ${selectedStaff?.name || "the selected technician"}?`
+      : `Assign ${vehicle.registration || vehicle.vehicle} to ${selectedStaff?.name || "the selected technician"}?`;
+  const confirmed = await kcConfirmAction(message, removing ? "Remove Assignment" : "Save Assignment", removing);
+  if (!confirmed) {
+    renderVehicles();
+    return false;
+  }
+  try {
+    const response = await fetch("/api/phase-09a/vehicle-assignment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vehicleId: vehicle.vehicleId,
+        staffId,
+        technicianId,
+        remove: removing,
+        officeUserName: currentUserName()
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.message || "Vehicle assignment could not be saved.");
+    await loadCommandData();
+    render();
+    await kcInfo(removing ? "Vehicle assignment removed." : "Vehicle assignment saved.");
+    return true;
+  } catch (error) {
+    await kcInfo(error.message || "Vehicle assignment could not be saved.");
+    renderVehicles();
+    return false;
+  }
 }
 
 function renderCompliance() {
@@ -6915,6 +10114,7 @@ function renderValuations() {
   document.querySelector("#valuationArkTotal").textContent = money(totals.ark);
   document.querySelector("#valuationJgTotal").textContent = money(totals.jg);
   document.querySelector("#valuationPrivateTotal").textContent = money(totals.private);
+  document.querySelector("#valuationVergoTotal").textContent = money(totals.vergo);
   document.querySelector("#valuationReportOutstandingCount").textContent = outstanding.length;
   document.querySelector("#valuationTableRunningTotal").textContent = money(valuationTotalForRows(rows));
 
@@ -6952,19 +10152,26 @@ function renderPlanner() {
 
   document.querySelector("#plannerItemCount").textContent = board.weekItems.length;
   document.querySelector("#plannerTechnicianCount").textContent = board.technicians.length;
-  document.querySelector("#plannerUnavailableCount").textContent = `${plannerUnavailableSlotCount(board.weekItems)} / ${board.technicians.length * board.days.length * 2}`;
+  document.querySelector("#plannerUnavailableCount").textContent = `${plannerUnavailableSlotCount(board.weekItems) + plannerDerivedUnavailableSlotCount(board.approvedLeaveEntries)} / ${board.technicians.length * board.days.length * 2}`;
   document.querySelector("#plannerWeekLabel").textContent = selectedWeek === "all" ? "All" : selectedWeek.replace("WC ", "");
+  renderPlannerDispatchResults(selectedWeek);
   document.querySelector("#plannerBoard").innerHTML = board.html;
 }
 
 function plannerBoardHtml(selectedWeek = plannerCurrentWeek(), rows = null, editable = true) {
-  const sourceRows = rows || weeklyPlanner.filter((item) => selectedWeek === "all" || item.week === selectedWeek);
-  const weekItems = weeklyPlanner.filter((item) => selectedWeek === "all" || item.week === selectedWeek);
+  const sourceRows = (rows || weeklyPlanner.filter((item) => selectedWeek === "all" || item.week === selectedWeek))
+    .filter((item) => item.source !== "approved-holiday");
+  const weekItems = weeklyPlanner
+    .filter((item) => selectedWeek === "all" || item.week === selectedWeek)
+    .filter((item) => item.source !== "approved-holiday");
+  const approvedLeaveEntries = approvedHolidayPlannerEntries(selectedWeek);
+  const approvedLeaveLookup = plannerLeaveLookup(approvedLeaveEntries);
   const selectedWeekStart = plannerWeekStartFromLabel(selectedWeek);
   const techniciansForWeek = [...new Set([
     ...staffProfiles.filter((staff) => String(staff.role || "").toLowerCase().includes("technician")).map((staff) => staff.name),
     ...technicians.map((tech) => tech.name),
-    ...weekItems.map((item) => item.technician)
+    ...weekItems.map((item) => item.technician),
+    ...approvedLeaveEntries.map((item) => item.technician)
   ].filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
   const days = plannerWeekDays(selectedWeekStart);
@@ -6974,6 +10181,7 @@ function plannerBoardHtml(selectedWeek = plannerCurrentWeek(), rows = null, edit
       days,
       technicians: techniciansForWeek,
       weekItems,
+      approvedLeaveEntries,
       html: '<p class="empty-state">No planner items found.</p>'
     };
   }
@@ -6990,7 +10198,7 @@ function plannerBoardHtml(selectedWeek = plannerCurrentWeek(), rows = null, edit
           return `
             <div class="planner-name${breakClass}">${session === "AM" ? escapeHtml(technician) : ""}</div>
             <div class="planner-session${breakClass}">${session}</div>
-            ${days.map((day) => plannerSheetCell(itemLookup.get(`${technician}|${day.date}|${session}`), breakClass, {
+            ${days.map((day) => plannerSheetCell(itemLookup.get(`${technician}|${day.date}|${session}`), approvedLeaveLookup.get(`${technician}|${day.date}|${session}`) || [], breakClass, {
               technician,
               date: day.date,
               day: day.label,
@@ -7006,12 +10214,33 @@ function plannerBoardHtml(selectedWeek = plannerCurrentWeek(), rows = null, edit
     </div>
   `;
 
-  return { days, technicians: techniciansForWeek, weekItems, html };
+  return { days, technicians: techniciansForWeek, weekItems, approvedLeaveEntries, html };
 }
 
-function plannerSheetCell(item, breakClass = "", seed = {}, editable = true) {
+function plannerSheetCell(item, leaveEntries = [], breakClass = "", seed = {}, editable = true) {
   const editableClass = editable ? " planner-cell-editable" : "";
+  const leaveEntry = leaveEntries[0];
+  const isFullDayLeaveContinuation = leaveEntry?.fullDay && seed.session === "PM";
+  const fullDayClass = leaveEntry?.fullDay
+    ? seed.session === "AM"
+      ? " planner-full-day-leave-start"
+      : " planner-full-day-leave-continuation"
+    : "";
   if (!item) {
+    if (leaveEntry) {
+      return `
+        <div class="planner-cell${editableClass} planner-derived-leave-cell${fullDayClass}${breakClass}"
+          data-planner-create="true"
+          data-date="${escapeHtml(seed.date || "")}"
+          data-day="${escapeHtml(seed.day || "")}"
+          data-technician="${escapeHtml(seed.technician || "")}"
+          data-session="${escapeHtml(seed.session || "")}"
+          data-week="${escapeHtml(seed.week || "")}"
+          data-week-start="${escapeHtml(seed.weekStart || "")}">
+          ${isFullDayLeaveContinuation ? "" : plannerLeaveIndicator(leaveEntry)}
+        </div>
+      `;
+    }
     return `
       <div class="planner-cell${editableClass} planner-empty-cell${breakClass}"
         data-planner-create="true"
@@ -7025,9 +10254,12 @@ function plannerSheetCell(item, breakClass = "", seed = {}, editable = true) {
     `;
   }
   const index = weeklyPlanner.indexOf(item);
+  const hasLeaveConflict = Boolean(leaveEntry);
   return `
-    <div class="planner-cell${editableClass} ${plannerSlotClass(item)}${breakClass}" data-planner-index="${index}">
+    <div class="planner-cell${editableClass} ${plannerSlotClass(item)}${hasLeaveConflict ? ` planner-leave-conflict${fullDayClass}` : ""}${breakClass}" data-planner-index="${index}">
       <strong>${escapeHtml(plannerText(item))}</strong>
+      ${hasLeaveConflict && !isFullDayLeaveContinuation ? plannerLeaveIndicator(leaveEntry, true) : ""}
+      ${hasLeaveConflict ? plannerLeaveConflictWarning(leaveEntry) : ""}
       ${editable ? `<div class="record-actions">${recordButtons("planner", index)}</div>` : ""}
     </div>
   `;
@@ -7090,6 +10322,7 @@ async function exportValuationGroup(group) {
   const groupLabels = {
     ark: "Ark",
     jg: "JG Pest Control",
+    vergo: "Vergo",
     other: "Other"
   };
   const rows = valuationGroupRows(group, selectedMonth);
@@ -7107,7 +10340,7 @@ function showValuationGraph() {
   const selectedMonth = selectedValuationMonthKey();
   const months = rollingValuationGraphData(selectedMonth);
   const selectedTotals = valuationGraphTotals(selectedMonth);
-  const max = Math.max(...months.flatMap((item) => [item.ark, item.jg, item.other]), 1);
+  const max = Math.max(...months.flatMap((item) => [item.ark, item.jg, item.vergo, item.other]), 1);
   const yearTotal = months.reduce((sum, item) => sum + item.total, 0);
 
   valuationGraphSubtitle.textContent = `${months[0].fullLabel} to ${months[11].fullLabel} | Selected month due ${lastWorkingDayOfMonth(`${selectedMonth}-01`)}`;
@@ -7119,7 +10352,7 @@ function showValuationGraph() {
       </article>
       <article>
         <span>Selected month</span>
-        <strong>${money(selectedTotals.ark + selectedTotals.jg + selectedTotals.other)}</strong>
+        <strong>${money(selectedTotals.ark + selectedTotals.jg + selectedTotals.vergo + selectedTotals.other)}</strong>
       </article>
       <article>
         <span>Highest month</span>
@@ -7129,6 +10362,7 @@ function showValuationGraph() {
     <div class="valuation-graph-legend" aria-label="Valuation graph key">
       <span><i class="ark"></i>Ark</span>
       <span><i class="jg"></i>JG Pest Control</span>
+      <span><i class="vergo"></i>Vergo</span>
       <span><i class="other"></i>Other</span>
     </div>
     <div class="valuation-year-chart" aria-label="Rolling valuation totals">
@@ -7137,6 +10371,7 @@ function showValuationGraph() {
           <div class="valuation-month-bars">
             <i class="ark" title="Ark ${money(item.ark)}" style="height:${Math.max((item.ark / max) * 100, item.ark ? 5 : 0)}%"></i>
             <i class="jg" title="JG Pest Control ${money(item.jg)}" style="height:${Math.max((item.jg / max) * 100, item.jg ? 5 : 0)}%"></i>
+            <i class="vergo" title="Vergo ${money(item.vergo)}" style="height:${Math.max((item.vergo / max) * 100, item.vergo ? 5 : 0)}%"></i>
             <i class="other" title="Other ${money(item.other)}" style="height:${Math.max((item.other / max) * 100, item.other ? 5 : 0)}%"></i>
           </div>
           <strong>${escapeHtml(item.label)}</strong>
@@ -7477,6 +10712,7 @@ async function generateValuationWorkbook(group) {
   const groupLabels = {
     ark: "Ark",
     jg: "JG Pest Control",
+    vergo: "Vergo",
     other: "Other"
   };
   const rows = await reviewZeroValuationRows(valuationGroupRows(group, selectedMonth));
@@ -7537,6 +10773,58 @@ function staffTrainingRecords(staff) {
   return trainingMatrix.filter((record) => (record.staffId && record.staffId === staff.staffId) || record.employee === staff.name);
 }
 
+function staffToolboxAssignments(staff) {
+  return tscAssignmentRecords.filter((assignment) =>
+    (assignment.staffId && assignment.staffId === staff.staffId)
+    || (assignment.employeeId && assignment.employeeId === staff.staffId)
+    || assignment.employeeName === staff.name
+  );
+}
+
+function staffEvidenceRecords(staff) {
+  return tscEvidenceRecords.filter((record) =>
+    (record.staffId && record.staffId === staff.staffId)
+    || (record.employeeId && record.employeeId === staff.staffId)
+    || record.employeeName === staff.name
+  );
+}
+
+function staffAssignedAssets(staff) {
+  return assets.map(asAssetObject).filter((asset) =>
+    asset.assignedStaffId === staff.staffId
+    || asset.assignedTo === staff.name
+    || asset.holder === staff.name
+  );
+}
+
+function staffAssignedVehicle(staff) {
+  return vehicles.map(asVehicleObject).find((vehicle) =>
+    vehicle.assignedStaffId === staff.staffId
+    || (staff.technicianId && vehicle.assignedTechnicianId === staff.technicianId)
+    || vehicle.driver === staff.name
+  );
+}
+
+function staffOpenActions(staff) {
+  return actionItems.filter((item) => {
+    const status = String(item.status || "").toLowerCase();
+    const linked = item.staffId === staff.staffId
+      || item.assignedStaffId === staff.staffId
+      || item.assignedToUserId === staff.staffId
+      || item.assignedTo === staff.name;
+    return linked && !["closed", "completed", "resolved"].includes(status);
+  });
+}
+
+function staffAuditEvents(staff) {
+  return universalAuditEvents.filter((event) =>
+    event.entityId === staff.staffId
+    || event.staffId === staff.staffId
+    || event.recordId === staff.staffId
+    || String(event.affectedRecord || "").includes(staff.name)
+  ).slice(-10).reverse();
+}
+
 function isLikelyTestRecord(item = {}) {
   const text = [
     item.name,
@@ -7565,6 +10853,252 @@ function staffHolidayRequestsFor(staff, status = "") {
     .filter((request) => !status || request.status === status);
 }
 
+function holidayPlannerMonthStart(monthKey = activeHolidayPlannerMonth) {
+  const [year, month] = String(monthKey || today.slice(0, 7)).split("-").map(Number);
+  return new Date(year, (month || 1) - 1, 1);
+}
+
+function holidayPlannerMonthKeyFromDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function holidayPlannerSetMonth(monthKey) {
+  const candidate = /^\d{4}-\d{2}$/.test(String(monthKey || "")) ? monthKey : today.slice(0, 7);
+  activeHolidayPlannerMonth = candidate;
+  const monthInput = document.querySelector("#holidayPlannerMonthInput");
+  if (monthInput) monthInput.value = activeHolidayPlannerMonth;
+}
+
+function holidayPlannerStatus(request = {}) {
+  return String(request.status || "Pending").trim() || "Pending";
+}
+
+function holidayPlannerStatusVisible(status) {
+  const selected = document.querySelector("#holidayPlannerStatusFilter")?.value || "active";
+  const showDeclined = document.querySelector("#holidayPlannerShowDeclined")?.checked === true;
+  const showCancelled = document.querySelector("#holidayPlannerShowCancelled")?.checked === true;
+  if (selected === "all") {
+    if (status === "Declined") return showDeclined;
+    if (status === "Cancelled") return showCancelled;
+    return true;
+  }
+  if (selected === "active") return status === "Approved" || status === "Pending";
+  return status === selected;
+}
+
+function holidayPlannerRequestDates(request = {}) {
+  return dateRangeValues(request.from, request.to || request.from);
+}
+
+function holidayPlannerRequests() {
+  const employee = document.querySelector("#holidayPlannerEmployeeFilter")?.value || "all";
+  const search = (document.querySelector("#holidayPlannerSearch")?.value || "").trim().toLowerCase();
+  return holidayRequests
+    .map((request, index) => ({ request, index, status: holidayPlannerStatus(request), dates: holidayPlannerRequestDates(request) }))
+    .filter((item) => item.request.from)
+    .filter((item) => holidayPlannerStatusVisible(item.status))
+    .filter((item) => employee === "all" || item.request.name === employee || item.request.staffId === employee)
+    .filter((item) => !search || String(item.request.name || "").toLowerCase().includes(search))
+    .filter((item) => item.dates.some((date) => date.startsWith(activeHolidayPlannerMonth)));
+}
+
+function holidayPlannerMonthDates(monthKey = activeHolidayPlannerMonth) {
+  const start = holidayPlannerMonthStart(monthKey);
+  const gridStart = new Date(start);
+  const day = gridStart.getDay() || 7;
+  gridStart.setDate(gridStart.getDate() - (day - 1));
+  const dates = [];
+  const cursor = new Date(gridStart);
+  for (let i = 0; i < 42; i += 1) {
+    dates.push(localIsoDate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+function holidayPlannerStatusClass(status = "") {
+  return staffNotificationStatusClass(status);
+}
+
+function holidayPlannerEmployeeOptions() {
+  const selected = document.querySelector("#holidayPlannerEmployeeFilter")?.value || "all";
+  const options = [...new Set([
+    ...staffProfiles.map((staff) => staff.name),
+    ...holidayRequests.map((request) => request.name)
+  ].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const target = document.querySelector("#holidayPlannerEmployeeFilter");
+  if (!target) return;
+  target.innerHTML = '<option value="all">All employees</option>'
+    + options.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+  target.value = options.includes(selected) ? selected : "all";
+}
+
+function holidayPlannerSpanBlock(item, segment) {
+  const request = item.request;
+  const dates = segment.dates;
+  const range = dates.length > 1 ? `${formatDateUk(request.from)} to ${formatDateUk(request.to || request.from)}` : formatDateUk(request.from);
+  const compactStatus = `${holidayPlannerStatus(request)} Leave`;
+  const style = `--holiday-row:${segment.row}; --holiday-col:${segment.startCol}; --holiday-span:${segment.span}; --holiday-offset:${34 + (segment.lane * 38)}px;`;
+  return `
+    <button class="holiday-calendar-span ${holidayPlannerStatusClass(item.status)} ${segment.startsRecord ? "range-start" : "range-continuation-start"} ${segment.endsRecord ? "range-end" : "range-continuation-end"}" type="button" data-holiday-planner-open="${item.index}" style="${escapeHtml(style)}" title="${escapeHtml(`${request.name || "Employee"} | ${range} | ${holidayPlannerStatus(request)}`)}" aria-label="${escapeHtml(`${request.name || "Employee"} ${range} ${holidayPlannerStatus(request)}`)}">
+      <strong>${escapeHtml(request.name || "Employee")}</strong>
+      <span>${escapeHtml(compactStatus)}</span>
+    </button>
+  `;
+}
+
+function holidayPlannerDayEntries(date, items) {
+  return items.filter((item) => item.dates.includes(date));
+}
+
+function holidayPlannerSpanBlocks(items, dates) {
+  const dateIndex = new Map(dates.map((date, index) => [date, index]));
+  const laneUseByRow = new Map();
+  const spans = [];
+
+  items.forEach((item) => {
+    const visibleDates = item.dates
+      .filter((date) => dateIndex.has(date))
+      .sort((a, b) => a.localeCompare(b));
+    if (!visibleDates.length) return;
+
+    let segmentDates = [];
+    visibleDates.forEach((date) => {
+      const index = dateIndex.get(date);
+      const previousDate = segmentDates[segmentDates.length - 1];
+      const previousIndex = previousDate ? dateIndex.get(previousDate) : null;
+      const startsNewRow = previousIndex !== null && Math.floor(previousIndex / 7) !== Math.floor(index / 7);
+      const isContiguous = previousDate && datePlusDays(previousDate, 1) === date;
+      if (segmentDates.length && (!isContiguous || startsNewRow)) {
+        spans.push({ item, dates: segmentDates });
+        segmentDates = [];
+      }
+      segmentDates.push(date);
+    });
+    if (segmentDates.length) spans.push({ item, dates: segmentDates });
+  });
+
+  return spans.map((span) => {
+    const firstDate = span.dates[0];
+    const lastDate = span.dates[span.dates.length - 1];
+    const firstIndex = dateIndex.get(firstDate);
+    const row = Math.floor(firstIndex / 7) + 1;
+    const startCol = (firstIndex % 7) + 1;
+    const lane = laneUseByRow.get(row) || 0;
+    laneUseByRow.set(row, lane + 1);
+    return {
+      ...span,
+      row,
+      startCol,
+      span: span.dates.length,
+      lane,
+      startsRecord: firstDate === span.item.dates[0],
+      endsRecord: lastDate === span.item.dates[span.item.dates.length - 1]
+    };
+  });
+}
+
+function renderHolidayPlannerCalendar() {
+  const calendar = document.querySelector("#holidayPlannerCalendar");
+  const title = document.querySelector("#holidayPlannerMonthTitle");
+  if (!calendar) return;
+  holidayPlannerSetMonth(activeHolidayPlannerMonth);
+  holidayPlannerEmployeeOptions();
+  const start = holidayPlannerMonthStart(activeHolidayPlannerMonth);
+  if (title) {
+    title.textContent = start.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  }
+  const visible = holidayPlannerRequests();
+  const dates = holidayPlannerMonthDates();
+  const dayCells = dates.map((date) => {
+    const entries = holidayPlannerDayEntries(date, visible);
+    const inMonth = date.startsWith(activeHolidayPlannerMonth);
+    return `
+      <article class="holiday-calendar-day ${inMonth ? "" : "outside-month"} ${date === today ? "today" : ""} ${entries.length > 1 ? "multiple-away" : ""}">
+        <div class="holiday-calendar-date">
+          <strong>${Number(date.slice(8, 10))}</strong>
+          ${entries.length > 1 ? '<span title="Multiple staff away">Multiple staff away</span>' : ""}
+        </div>
+      </article>
+    `;
+  }).join("");
+  const spanBlocks = holidayPlannerSpanBlocks(visible, dates)
+    .map((span) => holidayPlannerSpanBlock(span.item, span))
+    .join("");
+  calendar.innerHTML = dayCells + spanBlocks;
+}
+
+function holidayPlannerSummaryItems() {
+  const visibleAll = holidayRequests
+    .map((request, index) => ({ request, index, status: holidayPlannerStatus(request), dates: holidayPlannerRequestDates(request) }))
+    .filter((item) => item.status === "Approved" || item.status === "Pending");
+  const tomorrowValue = (() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    return localIsoDate(date);
+  })();
+  const weekDates = new Set(dateRangeValues(today, (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 6);
+    return localIsoDate(d);
+  })()));
+  const upcoming = visibleAll
+    .filter((item) => item.dates.some((date) => date >= today))
+    .sort((a, b) => String(a.request.from || "").localeCompare(String(b.request.from || "")))[0];
+  return [
+    ["Today's Leave", visibleAll.filter((item) => item.dates.includes(today))],
+    ["Tomorrow's Leave", visibleAll.filter((item) => item.dates.includes(tomorrowValue))],
+    ["This Week", visibleAll.filter((item) => item.dates.some((date) => weekDates.has(date)))],
+    ["Pending Requests", visibleAll.filter((item) => item.status === "Pending")],
+    ["Next Upcoming Holiday", upcoming ? [upcoming] : []]
+  ];
+}
+
+function renderHolidayPlannerSummary() {
+  const target = document.querySelector("#holidayPlannerSummary");
+  if (!target) return;
+  target.innerHTML = holidayPlannerSummaryItems().map(([title, items]) => `
+    <section class="holiday-summary-block">
+      <h4>${escapeHtml(title)}</h4>
+      ${items.length ? items.slice(0, 5).map((item) => `
+        <button class="holiday-summary-item" type="button" data-holiday-planner-open="${item.index}">
+          <span>${escapeHtml(item.request.name || "Employee")}</span>
+          <strong>${escapeHtml(formatDateUk(item.request.from))}${item.request.to && item.request.to !== item.request.from ? ` to ${escapeHtml(formatDateUk(item.request.to))}` : ""}</strong>
+          <em class="holiday-status ${holidayPlannerStatusClass(item.status)}">${escapeHtml(item.status)}</em>
+        </button>
+      `).join("") : '<p class="empty-state compact-empty">No leave in this view.</p>'}
+    </section>
+  `).join("");
+}
+
+function renderHolidayPlanner() {
+  if (!document.querySelector("#holiday-planner")) return;
+  renderHolidayPlannerCalendar();
+  renderHolidayPlannerSummary();
+}
+
+function openHolidayPlannerRecord(index) {
+  const request = holidayRequests[Number(index)];
+  if (!request) return;
+  openDataDialog("holidays", String(index));
+}
+
+function openStaffHolidayPlanner(staffName) {
+  const staff = staffProfiles.find((item) => item.name === staffName) || {};
+  const next = staffHolidayRequestsFor(staff)
+    .filter((request) => ["Approved", "Pending"].includes(holidayPlannerStatus(request)))
+    .filter((request) => String(request.to || request.from || "") >= today)
+    .sort((a, b) => String(a.from || "").localeCompare(String(b.from || "")))[0];
+  activeHolidayPlannerMonth = String(next?.from || today).slice(0, 7);
+  showSection("holiday-planner");
+  renderHolidayPlanner();
+  const employeeFilter = document.querySelector("#holidayPlannerEmployeeFilter");
+  if (employeeFilter && [...employeeFilter.options].some((option) => option.value === staffName)) {
+    employeeFilter.value = staffName;
+    renderHolidayPlanner();
+  }
+}
+
 function staffNextHoliday(staff) {
   return staffHolidayRequestsFor(staff, "Approved")
     .filter((request) => String(request.from || "") >= today)
@@ -7572,13 +11106,61 @@ function staffNextHoliday(staff) {
 }
 
 function staffCompactRow(title, detail, status = "") {
+  const safeStatus = String(status || "");
+  const statusClass = ["Approved", "Present", "Current", "No Expiry", "Completed", "Acknowledged"].includes(safeStatus)
+    ? "ok"
+    : ["Declined", "Sick", "Absent", "Absent - Called in Sick", "Expired", "Overdue"].includes(safeStatus)
+      ? "urgent"
+      : ["Superseded", "Inactive", "Not Applicable", "No Action Required"].includes(safeStatus)
+        ? "muted"
+        : "warning";
   return `
     <article class="staff-compact-row">
       <div>
         <strong>${escapeHtml(title)}</strong>
         <p>${escapeHtml(detail || "")}</p>
       </div>
-      ${status ? `<span class="status ${status === "Approved" || status === "Present" ? "ok" : status === "Declined" || status === "Sick" || status === "Absent" || status === "Absent - Called in Sick" ? "urgent" : "warning"}">${escapeHtml(status)}</span>` : ""}
+      ${status ? `<span class="status ${statusClass}">${escapeHtml(status)}</span>` : ""}
+    </article>
+  `;
+}
+
+function staffAttendanceRecordRow(record) {
+  const index = attendanceRecords.indexOf(record);
+  const type = attendanceType(record);
+  const days = calculateAttendanceWorkingDays(record);
+  const details = [
+    attendanceDateLabel(record),
+    record.dayType || "Full day",
+    type === "Late" && record.minutesLate ? `${record.minutesLate} minutes late` : "",
+    type !== "Late" ? `${formatLeaveNumber(days)} working day${Number(days) === 1 ? "" : "s"}` : "",
+    attendanceIsOngoing(record) ? "Ongoing" : "",
+    record.returnDate ? `Return ${formatDateUk(record.returnDate)}` : "",
+    record.recordedBy ? `Recorded by ${record.recordedBy}` : "",
+    record.recordedAt ? `Recorded ${formatDateUk(String(record.recordedAt).slice(0, 10))}` : "",
+    record.confidentialNote ? "Confidential note" : "Non-confidential note"
+  ].filter(Boolean).join(" | ");
+  const auditRows = Array.isArray(record.auditTrail) && record.auditTrail.length
+    ? `<div class="audit-trail-mini">${record.auditTrail.slice(-3).map((entry) => `<p>${escapeHtml(`${entry.action || "Audit"} by ${entry.by || "Unknown"} on ${formatDateUk(String(entry.at || "").slice(0, 10))}${entry.reason ? ` - ${entry.reason}` : ""}`)}</p>`).join("")}</div>`
+    : "";
+  const note = record.officeNotes || record.returnToWorkNotes || record.notes || "";
+  const status = attendanceIsVoid(record) ? "Void" : (attendanceIsOngoing(record) ? "Ongoing" : type);
+  const actions = index >= 0 ? `
+    <div class="record-actions">
+      <button class="secondary-button" type="button" data-edit-attendance="${index}">${attendanceIsOngoing(record) ? "Correct / Close" : "Correct"}</button>
+      ${!attendanceIsVoid(record) ? `<button class="danger-button" type="button" data-void-attendance="${index}">Void</button>` : ""}
+    </div>
+  ` : "";
+  return `
+    <article class="staff-compact-row attendance-history-row">
+      <div>
+        <strong>${escapeHtml(type || "Attendance")}</strong>
+        <p>${escapeHtml(details)}</p>
+        ${note ? `<p>${record.confidentialNote ? "Confidential office note: " : "Office note: "}${escapeHtml(note)}</p>` : ""}
+        ${auditRows}
+        ${actions}
+      </div>
+      <span class="status ${attendanceIsVoid(record) ? "warning" : type === "Late" || attendanceIsOngoing(record) ? "warning" : type === "Sick" || type.includes("Absent") ? "urgent" : "ok"}">${escapeHtml(status)}</span>
     </article>
   `;
 }
@@ -7600,8 +11182,15 @@ function renderSelectedStaffProfile(staff, index, currentYear) {
 
   const attendance = attendanceFor(staff.name, today);
   const leaveSummary = staffLeaveSummary(staff, currentYear);
+  const attendanceSummary = annualAttendanceSummary(staff, currentYear);
   const trainingAlerts = staffTrainingAlertCount(staff);
   const nextHoliday = staffNextHoliday(staff);
+  const toolboxAssignments = staffToolboxAssignments(staff);
+  const evidenceRecords = staffEvidenceRecords(staff);
+  const assignedAssets = staffAssignedAssets(staff);
+  const assignedVehicle = staffAssignedVehicle(staff);
+  const openActions = staffOpenActions(staff);
+  const auditEvents = staffAuditEvents(staff);
   document.querySelectorAll(".staff-profile-tab").forEach((button) => {
     button.classList.toggle("active", button.dataset.staffTab === activeStaffTab);
   });
@@ -7619,6 +11208,7 @@ function renderSelectedStaffProfile(staff, index, currentYear) {
       <button class="secondary-button" type="button" data-edit-record="staff" data-record-index="${index}">Edit Profile</button>
       <button class="secondary-button" type="button" data-staff-detail-attendance="${escapeHtml(staff.name)}">Log Sick / Late / Absent</button>
       <button class="secondary-button" type="button" data-staff-detail-holiday="${escapeHtml(staff.name)}">Add Holiday</button>
+      <button class="secondary-button" type="button" data-open-staff-holiday-planner="${escapeHtml(staff.name)}">Open in Holiday Planner</button>
     </div>
   `;
 
@@ -7630,16 +11220,15 @@ function renderSelectedStaffProfile(staff, index, currentYear) {
       request.status || "Pending"
     ))
     .join("");
-  const attendanceRows = attendanceRecords
-    .filter((record) => record.name === staff.name)
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-    .slice(0, 20)
-    .map((record) => staffCompactRow(formatDateUk(record.date), `${record.category || record.returnToWorkNotes || "No notes"}`, record.status))
+  const attendanceRows = staffAttendanceRecords(staff, currentYear, true)
+    .map(staffAttendanceRecordRow)
     .join("");
   const trainingRows = staffTrainingRecords(staff)
     .map((record) => {
       const status = trainingStatus(record);
-      return staffCompactRow(record.course, `${record.provider || "Provider not set"} | Expires ${record.expiryDate ? formatDateUk(record.expiryDate) : "not set"}`, status.label);
+      const expiryLabel = record.noExpiry || status.label === "No Expiry" ? "No expiry" : record.expiryDate ? formatDateUk(record.expiryDate) : "not set";
+      const documentLabel = record.documentFileName || record.certificate ? ` | ${record.documentFileName || record.certificate}` : "";
+      return staffCompactRow(record.course, `${record.provider || "Provider not set"} | Expires ${expiryLabel}${documentLabel}`, status.label);
     })
     .join("");
   const incidents = incidentHistoryForStaff(staff);
@@ -7658,11 +11247,21 @@ function renderSelectedStaffProfile(staff, index, currentYear) {
         ${staffProfileMetric("Holiday remaining", leaveSummary.holidayRemaining)}
         ${staffProfileMetric("Sick days this year", leaveSummary.sickDays)}
         ${staffProfileMetric("Training alerts", trainingAlerts)}
+        ${staffProfileMetric("Open actions", openActions.length)}
         ${staffProfileMetric("Next booked holiday", nextHoliday ? `${formatDateUk(nextHoliday.from)} to ${formatDateUk(nextHoliday.to)}` : "None booked")}
       </div>
       <section class="staff-tab-section">
         <h4>Recent activity</h4>
         ${recentActivity.length ? recentActivity.map((item) => staffCompactRow(item, "")).join("") : '<p class="empty-state">No recent activity.</p>'}
+      </section>
+      <section class="staff-tab-section">
+        <h4>Current responsibility</h4>
+        ${assignedVehicle ? staffCompactRow(assignedVehicle.registration || assignedVehicle.vehicle || "Assigned vehicle", [assignedVehicle.make, assignedVehicle.model].filter(Boolean).join(" ") || assignedVehicle.vehicle || "Vehicle record", assignedVehicle.status || "Assigned") : '<p class="empty-state">No assigned vehicle recorded.</p>'}
+        ${assignedAssets.length ? assignedAssets.slice(0, 5).map((asset) => staffCompactRow(asset.asset || asset.assetId || "Asset", [asset.category, asset.condition].filter(Boolean).join(" | "), asset.status)).join("") : '<p class="empty-state">No assigned assets recorded.</p>'}
+      </section>
+      <section class="staff-tab-section">
+        <h4>Open actions</h4>
+        ${openActions.length ? openActions.slice(0, 5).map((item) => staffCompactRow(item.title || item.type || "Action", item.description || item.relatedEntityType || "", item.status || "New")).join("") : '<p class="empty-state">No open staff actions.</p>'}
       </section>
     `,
     holidays: `
@@ -7682,13 +11281,21 @@ function renderSelectedStaffProfile(staff, index, currentYear) {
       </section>
     `,
     attendance: `
+      <div class="staff-profile-cards">
+        ${staffProfileMetric("Sick days", formatLeaveNumber(attendanceSummary.sickDays))}
+        ${staffProfileMetric("Sickness occurrences", attendanceSummary.sicknessOccurrences)}
+        ${staffProfileMetric("Late occurrences", attendanceSummary.lateOccurrences)}
+        ${staffProfileMetric("Absent days", formatLeaveNumber(attendanceSummary.absentDays))}
+        ${staffProfileMetric("Authorised absence", formatLeaveNumber(attendanceSummary.otherAuthorisedAbsenceDays))}
+        ${staffProfileMetric("Unauthorised absence", formatLeaveNumber(attendanceSummary.unauthorisedAbsenceDays))}
+      </div>
       <div class="staff-tab-actions">
         <button class="primary-button" type="button" data-staff-detail-attendance="${escapeHtml(staff.name)}">Log sick / late / absent</button>
         <button class="secondary-button" type="button" data-sick-call="${escapeHtml(staff.name)}">Sick call-in</button>
       </div>
       <section class="staff-tab-section">
         <h4>Attendance records</h4>
-        ${attendanceRows || '<p class="empty-state">No attendance records yet.</p>'}
+        ${attendanceRows || '<p class="empty-state">No attendance records for this year.</p>'}
       </section>
     `,
     training: `
@@ -7703,11 +11310,19 @@ function renderSelectedStaffProfile(staff, index, currentYear) {
         </div>
         ${trainingRows || '<p class="empty-state">No matrix training records yet.</p>'}
       </section>
+      <section class="staff-tab-section">
+        <h4>Toolbox Talk and policy evidence</h4>
+        ${toolboxAssignments.length ? toolboxAssignments.slice(0, 6).map((assignment) => staffCompactRow(assignment.title || assignment.documentTitle || assignment.contentTitle || "Assigned communication", assignment.completedAt || assignment.acknowledgedAt ? `Completed ${formatDateUk(String(assignment.completedAt || assignment.acknowledgedAt).slice(0, 10))}` : `Due ${assignment.dueDate ? formatDateUk(assignment.dueDate) : "not set"}`, assignment.status || "Outstanding")).join("") : '<p class="empty-state">No Toolbox Talk or policy assignments recorded.</p>'}
+      </section>
     `,
     documents: `
       <section class="staff-tab-section">
         <h4>Staff documents</h4>
-        <p class="empty-state">Licence documents, certificates and other staff documents will be tracked here. Existing employee PDFs in OneDrive remain untouched.</p>
+        ${staffTrainingRecords(staff).filter((record) => record.documentFileName || record.certificate).map((record) => staffCompactRow(record.documentFileName || record.certificate, record.course || "Training certificate", trainingStatus(record).label)).join("") || '<p class="empty-state">No staff document metadata has been linked yet.</p>'}
+      </section>
+      <section class="staff-tab-section">
+        <h4>Evidence history</h4>
+        ${evidenceRecords.length ? evidenceRecords.slice(0, 8).map((record) => staffCompactRow(record.evidenceType || record.type || "Evidence", record.title || record.documentTitle || record.recordId || "", record.status || "Recorded")).join("") : '<p class="empty-state">No acknowledgement or compliance evidence recorded.</p>'}
       </section>
     `,
     notes: `
@@ -7720,6 +11335,10 @@ function renderSelectedStaffProfile(staff, index, currentYear) {
       <section class="staff-tab-section">
         <h4>Incident log</h4>
         ${incidents.length ? incidents.map((incident) => staffCompactRow(incident, "")).join("") : '<p class="empty-state">No internal accident or incident records logged.</p>'}
+      </section>
+      <section class="staff-tab-section">
+        <h4>Audit history</h4>
+        ${auditEvents.length ? auditEvents.map((event) => staffCompactRow(event.action || "Audit event", `${event.performedAt || event.dateTime || ""} | ${event.performedByUserId || event.user || "Unknown"}`, event.entityType || event.module || "Audit")).join("") : '<p class="empty-state">No staff audit events recorded.</p>'}
       </section>
     `
   };
@@ -7787,6 +11406,7 @@ function renderStaff() {
       : '<p class="empty-state compact-empty">No pending holiday requests.</p>';
   }
 
+  renderStaffActivityNotifications();
   renderSelectedStaffProfile(staffProfiles[selectedStaffIndex], selectedStaffIndex, currentYear);
 }
 
@@ -7798,7 +11418,7 @@ function renderTrainingMatrix() {
     .map((record, index) => ({ ...record, index, status: trainingStatus(record) }))
     .filter((record) => trainingRecordActiveInYear(record, activeTrainingYear));
   document.querySelector("#trainingCurrentCount").textContent = allRecords.filter((record) => record.status.label === "Current" || record.status.label === "No Expiry").length;
-  document.querySelector("#trainingExpiringCount").textContent = allRecords.filter((record) => record.status.className === "warning").length;
+  document.querySelector("#trainingExpiringCount").textContent = allRecords.filter((record) => record.status.label === "Expiring Soon").length;
   document.querySelector("#trainingExpiredCount").textContent = allRecords.filter((record) => record.status.className === "urgent").length;
   document.querySelector("#trainingEmployeeCount").textContent = new Set(allRecords.map((record) => record.employee).filter(Boolean)).size;
 
@@ -7820,7 +11440,8 @@ function renderTrainingMatrix() {
               <button class="secondary-button" type="button" data-view-training="${record.index}">View</button>
               <button class="secondary-button" type="button" data-edit-record="training" data-record-index="${record.index}">Edit</button>
               <button class="secondary-button" type="button" data-replace-training-certificate="${record.index}">Replace certificate</button>
-              <button class="danger-button" type="button" data-delete-record="training" data-record-index="${record.index}">Delete</button>
+              <button class="secondary-button" type="button" data-training-lifecycle="Superseded" data-training-index="${record.index}">Supersede</button>
+              <button class="secondary-button" type="button" data-training-lifecycle="Inactive" data-training-index="${record.index}">Mark inactive</button>
             </div>
           </td>
         </tr>
@@ -7902,8 +11523,12 @@ function filteredTrainingRecords() {
     const searchable = `${record.employee} ${record.course} ${record.provider} ${record.certificateNumber} ${record.documentFileName} ${record.notes}`.toLowerCase();
     const matchesStatus = statusFilter === "all"
       || (statusFilter === "current" && record.status.label === "Current")
-      || (statusFilter === "expiring" && record.status.className === "warning")
+      || (statusFilter === "expiring" && record.status.label === "Expiring Soon")
       || (statusFilter === "expired" && record.status.className === "urgent")
+      || (statusFilter === "missing" && record.status.label === "Missing / Not Recorded")
+      || (statusFilter === "not-applicable" && record.status.label === "Not Applicable")
+      || (statusFilter === "superseded" && record.status.label === "Superseded")
+      || (statusFilter === "inactive" && record.status.label === "Inactive")
       || (statusFilter === "no-expiry" && record.status.label === "No Expiry");
     const matchesExpiry = expiryFilter === "all" || (!record.noExpiry && record.status.days >= 0 && record.status.days <= Number(expiryFilter));
     return (!term || searchable.includes(term))
@@ -8173,6 +11798,42 @@ async function openTrainingCertificate(index) {
   certificateViewerDialog?.showModal();
 }
 
+async function updateTrainingLifecycle(index, lifecycleStatus) {
+  const record = trainingMatrix[Number(index)];
+  if (!record) return;
+  const confirmed = await kcConfirmAction(
+    `Mark "${record.course || "this training record"}" for ${record.employee || "this employee"} as ${lifecycleStatus}? The record will remain in history.`,
+    `Mark ${lifecycleStatus}`
+  );
+  if (!confirmed) return;
+  const previous = { ...record };
+  record.lifecycleStatus = lifecycleStatus;
+  record.status = lifecycleStatus;
+  record.updatedAt = new Date().toISOString();
+  record.history = Array.isArray(record.history) ? record.history : [];
+  record.history.push({
+    action: `Marked ${lifecycleStatus}`,
+    by: currentUserName(),
+    at: record.updatedAt
+  });
+  universalAuditEvents.unshift({
+    auditEventId: `AUD-STAFF-COMPLIANCE-${stablePhase9Hash([record.trainingRecordId || record.id, lifecycleStatus, record.updatedAt])}`,
+    entityType: "TrainingRecord",
+    entityId: record.trainingRecordId || record.id || "",
+    action: `Training Record Marked ${lifecycleStatus}`,
+    performedByUserId: currentUserName(),
+    performedByRole: currentUserName() === "Kevin" || currentUserName() === "Alex" ? "Director" : "Office",
+    performedAt: record.updatedAt,
+    sourceApp: "Kingswood Hub",
+    oldValue: previous,
+    newValue: { ...record }
+  });
+  const saved = await saveCommandData();
+  if (!saved) return;
+  render();
+  await kcInfo("Training record lifecycle updated. The original record remains in history.");
+}
+
 function localFileUrl(filePath) {
   return `/api/local-file?path=${encodeURIComponent(filePath)}`;
 }
@@ -8275,6 +11936,11 @@ function renderCards(target, items) {
 
 function renderSettingsDetail(active = activeSettingsPanel) {
   activeSettingsPanel = active || "core";
+  if (activeSettingsPanel !== "themes") {
+    weatherThemePreviewValue = "live";
+    seasonalThemePreviewValue = "none";
+    applyDashboardHeaderTheme(lastWeatherCode);
+  }
   document.querySelectorAll("[data-settings-action]").forEach((card) => {
     card.classList.toggle("settings-active", card.dataset.settingsAction === activeSettingsPanel);
   });
@@ -8324,6 +11990,44 @@ function renderSettingsDetail(active = activeSettingsPanel) {
         </div>
       </div>
     `,
+    themes: () => `
+      ${settingsPanelHeader("Header Theme Preview", "Preview weather and seasonal header styles without changing the live Orpington weather feed.")}
+      <div class="theme-preview-panel">
+        <div class="theme-preview-note">
+          <strong>Preview mode only</strong>
+          <p>These controls change the header/banner visuals only. They do not change, save or replace the real weather data.</p>
+        </div>
+        <div class="theme-preview-controls">
+          <label>
+            Weather Theme Test Mode
+            <select id="weatherThemePreviewSelect">
+              <option value="live">Live weather automatic</option>
+              <option value="standard">Standard Kingswood header</option>
+              <option value="clear">Sunny</option>
+              <option value="rain">Rain</option>
+              <option value="snow">Snow</option>
+            </select>
+          </label>
+          <label>
+            Seasonal Theme Preview
+            <select id="seasonalThemePreviewSelect">
+              <option value="none">None</option>
+              <option value="christmas">Christmas</option>
+              <option value="easter">Easter</option>
+              <option value="halloween">Halloween</option>
+            </select>
+          </label>
+          <label>
+            Christmas automatic end date
+            <input id="christmasThemeEndDateInput" type="date" value="${escapeHtml(christmasThemeEndDate())}">
+          </label>
+        </div>
+        <div class="theme-preview-actions">
+          <p id="themePreviewStatus" class="theme-preview-status">Header preview: Live weather automatic.</p>
+          <button class="secondary-button" id="resetHeaderThemePreviewButton" type="button">Reset to live header</button>
+        </div>
+      </div>
+    `,
     storage: () => `
       ${settingsPanelHeader("Data Storage", "The Hub saves into this Kingswood Hub OneDrive folder. Each save now keeps timestamped safety backups.")}
       <div class="storage-panel">
@@ -8338,6 +12042,7 @@ function renderSettingsDetail(active = activeSettingsPanel) {
   };
 
   detail.innerHTML = (panels[activeSettingsPanel] || panels.core)();
+  updateThemePreviewControls();
 }
 
 function settingsPanelHeader(title, subtitle) {
@@ -8988,10 +12693,290 @@ function renderSplitScreen() {
   plannerBoard.innerHTML = board.html;
 }
 
+function historyControlValue(selector, fallback = "all") {
+  return document.querySelector(selector)?.value || fallback;
+}
+
+function historyStoredPageSize() {
+  const stored = Number(localStorage.getItem(historyPageSizeStorageKey) || 15);
+  return [15, 25, 50, 100].includes(stored) ? stored : 15;
+}
+
+function historySearchTerm() {
+  return (document.querySelector("#historySearch")?.value || "").trim().toLowerCase();
+}
+
+function historyDateValue(job) {
+  return String(job.completedAt || job.completionDate || job.submittedAt || job.date || job.jobDate || "").slice(0, 10);
+}
+
+function historyRecordKey(job, fallbackIndex) {
+  return String(job.jobId || job.id || job.number || job.reference || job.jobReference || fallbackIndex);
+}
+
+function historyMeaningfulValues(job) {
+  return [
+    job.number,
+    job.reference,
+    job.jobReference,
+    job.address,
+    job.title,
+    job.client,
+    job.postcode,
+    job.technician,
+    job.date
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+}
+
+function historyStatusInfo(job) {
+  const rawStatus = String(job.status || "").toLowerCase();
+  const rawReport = String(job.report || "").toLowerCase();
+  if (rawStatus.includes("cancel")) return { key: "cancelled", label: "Cancelled", className: "urgent" };
+  if (rawStatus.includes("follow") || rawReport.includes("follow")) return { key: "follow-up-required", label: "Follow-up Required", className: "warning" };
+  if (jobCompleted(job)) return { key: "completed", label: "Completed", className: "ok" };
+  if (rawStatus.includes("await") || rawReport.includes("await")) return { key: "awaiting-report", label: "Awaiting Report", className: "warning" };
+  if (rawStatus.includes("sent")) return { key: "sent", label: "Sent to Technician", className: "sent-tech" };
+  return { key: "scheduled", label: rawStatus ? job.status : "Scheduled", className: "draft" };
+}
+
+function historyReportMatches(job) {
+  const jobId = String(job.jobId || job.id || "").trim();
+  const jobReference = String(job.number || job.reference || job.jobReference || "").trim();
+  return phase05eCompletedReports
+    .filter((report) => {
+      return (jobId && report.jobId === jobId) || (jobReference && report.jobReference === jobReference);
+    })
+    .filter((report) => report.reportId && report.oneDriveFolder)
+    .sort((a, b) => new Date(b.submittedAt || b.createdAt || b.jobDate || 0) - new Date(a.submittedAt || a.createdAt || a.jobDate || 0));
+}
+
+function historyDateMatches(dateValue, filter) {
+  if (filter === "all") return true;
+  if (!dateValue) return false;
+  const date = new Date(`${dateValue}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return false;
+  const now = new Date(`${today}T00:00:00`);
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const day = now.getDay() || 7;
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - day + 1);
+  const lastThreeMonths = new Date(now);
+  lastThreeMonths.setMonth(now.getMonth() - 3);
+  if (filter === "this-week") return date >= startOfWeek && date <= now;
+  if (filter === "this-month") return date >= startOfMonth && date <= now;
+  if (filter === "last-3-months") return date >= lastThreeMonths && date <= now;
+  if (filter === "this-year") return date >= startOfYear && date <= now;
+  return true;
+}
+
+function historySourceRecords() {
+  historyExcludedUnusableCount = 0;
+  return dashboardJobSource().map((job, index) => {
+    const originalIndex = jobs.indexOf(job);
+    const meaningful = historyMeaningfulValues(job);
+    if (!meaningful.length) {
+      historyExcludedUnusableCount += 1;
+      return null;
+    }
+    const incomplete = meaningful.length < 2;
+    const report = phase05eReportForJob(job);
+    const status = historyStatusInfo(job);
+    return {
+      job,
+      report,
+      status,
+      key: historyRecordKey(job, index),
+      originalIndex,
+      incomplete
+    };
+  }).filter(Boolean);
+}
+
+function historyPopulateFilterOptions(records) {
+  const technicianSelect = document.querySelector("#historyTechnicianFilter");
+  const clientSelect = document.querySelector("#historyClientFilter");
+  if (!technicianSelect || !clientSelect) return;
+  const technicianValue = technicianSelect.value || "all";
+  const clientValue = clientSelect.value || "all";
+  const technicians = [...new Set(records.map(({ job }) => String(job.technician || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const clients = [...new Set(records.map(({ job }) => String(job.client || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  technicianSelect.innerHTML = `<option value="all">All Technicians</option>${technicians.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}`;
+  clientSelect.innerHTML = `<option value="all">All Clients</option>${clients.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}`;
+  technicianSelect.value = technicians.includes(technicianValue) ? technicianValue : "all";
+  clientSelect.value = clients.includes(clientValue) ? clientValue : "all";
+}
+
+function historyFilteredRecords() {
+  const records = historySourceRecords();
+  historyPopulateFilterOptions(records);
+  const term = historySearchTerm();
+  const statusFilter = historyControlValue("#historyStatusFilter");
+  const dateFilter = historyControlValue("#historyDateFilter");
+  const technicianFilter = historyControlValue("#historyTechnicianFilter");
+  const clientFilter = historyControlValue("#historyClientFilter");
+  return records.filter(({ job, report, status }) => {
+    const searchable = [
+      job.address,
+      job.postcode,
+      job.number,
+      job.reference,
+      job.jobReference,
+      job.client,
+      job.technician,
+      job.title,
+      job.workType,
+      job.type,
+      report?.reportId
+    ].join(" ").toLowerCase();
+    const matchesSearch = !term || searchable.includes(term);
+    const matchesStatus = statusFilter === "all" || status.key === statusFilter;
+    const matchesDate = historyDateMatches(historyDateValue(job), dateFilter);
+    const matchesTechnician = technicianFilter === "all" || String(job.technician || "").trim() === technicianFilter;
+    const matchesClient = clientFilter === "all" || String(job.client || "").trim() === clientFilter;
+    return matchesSearch && matchesStatus && matchesDate && matchesTechnician && matchesClient;
+  });
+}
+
+function historySortedRecords(records) {
+  const sort = historyControlValue("#historySort", "newest");
+  const propertyLabel = (record) => String(record.job.address || record.job.title || "").toLowerCase();
+  const clientLabel = (record) => String(record.job.client || "").toLowerCase();
+  const techLabel = (record) => String(record.job.technician || "").toLowerCase();
+  const timeValue = (record) => new Date(`${historyDateValue(record.job) || "1900-01-01"}T00:00:00`).getTime() || 0;
+  return [...records].sort((a, b) => {
+    if (sort === "oldest") return timeValue(a) - timeValue(b);
+    if (sort === "client-az") return clientLabel(a).localeCompare(clientLabel(b));
+    if (sort === "client-za") return clientLabel(b).localeCompare(clientLabel(a));
+    if (sort === "technician-az") return techLabel(a).localeCompare(techLabel(b));
+    if (sort === "property-az") return propertyLabel(a).localeCompare(propertyLabel(b));
+    return timeValue(b) - timeValue(a);
+  });
+}
+
+function historyMetaItem(label, value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(text)}</strong></article>`;
+}
+
+function historyReportSection(record) {
+  const reports = historyReportMatches(record.job);
+  const report = record.report;
+  if (!report) return "";
+  const multipleNotice = reports.length > 1 ? `<p class="history-report-note">Multiple reports exist. Showing the latest submitted report.</p>` : "";
+  const hasRecommendations = report.recommendations ? "Yes" : "No";
+  const reportId = String(report.reportId || "").trim();
+  const actionButtons = [
+    reportId ? `<button class="secondary-button compact-button" type="button" data-view-phase05e-report="${escapeHtml(reportId)}">View Report</button>` : "",
+    reportId && report.oneDriveFolder ? `<button class="secondary-button compact-button" type="button" data-open-report-folder="${escapeHtml(reportId)}">Open OneDrive Folder</button>` : ""
+  ].filter(Boolean).join("");
+  return `
+    <section class="history-expanded-section">
+      <h3>Completed Technician Report</h3>
+      ${multipleNotice}
+      <div class="history-detail-grid">
+        ${historyMetaItem("Report status", report.status || "Completed - Report Submitted")}
+        ${historyMetaItem("Report ID", reportId)}
+        ${historyMetaItem("Submitted", formatDateTimeUk(report.submittedAt))}
+        ${historyMetaItem("Technician", report.technician || record.job.technician)}
+        ${historyMetaItem("Photo count", String(report.photoCount ?? 0))}
+        ${historyMetaItem("Recommendations present", hasRecommendations)}
+      </div>
+      ${actionButtons ? `<div class="history-card-actions">${actionButtons}</div>` : ""}
+    </section>
+  `;
+}
+
+function historyExpandedContent(record) {
+  const job = record.job;
+  const status = record.status;
+  const reports = historyReportMatches(job);
+  const ambiguousReports = reports.length > 1 && !job.phase05eReport?.reportId;
+  return `
+    <div class="history-expanded" id="history-panel-${escapeHtml(record.key)}">
+      <section class="history-expanded-section">
+        <h3>Job Information</h3>
+        <div class="history-detail-grid">
+          ${historyMetaItem("Job reference", job.number || job.reference || job.jobReference)}
+          ${historyMetaItem("Client", job.client)}
+          ${historyMetaItem("Property address", job.address || job.title)}
+          ${historyMetaItem("Postcode", job.postcode)}
+          ${historyMetaItem("Work type", job.workType || job.type || job.title)}
+          ${historyMetaItem("Assigned technician", job.technician)}
+          ${historyMetaItem("Job date", historyDateValue(job) ? formatDateUk(historyDateValue(job)) : "")}
+          ${historyMetaItem("Completion date", record.report?.submittedAt ? formatDateTimeUk(record.report.submittedAt) : "")}
+          ${historyMetaItem("Current status", status.label)}
+        </div>
+      </section>
+      ${ambiguousReports ? '<p class="history-report-note">Multiple reports are linked to this job. The latest valid submitted report is selected.</p>' : ""}
+      ${historyReportSection(record)}
+      <div class="history-card-actions">
+        ${record.originalIndex >= 0 ? `<button class="secondary-button compact-button" type="button" data-view-job="${record.originalIndex}">View Job</button>` : ""}
+        ${record.report ? "" : '<span class="history-muted-action">No completed technician report is linked to this job.</span>'}
+      </div>
+    </div>
+  `;
+}
+
+function historyCard(record) {
+  const job = record.job;
+  const title = record.incomplete ? "Incomplete job record" : (job.address || job.title || job.number || "Job history record");
+  const reference = job.number || job.reference || job.jobReference || "No job reference";
+  const client = job.client || "Client not recorded";
+  const detailParts = [reference, client, job.postcode || job.workType || job.type || job.title].filter(Boolean);
+  const technician = String(job.technician || "").trim();
+  const expanded = false;
+  return `
+    <article class="history-card ${record.incomplete ? "incomplete" : ""}" data-history-record="${escapeHtml(record.key)}">
+      <button class="history-card-summary" type="button" data-history-expand="${escapeHtml(record.key)}" aria-expanded="${expanded}" aria-controls="history-panel-${escapeHtml(record.key)}">
+        <span class="history-card-main">
+          <strong>${escapeHtml(title)}</strong>
+          <small>${escapeHtml(detailParts.join(" | "))}</small>
+        </span>
+        <span class="history-card-meta">
+          ${technician ? `<span class="history-tech-badge">${escapeHtml(technician)}</span>` : ""}
+          <span class="status ${escapeHtml(record.status.className)}">${escapeHtml(record.status.label)}</span>
+        </span>
+      </button>
+      ${historyExpandedContent(record)}
+    </article>
+  `;
+}
+
+function updateHistoryPaginationUi(total, pageSize, totalPages) {
+  const resultSummary = document.querySelector("#historyResultSummary");
+  const pageSummary = document.querySelector("#historyPageSummary");
+  const pageIndicator = document.querySelector("#historyPageIndicator");
+  const prevButton = document.querySelector("#historyPrevPage");
+  const nextButton = document.querySelector("#historyNextPage");
+  if (!resultSummary || !pageSummary || !pageIndicator || !prevButton || !nextButton) return;
+  const start = total ? ((historyCurrentPage - 1) * pageSize) + 1 : 0;
+  const end = total ? Math.min(total, historyCurrentPage * pageSize) : 0;
+  resultSummary.textContent = total ? `Showing ${start}-${end} of ${total} jobs` : "Showing 0 jobs";
+  pageSummary.textContent = `Page ${historyCurrentPage} of ${totalPages}`;
+  pageIndicator.textContent = `Page ${historyCurrentPage} of ${totalPages}`;
+  prevButton.disabled = historyCurrentPage <= 1;
+  nextButton.disabled = historyCurrentPage >= totalPages;
+}
+
 function renderHistory() {
-  document.querySelector("#historyList").innerHTML = jobs.map((job) => (
-    listRow(job.address, `${job.number} | ${job.client} | ${job.title}`, `Technician: ${job.technician}`)
-  )).join("");
+  const list = document.querySelector("#historyList");
+  const pageSizeSelect = document.querySelector("#historyPageSize");
+  if (!list || !pageSizeSelect) return;
+  pageSizeSelect.value = String(historyStoredPageSize());
+  const pageSize = Number(pageSizeSelect.value);
+  const filtered = historySortedRecords(historyFilteredRecords());
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  historyCurrentPage = Math.min(Math.max(historyCurrentPage, 1), totalPages);
+  const pageRecords = filtered.slice((historyCurrentPage - 1) * pageSize, historyCurrentPage * pageSize);
+  updateHistoryPaginationUi(filtered.length, pageSize, totalPages);
+  if (historyExcludedUnusableCount) {
+    console.info(`Job History omitted ${historyExcludedUnusableCount} unusable blank record(s).`);
+  }
+  list.innerHTML = pageRecords.length
+    ? pageRecords.map(historyCard).join("")
+    : '<p class="empty-state">No job history records match the current search and filters.</p>';
 }
 
 function renderNotifications() {
@@ -9020,6 +13005,1118 @@ function listRow(title, detail, badge) {
   `;
 }
 
+function tscId(prefix) {
+  return `${prefix}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+}
+
+function tscNormaliseCommunicationType(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+function tscCommunicationTypeDefinition(value) {
+  return tscCommunicationTypes[tscNormaliseCommunicationType(value)] || null;
+}
+
+function tscCommunicationTypeForContent(item = {}) {
+  const stored = tscNormaliseCommunicationType(item.communicationType);
+  if (stored) return stored;
+  if (String(item.type || "") === "Toolbox Talk") return TSC_TOOLBOX_TALK_COMMUNICATION_TYPE;
+  if (String(item.type || "") === "Announcement") return TSC_ANNOUNCEMENT_COMMUNICATION_TYPE;
+  return "";
+}
+
+function tscCommunicationTypeDisplayName(value) {
+  return tscCommunicationTypeDefinition(value)?.displayName || "Communication";
+}
+
+function tscValidateCommunicationType(value) {
+  const definition = tscCommunicationTypeDefinition(value);
+  if (!definition) return { ok: false, reason: "unsupported" };
+  if (definition.status !== "active") return { ok: false, reason: "inactive" };
+  return { ok: true, definition };
+}
+
+function normaliseTscCommunicationTypes() {
+  tscMasterContent = tscMasterContent.map((item) => {
+    const communicationType = tscCommunicationTypeForContent(item);
+    if (!tscValidateCommunicationType(communicationType).ok) return item;
+    const validation = tscValidateCommunicationType(communicationType);
+    if (!validation.ok || item.communicationType === communicationType) return item;
+    return { ...item, communicationType };
+  });
+}
+
+function tscControlledDocuments() {
+  return tscMasterContent.filter((item) => tscValidateCommunicationType(tscCommunicationTypeForContent(item)).ok);
+}
+
+function tscContentById(contentId) {
+  return tscMasterContent.find((item) => item.contentId === contentId);
+}
+
+function tscPublishedById(revisionId) {
+  return tscPublishedRevisions.find((revision) => revision.revisionId === revisionId);
+}
+
+const tscAssignmentStatusValues = ["Not Started", "In Progress", "Completed", "Overdue", "Cancelled", "Withdrawn", "Exempt", "Reopened"];
+const tscEvidenceTypes = ["Acknowledgement", "Knowledge Check", "Quiz Result", "Digital Signature", "Supervisor Verification", "Practical Assessment", "Certificate", "Photograph", "Document Upload", "Attendance Record", "System Verification"];
+const tscEvidenceStatusValues = ["Pending", "Submitted", "Accepted", "Verified", "Rejected", "Superseded", "Revoked", "Archived"];
+
+function tscEvidenceById(evidenceId) {
+  return tscEvidenceRecords.find((record) => record.evidenceId === evidenceId);
+}
+
+function tscEvidenceForAssignment(assignmentId) {
+  return tscEvidenceRecords.filter((record) => record.assignmentId === assignmentId);
+}
+
+function tscEvidenceCanEdit(record = {}) {
+  return !["Accepted", "Verified", "Archived"].includes(record.evidenceStatus);
+}
+
+function tscPublishedForContent(contentId) {
+  return tscPublishedRevisions.find((revision) => revision.sourceContentId === contentId)
+    || tscPublishedRevisions.find((revision) => revision.documentId === tscContentById(contentId)?.documentId);
+}
+
+function tscNormaliseStatusValue(value) {
+  return String(value || "").trim().toLowerCase().replace(/[\s_-]+/g, "-");
+}
+
+function tscContentIsPublished(item = {}) {
+  return tscNormaliseStatusValue(item.status) === "published";
+}
+
+function tscContentIsArchived(item = {}) {
+  return tscNormaliseStatusValue(item.status) === "archived";
+}
+
+function tscEnsurePublishedRevisionForContent(item = {}) {
+  if (!item.contentId || !tscContentIsPublished(item)) return null;
+  const existing = tscPublishedForContent(item.contentId);
+  if (existing) return existing;
+  const now = new Date().toISOString();
+  const { communicationType, type, ...publishedSnapshot } = item;
+  const published = {
+    revisionId: tscId("TSC-PUB"),
+    sourceContentId: item.contentId,
+    documentId: item.documentId || item.contentId,
+    documentTitle: item.title || "",
+    revisionNumber: item.revision || "Rev A",
+    publicationDate: today,
+    publishedBy: currentUserName(),
+    effectiveDate: item.effectiveDate || today,
+    reviewDate: item.reviewDate || "",
+    publicationStatus: "Published",
+    immutableSnapshot: { ...publishedSnapshot, publishedAt: now }
+  };
+  tscPublishedRevisions.unshift(published);
+  return published;
+}
+
+function tscEligibleStaffForAudience(audience) {
+  const activeStaff = staffProfiles.filter((staff) => (staff.status || "Active") !== "Inactive");
+  const roleMatches = (staff, terms) => terms.some((term) => String(staff.role || "").toLowerCase().includes(term));
+  if (audience === "All Technicians") return activeStaff.filter((staff) => roleMatches(staff, ["technician"]));
+  if (audience === "Surveyors") return activeStaff.filter((staff) => roleMatches(staff, ["surveyor"]));
+  if (audience === "Office Staff") return activeStaff.filter((staff) => !roleMatches(staff, ["technician"]));
+  if (audience === "Managers") return activeStaff.filter((staff) => roleMatches(staff, ["manager"]));
+  if (audience === "Directors") return activeStaff.filter((staff) => roleMatches(staff, ["director"]));
+  return activeStaff.filter((staff) => roleMatches(staff, ["technician"]));
+}
+
+function tscSelectedTechnicianIds() {
+  const input = document.querySelector("#tscIssueSelectedStaffInput");
+  if (!input) return [];
+  return Array.from(input.selectedOptions || []).map((option) => option.value).filter(Boolean);
+}
+
+function tscEligibleStaffForIssueAudience(audience) {
+  if (audience !== "Selected Technicians") return tscEligibleStaffForAudience(audience);
+  const selected = new Set(tscSelectedTechnicianIds());
+  return tscEligibleStaffForAudience("All Technicians").filter((staff) => selected.has(staff.staffId));
+}
+
+function populateTscSelectedTechnicianOptions(selectedIds = []) {
+  const input = document.querySelector("#tscIssueSelectedStaffInput");
+  if (!input) return;
+  const selected = new Set(selectedIds);
+  input.innerHTML = tscEligibleStaffForAudience("All Technicians").map((staff) => `
+    <option value="${escapeHtml(staff.staffId)}" ${selected.has(staff.staffId) ? "selected" : ""}>${escapeHtml(staff.name || staff.staffId)}</option>
+  `).join("");
+}
+
+function tscAnnouncementSelectedTechnicianIds() {
+  const input = document.querySelector("#tscAnnouncementSelectedStaffInput");
+  if (!input) return [];
+  return Array.from(input.selectedOptions || []).map((option) => option.value).filter(Boolean);
+}
+
+function populateTscAnnouncementSelectedTechnicianOptions(selectedIds = []) {
+  const input = document.querySelector("#tscAnnouncementSelectedStaffInput");
+  if (!input) return;
+  const selected = new Set(selectedIds);
+  input.innerHTML = tscEligibleStaffForAudience("All Technicians").map((staff) => `
+    <option value="${escapeHtml(staff.staffId)}" ${selected.has(staff.staffId) ? "selected" : ""}>${escapeHtml(staff.name || staff.staffId)}</option>
+  `).join("");
+}
+
+function tscAnnouncementAudienceStaff(audience) {
+  if (audience !== "Selected Technicians") return tscEligibleStaffForAudience("All Technicians");
+  const selected = new Set(tscAnnouncementSelectedTechnicianIds());
+  return tscEligibleStaffForAudience("All Technicians").filter((staff) => selected.has(staff.staffId));
+}
+
+function updateTscAnnouncementConfirmation() {
+  const audience = document.querySelector("#tscAnnouncementAudienceInput")?.value || "All Technicians";
+  const selectedLabel = document.querySelector("#tscAnnouncementSelectedStaffLabel");
+  if (selectedLabel) selectedLabel.hidden = audience !== "Selected Technicians";
+  if (audience === "Selected Technicians") populateTscAnnouncementSelectedTechnicianOptions(tscAnnouncementSelectedTechnicianIds());
+  const staff = tscAnnouncementAudienceStaff(audience);
+  const target = document.querySelector("#tscAnnouncementConfirmation");
+  if (!target) return;
+  target.innerHTML = `
+    This announcement will be sent to <strong>${escapeHtml(String(staff.length))}</strong> active technician${staff.length === 1 ? "" : "s"}.<br>
+    ${audience === "Selected Technicians" ? "Only the selected technicians will receive it." : "All active technicians will receive it."}
+  `;
+}
+
+function tscIssueCommunicationType(issue = {}) {
+  const content = tscContentById(issue.contentId) || {};
+  return tscCommunicationTypeForContent(content);
+}
+
+function tscIssueAssignments(issueId) {
+  return tscAssignmentRecords.filter((assignment) => assignment.issueId === issueId);
+}
+
+function tscIssueProgress(issue) {
+  const assignments = tscIssueAssignments(issue.issueId);
+  const issueType = tscIssueCommunicationType(issue);
+  const acknowledgementRequired = issueType === TSC_ANNOUNCEMENT_COMMUNICATION_TYPE ? issue.acknowledgementRequired === true : true;
+  const completed = assignments.filter((assignment) => assignment.status === "Completed" || assignment.completedAt || assignment.completedDateTime);
+  const sent = assignments.filter((assignment) => assignment.sentAt || assignment.assignedDateTime || assignment.createdAt);
+  const received = assignments.filter((assignment) => assignment.receivedAt || completed.includes(assignment));
+  const viewed = assignments.filter((assignment) => assignment.viewedAt || assignment.openedAt || assignment.openedDateTime || completed.includes(assignment));
+  const outstanding = assignments.filter((assignment) => acknowledgementRequired ? !completed.includes(assignment) : !viewed.includes(assignment));
+  return {
+    assigned: assignments.length,
+    sent: sent.length,
+    received: received.length,
+    viewed: viewed.length,
+    acknowledged: completed.length,
+    completed: completed.length,
+    outstanding: outstanding.length
+  };
+}
+
+function tscIssueOperationalStatus(issue) {
+  const progress = tscIssueProgress(issue);
+  const dueDate = issue.dueDate || "";
+  if (progress.assigned && progress.completed === progress.assigned) return "Completed";
+  if (dueDate && dueDate < today) return "Overdue";
+  if (issue.status === "Issued") return "Live";
+  return issue.status || "Draft";
+}
+
+function tscEvidenceSchemaReference() {
+  return {
+    evidenceId: "",
+    assignmentId: "",
+    employeeId: "",
+    evidenceType: "Acknowledgement",
+    evidenceStatus: "Pending",
+    createdDateTime: "",
+    submittedDateTime: "",
+    verifiedDateTime: "",
+    verifiedBy: "",
+    completionMethod: "",
+    result: "",
+    score: null,
+    passFail: "",
+    acknowledgementText: "",
+    signatureReference: "",
+    attachmentReference: "",
+    supervisorNotes: "",
+    deviceInformation: "",
+    appVersion: appVersion,
+    authenticatedUserId: "",
+    ipAddress: null,
+    location: null,
+    sourceSystem: "Kingswood Connect",
+    auditEventId: "",
+    publishedRevisionId: "",
+    contentSnapshotReference: "",
+    documentChecksum: ""
+  };
+}
+
+function tscAssignmentSchemaReference() {
+  return {
+    assignmentId: "",
+    issueCampaignId: "",
+    employeeId: "",
+    assignedDateTime: "",
+    dueDateTime: "",
+    status: "Not Started",
+    priority: "Normal",
+    assignmentSource: "",
+    assignedBy: "",
+    openedDateTime: "",
+    completedDateTime: "",
+    cancelledDateTime: "",
+    cancellationReason: "",
+    exemptionStatus: "",
+    exemptionReason: "",
+    reopenedDateTime: "",
+    escalationStatus: "",
+    managerOrSupervisor: ""
+  };
+}
+
+function tscContentCanEdit(item = {}) {
+  return !tscContentIsPublished(item) && !tscContentIsArchived(item);
+}
+
+function tscStatusPill(status) {
+  const className = status === "Approved" || status === "Published" || status === "Accepted" || status === "Verified" || status === "Completed"
+    ? "green"
+    : status === "Draft" || status === "Submitted for Approval" || status === "Pending" || status === "Submitted" || status === "In Progress" || status === "Not Started" || status === "Reopened"
+      ? "amber"
+      : status === "Archived" || status === "Superseded" || status === "Revoked" || status === "Cancelled" || status === "Withdrawn" || status === "Exempt"
+        ? "muted"
+        : status === "Due for Review" || status === "Rejected" || status === "Overdue"
+          ? "red"
+          : "";
+  return `<span class="status-pill ${className}">${escapeHtml(status || "-")}</span>`;
+}
+
+function tscAudit(action, record = {}, details = {}) {
+  const event = {
+    auditEventId: tscId("AUD"),
+    dateTime: new Date().toISOString(),
+    user: currentUserName(),
+    role: currentUserName() === "Kevin" || currentUserName() === "Alex" ? "Director" : "Office",
+    module: "Training, Safety & Compliance",
+    action,
+    affectedRecord: record.title || record.documentId || "Controlled Document",
+    recordId: record.contentId || record.revisionId || record.documentId || "",
+    previousValue: details.previousValue || null,
+    newValue: details.newValue || null,
+    notes: details.notes || ""
+  };
+  universalAuditEvents.unshift(event);
+  return event.auditEventId;
+}
+
+function renderTscModule() {
+  if (!document.querySelector("#training-safety-compliance")) return;
+  const documents = tscControlledDocuments();
+  const allAssignments = tscAssignmentRecords;
+  const incompleteAssignments = allAssignments.filter((assignment) => assignment.status !== "Completed" && !assignment.completedAt && !assignment.completedDateTime);
+  const completedThisMonth = allAssignments.filter((assignment) => {
+    const completedAt = String(assignment.completedAt || assignment.completedDateTime || "");
+    return completedAt.startsWith(today.slice(0, 7));
+  });
+  document.querySelector("#tscKpiActionRequired").textContent = incompleteAssignments.length;
+  document.querySelector("#tscKpiAwaiting").textContent = incompleteAssignments.length;
+  document.querySelector("#tscKpiOverdue").textContent = incompleteAssignments.filter((assignment) => String(assignment.dueDate || "").slice(0, 10) < today).length;
+  document.querySelector("#tscKpiCompletedMonth").textContent = completedThisMonth.length;
+  document.querySelector("#tscOverviewLive").textContent = documents.filter((item) => item.status === "Approved").length;
+  document.querySelector("#tscOverviewScheduled").textContent = documents.filter((item) => tscContentIsPublished(item)).length;
+  document.querySelector("#tscOverviewComplete").textContent = documents.filter((item) => tscContentIsArchived(item)).length;
+  const evidenceCount = document.querySelector("#tscEvidenceRecordCount");
+  if (evidenceCount) evidenceCount.textContent = tscEvidenceRecords.length;
+  const assignmentModelCount = document.querySelector("#tscAssignmentModelCount");
+  if (assignmentModelCount) assignmentModelCount.textContent = tscAssignmentRecords.length;
+  document.querySelector("#tscLiveIssueBadge").textContent = tscPublishedRevisions.length ? `${tscPublishedRevisions.length} published revision${tscPublishedRevisions.length === 1 ? "" : "s"}` : "No published revisions yet";
+  renderTscContentTable();
+  renderTscPublishedRevisionTable();
+  renderTscCommunicationTable();
+  renderTscIssueRecordTable();
+  renderTscAssignmentRecordTable();
+  renderTscAssignmentModelTable();
+  renderTscEvidenceSummaryTable();
+  renderTscAuditTable();
+  renderTscRecentActivity();
+  renderTscCommunicationDetail();
+}
+
+function renderTscContentTable() {
+  const target = document.querySelector("#tscContentTableBody");
+  if (!target) return;
+  const items = tscControlledDocuments();
+  target.innerHTML = items.map((item) => {
+    const canEdit = tscContentCanEdit(item);
+    return `
+      <tr>
+        <td>${escapeHtml(tscCommunicationTypeDisplayName(tscCommunicationTypeForContent(item)))}</td>
+        <td>${escapeHtml(item.title || "-")}</td>
+        <td>${escapeHtml(item.documentId || item.contentId || "-")}</td>
+        <td>${escapeHtml(item.revision || "-")}</td>
+        <td>${tscStatusPill(item.status || "Draft")}</td>
+        <td>${escapeHtml(item.reviewDate ? formatDateUk(item.reviewDate) : "Not set")}</td>
+        <td>${escapeHtml(item.lastUpdated ? formatDateUk(String(item.lastUpdated).slice(0, 10)) : "Not saved")}</td>
+        <td>
+          <div class="tsc-action-row">
+            ${canEdit ? `<button class="secondary-button" type="button" data-tsc-content-edit="${escapeHtml(item.contentId)}">Edit</button>` : '<span class="status-pill muted">Read-only</span>'}
+            <button class="secondary-button" type="button" data-tsc-content-view="${escapeHtml(item.contentId)}">View</button>
+            <button class="secondary-button" type="button" data-tsc-content-clone="${escapeHtml(item.contentId)}">Clone</button>
+            ${item.status === "Submitted for Approval" ? `<button class="secondary-button" type="button" data-tsc-content-approve="${escapeHtml(item.contentId)}">Approve</button>` : ""}
+            ${item.status === "Approved" ? `<button class="secondary-button" type="button" data-tsc-content-publish="${escapeHtml(item.contentId)}">Publish</button>` : ""}
+            ${tscContentIsPublished(item) ? `<button class="primary-button" type="button" data-tsc-content-issue="${escapeHtml(item.contentId)}">Issue</button>` : ""}
+            ${item.status !== "Archived" ? `<button class="secondary-button" type="button" data-tsc-content-archive="${escapeHtml(item.contentId)}">Archive</button>` : ""}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("") || '<tr><td colspan="8">No controlled documents have been created yet.</td></tr>';
+}
+
+function renderTscCommunicationTable() {
+  const target = document.querySelector("#tscCommunicationTableBody");
+  if (!target) return;
+  target.innerHTML = tscIssueRecords.map((issue) => {
+    const progress = tscIssueProgress(issue);
+    const status = tscIssueOperationalStatus(issue);
+    const issueType = tscIssueCommunicationType(issue);
+    const typeLabel = tscCommunicationTypeDisplayName(issueType);
+    const progressLabel = issueType === TSC_ANNOUNCEMENT_COMMUNICATION_TYPE
+      ? `${progress.sent} Sent / ${progress.received} Received / ${progress.viewed} Viewed / ${progress.acknowledged} Acknowledged / ${progress.outstanding} Outstanding`
+      : `${progress.completed} Completed / ${progress.outstanding} Outstanding`;
+    return `
+      <tr>
+        <td><span class="status-pill muted">${escapeHtml(typeLabel)}</span><br>${escapeHtml(issue.title || typeLabel)}</td>
+        <td>${escapeHtml(`${issue.audience || "Audience"}${progress.assigned ? ` - ${progress.assigned} Assigned` : ""}`)}</td>
+        <td>${escapeHtml(issue.issueDate ? formatDateUk(String(issue.issueDate).slice(0, 10)) : "-")}</td>
+        <td>${escapeHtml(issue.dueDate ? formatDateUk(String(issue.dueDate).slice(0, 10)) : "-")}</td>
+        <td>${escapeHtml(progressLabel)}</td>
+        <td>${tscStatusPill(status)}</td>
+        <td><button class="secondary-button" type="button" data-tsc-detail-open="${escapeHtml(issue.issueId)}">Manage</button></td>
+      </tr>
+    `;
+  }).join("") || '<tr><td colspan="7">No communications have been issued yet.</td></tr>';
+}
+
+function renderTscPublishedRevisionTable() {
+  const target = document.querySelector("#tscPublishedRevisionTableBody");
+  if (!target) return;
+  target.innerHTML = tscPublishedRevisions.map((revision) => `
+    <tr>
+      <td>${escapeHtml(revision.documentId || "-")}</td>
+      <td>${escapeHtml(revision.revisionNumber || "-")}</td>
+      <td>${escapeHtml(revision.publicationDate ? formatDateUk(revision.publicationDate) : "Not set")}</td>
+      <td>${escapeHtml(revision.publishedBy || "-")}</td>
+      <td>${escapeHtml(revision.effectiveDate ? formatDateUk(revision.effectiveDate) : "Not set")}</td>
+      <td>${escapeHtml(revision.reviewDate ? formatDateUk(revision.reviewDate) : "Not set")}</td>
+      <td>${tscStatusPill(revision.publicationStatus || "Published")}</td>
+      <td><button class="secondary-button" type="button" data-tsc-detail-open="${escapeHtml(revision.revisionId)}">View</button></td>
+    </tr>
+  `).join("") || '<tr><td colspan="8">No published revisions yet.</td></tr>';
+}
+
+function tscIssueById(issueId) {
+  return tscIssueRecords.find((issue) => issue.issueId === issueId);
+}
+
+function tscAssignmentsForIssue(issueId) {
+  return tscAssignmentRecords.filter((assignment) => assignment.issueId === issueId);
+}
+
+function renderTscIssueRecordTable() {
+  const target = document.querySelector("#tscIssueRecordTableBody");
+  if (!target) return;
+  target.innerHTML = tscIssueRecords.map((issue) => {
+    const assignments = tscAssignmentsForIssue(issue.issueId);
+    const evidenceCount = assignments.reduce((total, assignment) => total + tscEvidenceForAssignment(assignment.assignmentId).length, 0);
+    const content = tscContentById(issue.contentId) || tscPublishedById(issue.publishedRevisionId) || {};
+    return `
+      <tr>
+        <td>${escapeHtml(issue.issueId || "-")}</td>
+        <td>${escapeHtml(issue.title || content.title || content.documentTitle || issue.contentId || "-")}</td>
+        <td>${escapeHtml(issue.audience || issue.recipientRole || "Not set")}</td>
+        <td>${escapeHtml(issue.issueDate ? formatDateUk(String(issue.issueDate).slice(0, 10)) : "-")}</td>
+        <td>${escapeHtml(issue.dueDate ? formatDateUk(String(issue.dueDate).slice(0, 10)) : "-")}</td>
+        <td>${tscStatusPill(issue.status || "Draft")}</td>
+        <td>${escapeHtml(String(assignments.length))}</td>
+        <td>${escapeHtml(String(evidenceCount))}</td>
+      </tr>
+    `;
+  }).join("") || '<tr><td colspan="8">No issue records yet. Existing issue record structure is preserved for the future workflow.</td></tr>';
+}
+
+function renderTscAssignmentRecordTable() {
+  const target = document.querySelector("#tscAssignmentRecordTableBody");
+  if (!target) return;
+  target.innerHTML = tscAssignmentRecords.map((assignment) => {
+    const evidenceCount = tscEvidenceForAssignment(assignment.assignmentId).length;
+    const staff = staffProfiles.find((profile) => profile.staffId === assignment.staffId || profile.staffId === assignment.employeeId) || {};
+    const issue = tscIssueById(assignment.issueId) || {};
+    return `
+      <tr>
+        <td>${escapeHtml(assignment.assignmentId || "-")}</td>
+        <td>${escapeHtml(assignment.issueId || "-")}</td>
+        <td>${escapeHtml(staff.name || assignment.employeeName || assignment.staffName || assignment.employeeId || assignment.staffId || "-")}</td>
+        <td>${tscStatusPill(assignment.status || "Not Started")}</td>
+        <td>${escapeHtml(assignment.dueDateTime ? new Date(assignment.dueDateTime).toLocaleString("en-GB") : assignment.dueDate ? formatDateUk(String(assignment.dueDate).slice(0, 10)) : issue.dueDate ? formatDateUk(String(issue.dueDate).slice(0, 10)) : "-")}</td>
+        <td>${escapeHtml(assignment.openedDateTime ? new Date(assignment.openedDateTime).toLocaleString("en-GB") : assignment.openedAt ? new Date(assignment.openedAt).toLocaleString("en-GB") : "-")}</td>
+        <td>${escapeHtml(assignment.completedDateTime ? new Date(assignment.completedDateTime).toLocaleString("en-GB") : assignment.completedAt ? new Date(assignment.completedAt).toLocaleString("en-GB") : "-")}</td>
+        <td>${escapeHtml(String(evidenceCount))}</td>
+      </tr>
+    `;
+  }).join("") || '<tr><td colspan="8">No assignment records yet. Assignment record structure is preserved separately from evidence.</td></tr>';
+}
+
+function renderTscAssignmentModelTable() {
+  const target = document.querySelector("#tscAssignmentModelTableBody");
+  if (!target) return;
+  const reference = tscAssignmentSchemaReference();
+  const rows = [
+    ["Assignment ID", "assignmentId", "Unique obligation identifier"],
+    ["Issue Campaign ID", "issueCampaignId", "Future campaign link"],
+    ["Employee ID", "employeeId", "Staff identity reference, not copied employee data"],
+    ["Assigned Date and Time", "assignedDateTime", "When the obligation was created"],
+    ["Due Date and Time", "dueDateTime", "Required completion deadline"],
+    ["Status", "status", tscAssignmentStatusValues.join(", ")],
+    ["Priority", "priority", "Standard priority marker for future escalation"],
+    ["Assignment Source", "assignmentSource", "Published revision, campaign or future source"],
+    ["Assigned By", "assignedBy", "User who created the obligation"],
+    ["Manager or Supervisor", "managerOrSupervisor", "Future verification/escalation link"]
+  ];
+  target.innerHTML = rows.map(([label, field, purpose]) => `
+    <tr>
+      <td>${escapeHtml(label)}</td>
+      <td>${escapeHtml(field)}</td>
+      <td>${escapeHtml(purpose)}</td>
+      <td>${escapeHtml(reference[field] || "-")}</td>
+    </tr>
+  `).join("");
+}
+
+function renderTscEvidenceSummaryTable() {
+  const target = document.querySelector("#tscEvidenceTableBody");
+  if (!target) return;
+  target.innerHTML = tscEvidenceRecords.map((record) => `
+    <tr>
+      <td>${escapeHtml(record.employeeName || record.employeeId || "-")}</td>
+      <td>${escapeHtml(record.evidenceType || "-")}</td>
+      <td>${tscStatusPill(record.evidenceStatus || "Pending")}</td>
+      <td>${escapeHtml(record.submittedDateTime ? new Date(record.submittedDateTime).toLocaleString("en-GB") : "-")}</td>
+      <td>${escapeHtml(record.verifiedDateTime ? new Date(record.verifiedDateTime).toLocaleString("en-GB") : "-")}</td>
+      <td>${escapeHtml(record.result || record.passFail || "-")}</td>
+      <td>${tscEvidenceCanEdit(record) ? '<span class="status-pill muted">Future workflow</span>' : '<span class="status-pill muted">Immutable</span>'}</td>
+    </tr>
+  `).join("") || '<tr><td colspan="7">No evidence records yet. Future assignments may hold multiple evidence records.</td></tr>';
+}
+
+function renderTscAuditTable() {
+  const target = document.querySelector("#tscAuditTableBody");
+  if (!target) return;
+  target.innerHTML = universalAuditEvents.slice(0, 25).map((event) => `
+    <tr>
+      <td>${escapeHtml(event.dateTime ? new Date(event.dateTime).toLocaleString("en-GB") : "-")}</td>
+      <td>${escapeHtml(event.user || "-")}</td>
+      <td>${escapeHtml(event.role || "-")}</td>
+      <td>${escapeHtml(event.module || "-")}</td>
+      <td>${escapeHtml(event.action || "-")}</td>
+      <td>${escapeHtml(event.affectedRecord || "-")}</td>
+      <td>${escapeHtml(event.recordId || "-")}</td>
+      <td>${escapeHtml(event.notes || "-")}</td>
+    </tr>
+  `).join("") || '<tr><td colspan="8">No audit events recorded yet.</td></tr>';
+}
+
+function renderTscRecentActivity() {
+  const target = document.querySelector("#tscRecentActivity");
+  if (!target) return;
+  target.innerHTML = universalAuditEvents.slice(0, 6).map((event) => `
+    <li><span></span><div><strong>${escapeHtml(event.action || "Audit Event")}</strong><p>${escapeHtml(`${event.affectedRecord || "Record"} by ${event.user || "Unknown"}`)}</p></div></li>
+  `).join("") || '<li><span></span><div><strong>No audit activity yet</strong><p>Create or update a controlled document to start the audit trail.</p></div></li>';
+}
+
+function renderTscCommunicationDetail() {
+  const detailPanel = document.querySelector("[data-tsc-communication-detail]");
+  if (!detailPanel || detailPanel.hidden) return;
+  const issue = tscIssueById(selectedTscIssueId) || tscIssueRecords[0];
+  if (!issue) return;
+  selectedTscIssueId = issue.issueId;
+  const assignments = tscIssueAssignments(issue.issueId);
+  const issueType = tscIssueCommunicationType(issue);
+  const typeLabel = tscCommunicationTypeDisplayName(issueType);
+  const progress = tscIssueProgress(issue);
+  const completed = assignments.filter((assignment) => assignment.status === "Completed" || assignment.completedAt || assignment.completedDateTime);
+  const viewed = assignments.filter((assignment) => assignment.viewedAt || assignment.openedAt || assignment.openedDateTime || completed.includes(assignment));
+  const outstanding = assignments.filter((assignment) => issueType === TSC_ANNOUNCEMENT_COMMUNICATION_TYPE && issue.acknowledgementRequired !== true
+    ? !viewed.includes(assignment)
+    : !completed.includes(assignment));
+  const employeeName = (assignment) => {
+    const staff = staffProfiles.find((profile) => profile.staffId === assignment.staffId || profile.staffId === assignment.employeeId) || {};
+    return staff.name || assignment.employeeName || assignment.staffName || assignment.employeeId || "Employee";
+  };
+  document.querySelector("#tscDetailTitle").textContent = issue.title || typeLabel;
+  const outstandingHeading = document.querySelector("#tscOutstandingHeading");
+  const completedHeading = document.querySelector("#tscCompletedHeading");
+  if (outstandingHeading) outstandingHeading.textContent = issueType === TSC_ANNOUNCEMENT_COMMUNICATION_TYPE ? "Outstanding Recipients" : "Outstanding Employees";
+  if (completedHeading) completedHeading.textContent = issueType === TSC_ANNOUNCEMENT_COMMUNICATION_TYPE ? "Announcement Results" : "Completed Employees";
+  document.querySelector("#tscDetailDescription").textContent = issueType === TSC_ANNOUNCEMENT_COMMUNICATION_TYPE
+    ? `${progress.sent} sent, ${progress.received} received, ${progress.viewed} viewed, ${progress.acknowledged} acknowledged, ${progress.outstanding} outstanding.`
+    : `${progress.assigned} assigned, ${progress.completed} completed, ${progress.outstanding} outstanding.`;
+  document.querySelector("#tscDetailSummary").innerHTML = `
+    <article><span>Type</span><strong>${escapeHtml(typeLabel)}</strong></article>
+    <article><span>Audience</span><strong>${escapeHtml(issue.audience || "-")}</strong></article>
+    <article><span>Issue Date</span><strong>${escapeHtml(issue.issueDate ? formatDateUk(issue.issueDate) : "-")}</strong></article>
+    <article><span>Due Date</span><strong>${escapeHtml(issue.dueDate ? formatDateUk(issue.dueDate) : "-")}</strong></article>
+    <article><span>Sent</span><strong>${escapeHtml(String(progress.sent || progress.assigned || 0))}</strong></article>
+    <article><span>Received</span><strong>${escapeHtml(String(progress.received || 0))}</strong></article>
+    <article><span>Viewed</span><strong>${escapeHtml(String(progress.viewed || 0))}</strong></article>
+    <article><span>${escapeHtml(issueType === TSC_ANNOUNCEMENT_COMMUNICATION_TYPE ? "Acknowledged" : "Completed")}</span><strong>${escapeHtml(String(progress.completed))}</strong></article>
+    <article><span>Outstanding</span><strong>${escapeHtml(String(progress.outstanding))}</strong></article>
+    <article><span>Status</span><strong>${escapeHtml(tscIssueOperationalStatus(issue))}</strong></article>
+  `;
+  const outstandingTarget = document.querySelector("#tscOutstandingEmployees");
+  if (outstandingTarget) {
+    outstandingTarget.innerHTML = outstanding.length
+      ? outstanding.map((assignment) => `<span>${escapeHtml(employeeName(assignment))}<b>${escapeHtml(assignment.status || "Not Started")}</b></span>`).join("")
+      : "No outstanding employees.";
+  }
+  const completedTarget = document.querySelector("#tscCompletedEmployees");
+  if (completedTarget) {
+    const results = issueType === TSC_ANNOUNCEMENT_COMMUNICATION_TYPE ? assignments : completed;
+    const timestamp = (assignment) => assignment.completedAt || assignment.completedDateTime || assignment.viewedAt || assignment.openedAt || assignment.openedDateTime || assignment.receivedAt || assignment.sentAt || assignment.assignedDateTime || "";
+    const statusLabel = (assignment) => {
+      if (assignment.completedAt || assignment.completedDateTime || assignment.status === "Completed") return issue.acknowledgementRequired === true ? "Acknowledged" : "Viewed";
+      if (assignment.viewedAt || assignment.openedAt || assignment.openedDateTime) return "Viewed";
+      if (assignment.receivedAt) return "Received";
+      if (assignment.sentAt || assignment.assignedDateTime) return "Sent";
+      return "Outstanding";
+    };
+    completedTarget.innerHTML = results.length
+      ? results.map((assignment) => `<span>${escapeHtml(employeeName(assignment))}<b>${escapeHtml(statusLabel(assignment))}${timestamp(assignment) ? ` - ${escapeHtml(new Date(timestamp(assignment)).toLocaleString("en-GB"))}` : ""}</b></span>`).join("")
+      : "No completed employees.";
+  }
+  const evidenceTarget = document.querySelector("#tscManageEvidenceTableBody");
+  if (evidenceTarget) {
+    const issueEvidence = assignments.flatMap((assignment) => tscEvidenceForAssignment(assignment.assignmentId)
+      .map((record) => ({ ...record, employeeName: employeeName(assignment) })));
+    evidenceTarget.innerHTML = issueEvidence.map((record) => `
+      <tr>
+        <td>${escapeHtml(record.employeeName || "-")}</td>
+        <td>${escapeHtml(record.evidenceType || "-")}</td>
+        <td>${tscStatusPill(record.evidenceStatus || "Pending")}</td>
+        <td>${escapeHtml(record.submittedDateTime ? new Date(record.submittedDateTime).toLocaleString("en-GB") : "-")}</td>
+        <td>${escapeHtml(record.result || record.passFail || "-")}</td>
+      </tr>
+    `).join("") || '<tr><td colspan="5">No evidence recorded yet.</td></tr>';
+  }
+}
+
+function openTscContentEditor(item = null, requestedCommunicationType = TSC_TOOLBOX_TALK_COMMUNICATION_TYPE) {
+  if (item && !tscContentCanEdit(item)) {
+    kcInfo("Published and archived revisions are read-only. Create a future revision instead of editing historical evidence.");
+    return;
+  }
+  const form = document.querySelector("#tscContentEditor");
+  if (!form) return;
+  const communicationType = item ? tscCommunicationTypeForContent(item) : requestedCommunicationType;
+  const typeLabel = tscCommunicationTypeDisplayName(communicationType);
+  const isAnnouncement = communicationType === TSC_ANNOUNCEMENT_COMMUNICATION_TYPE;
+  form.hidden = false;
+  document.querySelector("#tscContentIdInput").value = item?.contentId || "";
+  document.querySelector("#tscCommunicationTypeInput").value = communicationType;
+  document.querySelector("#tscTitleInput").value = item?.title || "";
+  document.querySelector("#tscDocumentIdInput").value = item?.documentId || (isAnnouncement ? tscId("ANN") : "");
+  document.querySelector("#tscRevisionInput").value = item?.revision || "Rev A";
+  document.querySelector("#tscCategoryInput").value = item?.category || "";
+  document.querySelector("#tscDocumentOwnerInput").value = item?.documentOwner || "";
+  document.querySelector("#tscDepartmentInput").value = item?.department || "";
+  document.querySelector("#tscApplicableRolesInput").value = item?.applicableRoles || "";
+  document.querySelector("#tscReviewFrequencyInput").value = item?.reviewFrequency || "";
+  document.querySelector("#tscEffectiveDateInput").value = item?.effectiveDate || "";
+  document.querySelector("#tscReviewDateInput").value = item?.reviewDate || "";
+  document.querySelector("#tscLinkedRiskInput").value = item?.linkedRiskAssessment || "";
+  document.querySelector("#tscLinkedMethodInput").value = item?.linkedMethodStatement || "";
+  document.querySelector("#tscLinkedCompetencyInput").value = item?.linkedCompetency || "";
+  document.querySelector("#tscKeywordsInput").value = item?.keywords || "";
+  document.querySelector("#tscSourceDocumentInput").value = item?.sourceDocument || "";
+  document.querySelector("#tscAuthorInput").value = item?.author || currentUserName();
+  document.querySelector("#tscSummaryInput").value = item?.summary || "";
+  document.querySelector("#tscFullContentInput").value = item?.fullContent || "";
+  const effectiveLabel = document.querySelector("#tscEffectiveDateLabel");
+  const reviewLabel = document.querySelector("#tscReviewDateLabel");
+  const fullContentLabel = document.querySelector("#tscFullContentLabel");
+  if (effectiveLabel) effectiveLabel.textContent = isAnnouncement ? "Published Date" : "Effective Date";
+  if (reviewLabel) reviewLabel.textContent = isAnnouncement ? "Expiry Date (optional)" : "Review Date";
+  if (fullContentLabel) fullContentLabel.textContent = isAnnouncement ? "Message Body" : "Full Content";
+  document.querySelector("#tscCategoryInput").placeholder = isAnnouncement ? "Office Notice" : "";
+  document.querySelector("#tscDocumentIdInput").placeholder = isAnnouncement ? "Generated automatically" : "";
+  form.querySelectorAll("[data-tsc-content-save-draft], [data-tsc-content-submit]").forEach((button) => {
+    if (button.dataset.tscContentSaveDraft !== undefined) button.textContent = isAnnouncement ? "Save Announcement Draft" : "Save Draft";
+    if (button.dataset.tscContentSubmit !== undefined) button.textContent = isAnnouncement ? "Submit Announcement" : "Submit for Approval";
+  });
+  document.querySelector("#tscTitleInput").focus();
+}
+
+function openTscAnnouncementEditor(item = null) {
+  if (item && !tscContentCanEdit(item)) {
+    kcInfo("Published and archived announcements are read-only.");
+    return;
+  }
+  const form = document.querySelector("#tscAnnouncementEditor");
+  if (!form) return;
+  form.hidden = false;
+  document.querySelector("#tscContentEditor").hidden = true;
+  document.querySelector("#tscIssueWizard").hidden = true;
+  document.querySelector("#tscAnnouncementContentIdInput").value = item?.contentId || "";
+  document.querySelector("#tscAnnouncementTitleInput").value = item?.title || "";
+  document.querySelector("#tscAnnouncementMessageInput").value = item?.fullContent || item?.message || "";
+  document.querySelector("#tscAnnouncementExpiryInput").value = item?.reviewDate || item?.expiryDate || "";
+  document.querySelector("#tscAnnouncementAckInput").value = item?.acknowledgementRequired === false ? "No" : "Yes";
+  document.querySelector("#tscAnnouncementAudienceInput").value = item?.audience || "All Technicians";
+  populateTscAnnouncementSelectedTechnicianOptions(item?.selectedStaffIds || []);
+  document.querySelector("#tscAnnouncementEditorTitle").textContent = item?.contentId ? "Edit Announcement Draft" : "New Announcement";
+  updateTscAnnouncementConfirmation();
+  document.querySelector("#tscAnnouncementTitleInput").focus();
+}
+
+async function saveTscAnnouncement(status = "Draft") {
+  const existingId = document.querySelector("#tscAnnouncementContentIdInput")?.value || "";
+  const contentId = existingId || tscId("ANN");
+  const existing = existingId ? tscContentById(existingId) : null;
+  if (existing && !tscContentCanEdit(existing)) {
+    await kcInfo("Published and archived announcements are read-only.");
+    return null;
+  }
+  const title = document.querySelector("#tscAnnouncementTitleInput")?.value.trim() || "";
+  const message = document.querySelector("#tscAnnouncementMessageInput")?.value.trim() || "";
+  const expiryDate = document.querySelector("#tscAnnouncementExpiryInput")?.value || "";
+  const audience = document.querySelector("#tscAnnouncementAudienceInput")?.value || "All Technicians";
+  const acknowledgementRequired = (document.querySelector("#tscAnnouncementAckInput")?.value || "Yes") === "Yes";
+  const selectedStaffIds = audience === "Selected Technicians" ? tscAnnouncementSelectedTechnicianIds() : [];
+  if (!title || !message) {
+    await kcInfo("Please add an announcement title and message.");
+    return null;
+  }
+  if (audience === "Selected Technicians" && !selectedStaffIds.length) {
+    await kcInfo("Please select at least one technician.");
+    return null;
+  }
+  if (expiryDate && expiryDate < today) {
+    await kcInfo("Expiry date cannot be in the past.");
+    return null;
+  }
+  const now = new Date().toISOString();
+  const previous = existing ? { ...existing } : null;
+  const record = {
+    ...(existing || {}),
+    contentId,
+    communicationType: TSC_ANNOUNCEMENT_COMMUNICATION_TYPE,
+    type: "Announcement",
+    title,
+    documentId: existing?.documentId || contentId,
+    revision: existing?.revision || "Rev A",
+    category: "Office Announcement",
+    documentOwner: "Office",
+    department: "Operations",
+    applicableRoles: audience,
+    reviewFrequency: "",
+    effectiveDate: existing?.effectiveDate || today,
+    reviewDate: expiryDate,
+    linkedRiskAssessment: "",
+    linkedMethodStatement: "",
+    linkedCompetency: "",
+    keywords: "announcement",
+    sourceDocument: "",
+    audience,
+    selectedStaffIds,
+    acknowledgementRequired,
+    summary: title,
+    fullContent: message,
+    status,
+    author: existing?.author || currentUserName(),
+    createdAt: existing?.createdAt || now,
+    lastUpdated: now
+  };
+  if (existing) {
+    tscMasterContent = tscMasterContent.map((item) => item.contentId === contentId ? record : item);
+    tscAudit("Announcement Updated", record, { previousValue: previous, newValue: record });
+  } else {
+    tscMasterContent.unshift(record);
+    tscAudit("Announcement Created", record, { newValue: record });
+  }
+  if (tscContentIsPublished(record)) {
+    const published = tscEnsurePublishedRevisionForContent(record);
+    if (published) {
+      record.publishedRevisionId = published.revisionId;
+      tscMasterContent = tscMasterContent.map((item) => item.contentId === contentId ? record : item);
+    }
+  }
+  const saved = await saveCommandData();
+  renderTscModule();
+  await kcInfo(saved
+    ? (status === "Draft" ? "Announcement draft saved." : "Announcement saved.")
+    : "Announcement has not been safely saved yet. A local backup is pending.");
+  return record;
+}
+
+async function sendTscAnnouncement() {
+  const record = await saveTscAnnouncement("Published");
+  if (!record) return;
+  const audience = record.audience || "All Technicians";
+  const staff = audience === "Selected Technicians"
+    ? tscEligibleStaffForAudience("All Technicians").filter((person) => new Set(record.selectedStaffIds || []).has(person.staffId))
+    : tscEligibleStaffForAudience("All Technicians");
+  if (!staff.length) {
+    await kcInfo("No active technicians match this announcement audience.");
+    return;
+  }
+  const now = new Date().toISOString();
+  const published = tscEnsurePublishedRevisionForContent(record);
+  if (published && record.publishedRevisionId !== published.revisionId) {
+    record.publishedRevisionId = published.revisionId;
+    tscMasterContent = tscMasterContent.map((item) => item.contentId === record.contentId ? record : item);
+  }
+  const issue = {
+    issueId: tscId("TSC-ISS"),
+    contentId: record.contentId,
+    publishedRevisionId: published?.revisionId || "",
+    title: record.title,
+    documentId: record.documentId,
+    revision: record.revision,
+    audience,
+    selectedStaffIds: audience === "Selected Technicians" ? staff.map((person) => person.staffId) : [],
+    issueDate: today,
+    dueDate: record.reviewDate || "",
+    expiresAt: record.reviewDate || "",
+    acknowledgementRequired: record.acknowledgementRequired === true,
+    dailyReminder: false,
+    notes: "",
+    status: "Issued",
+    issuedBy: currentUserName(),
+    issuedAt: now,
+    createdAt: now,
+    updatedAt: now
+  };
+  const auditId = tscAudit("Announcement Issued", issue, { newValue: issue, notes: `${staff.length} recipient${staff.length === 1 ? "" : "s"} frozen.` });
+  issue.auditEventId = auditId;
+  const assignments = staff.map((person) => ({
+    assignmentId: tscId("TSC-ASG"),
+    issueId: issue.issueId,
+    issueCampaignId: issue.issueId,
+    contentId: record.contentId,
+    publishedRevisionId: published?.revisionId || "",
+    staffId: person.staffId,
+    employeeId: person.staffId,
+    employeeName: person.name,
+    assignedDateTime: now,
+    sentAt: now,
+    dueDate: record.reviewDate || "",
+    status: "Not Started",
+    priority: "Normal",
+    assignmentSource: "Announcement",
+    assignedBy: currentUserName(),
+    acknowledgementRequired: record.acknowledgementRequired === true,
+    auditEventId: auditId
+  }));
+  tscIssueRecords.unshift(issue);
+  tscAssignmentRecords.unshift(...assignments);
+  document.querySelector("#tscAnnouncementEditor").hidden = true;
+  selectedTscIssueId = issue.issueId;
+  const detailPanel = document.querySelector("[data-tsc-communication-detail]");
+  if (detailPanel) detailPanel.hidden = false;
+  const saved = await saveCommandData();
+  renderTscModule();
+  await kcInfo(saved
+    ? "Announcement sent. Results are now available in Communications."
+    : "Announcement has not been safely saved yet. A local backup is pending.");
+}
+
+async function viewTscContent(contentId) {
+  const item = tscContentById(contentId);
+  if (!item) return;
+  await kcInfo(`${item.title || "Toolbox Talk"}\n\nStatus: ${item.status || "Draft"}\nRevision: ${item.revision || "-"}\n\n${item.summary || item.fullContent || "No content added."}`);
+}
+
+function cloneTscContent(contentId) {
+  const item = tscContentById(contentId);
+  if (!item) return;
+  const clone = {
+    ...item,
+    contentId: "",
+    communicationType: tscCommunicationTypeForContent(item),
+    title: `${item.title || tscCommunicationTypeDisplayName(tscCommunicationTypeForContent(item))} copy`,
+    documentId: "",
+    revision: "Rev A",
+    status: "Draft"
+  };
+  openTscContentEditor(clone);
+}
+
+function updateTscIssueConfirmation() {
+  const content = tscContentById(document.querySelector("#tscIssueContentIdInput")?.value || "");
+  const communicationType = tscCommunicationTypeForContent(content || {});
+  const typeLabel = tscCommunicationTypeDisplayName(communicationType);
+  const audience = document.querySelector("#tscIssueAudienceInput")?.value || "All Technicians";
+  const issueDate = document.querySelector("#tscIssueDateInput")?.value || today;
+  const dueDate = document.querySelector("#tscIssueDueDateInput")?.value || "";
+  const selectedStaffLabel = document.querySelector("#tscIssueSelectedStaffLabel");
+  if (selectedStaffLabel) selectedStaffLabel.hidden = audience !== "Selected Technicians";
+  if (audience === "Selected Technicians") populateTscSelectedTechnicianOptions(tscSelectedTechnicianIds());
+  const staff = tscEligibleStaffForIssueAudience(audience);
+  const target = document.querySelector("#tscIssueConfirmation");
+  if (!target) return;
+  target.innerHTML = `
+    <strong>${escapeHtml(content?.title || typeLabel)}</strong><br>
+    This will issue to <strong>${escapeHtml(String(staff.length))}</strong> employee${staff.length === 1 ? "" : "s"} in <strong>${escapeHtml(audience)}</strong>.<br>
+    Issue date: ${escapeHtml(issueDate ? formatDateUk(issueDate) : "Not set")} | Due date: ${escapeHtml(dueDate ? formatDateUk(dueDate) : "Not set")}
+  `;
+}
+
+async function openTscIssueWizard(contentId) {
+  const item = tscContentById(contentId);
+  const typeValidation = tscValidateCommunicationType(tscCommunicationTypeForContent(item || {}));
+  if (!item || !tscContentIsPublished(item) || !typeValidation.ok) {
+    await kcInfo("Only published communications can be issued.");
+    return;
+  }
+  const communicationType = typeValidation.definition.communicationType;
+  const typeLabel = typeValidation.definition.displayName;
+  const isAnnouncement = communicationType === TSC_ANNOUNCEMENT_COMMUNICATION_TYPE;
+  const published = tscPublishedForContent(contentId);
+  if (!published) {
+    await kcInfo(`Publish this ${typeLabel} before issuing it.`);
+    return;
+  }
+  const form = document.querySelector("#tscIssueWizard");
+  if (!form) return;
+  form.hidden = false;
+  document.querySelector("#tscIssueContentIdInput").value = contentId;
+  document.querySelector("#tscIssueWizardTitle").textContent = `Issue ${item.title || typeLabel}`;
+  document.querySelector("#tscIssueWizardSummary").textContent = `${item.documentId || "Document"} ${item.revision || ""} is ready to issue.`;
+  document.querySelector("#tscIssueAudienceInput").value = "All Technicians";
+  populateTscSelectedTechnicianOptions();
+  document.querySelector("#tscIssueSelectedStaffLabel").hidden = true;
+  document.querySelector("#tscIssueDateInput").value = today;
+  document.querySelector("#tscIssueDueDateInput").value = isAnnouncement ? (item.reviewDate || "") : today;
+  document.querySelector("#tscIssueReminderInput").value = "Yes";
+  document.querySelector("#tscIssueAckLabel").textContent = isAnnouncement ? "Acknowledgement Required" : "Daily Reminder";
+  document.querySelector("#tscIssueDueDateLabel").textContent = isAnnouncement ? "Expiry / Action Date" : "Due Date";
+  document.querySelector("#tscIssueNotesInput").value = "";
+  updateTscIssueConfirmation();
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function saveTscContent(status) {
+  const contentId = document.querySelector("#tscContentIdInput").value || tscId("TSC-DOC");
+  const existing = tscContentById(contentId);
+  if (existing && !tscContentCanEdit(existing)) {
+    await kcInfo("Published and archived revisions are read-only. Create a future revision instead of editing historical evidence.");
+    return;
+  }
+  const now = new Date().toISOString();
+  const title = document.querySelector("#tscTitleInput").value.trim();
+  const fullContent = document.querySelector("#tscFullContentInput").value.trim();
+  if (!title || !fullContent) {
+    await kcInfo("Please add a document title and full content.");
+    return;
+  }
+  const previous = existing ? { ...existing } : null;
+  const requestedCommunicationType = tscNormaliseCommunicationType(document.querySelector("#tscCommunicationTypeInput")?.value || TSC_TOOLBOX_TALK_COMMUNICATION_TYPE);
+  const existingCommunicationType = existing ? tscCommunicationTypeForContent(existing) : requestedCommunicationType;
+  const typeValidation = tscValidateCommunicationType(existingCommunicationType);
+  if (!typeValidation.ok) {
+    await kcInfo("This controlled communication type is not available.");
+    return;
+  }
+  const typeLabel = tscCommunicationTypeDisplayName(existingCommunicationType);
+  const record = {
+    ...(existing || {}),
+    contentId,
+    communicationType: existingCommunicationType,
+    type: typeLabel,
+    title,
+    documentId: document.querySelector("#tscDocumentIdInput").value.trim() || contentId,
+    revision: document.querySelector("#tscRevisionInput").value.trim() || "Rev A",
+    category: document.querySelector("#tscCategoryInput").value.trim(),
+    documentOwner: document.querySelector("#tscDocumentOwnerInput").value.trim(),
+    department: document.querySelector("#tscDepartmentInput").value.trim(),
+    applicableRoles: document.querySelector("#tscApplicableRolesInput").value.trim(),
+    reviewFrequency: document.querySelector("#tscReviewFrequencyInput").value.trim(),
+    effectiveDate: document.querySelector("#tscEffectiveDateInput").value,
+    reviewDate: document.querySelector("#tscReviewDateInput").value,
+    linkedRiskAssessment: document.querySelector("#tscLinkedRiskInput").value.trim(),
+    linkedMethodStatement: document.querySelector("#tscLinkedMethodInput").value.trim(),
+    linkedCompetency: document.querySelector("#tscLinkedCompetencyInput").value.trim(),
+    keywords: document.querySelector("#tscKeywordsInput").value.trim(),
+    sourceDocument: document.querySelector("#tscSourceDocumentInput").value.trim(),
+    summary: document.querySelector("#tscSummaryInput").value.trim(),
+    fullContent,
+    status,
+    author: document.querySelector("#tscAuthorInput").value.trim() || currentUserName(),
+    lastUpdated: now,
+    createdAt: existing?.createdAt || now
+  };
+  if (existing) {
+    tscMasterContent = tscMasterContent.map((item) => item.contentId === contentId ? record : item);
+    tscAudit(status === "Submitted for Approval" ? "Document Submitted" : "Document Updated", record, { previousValue: previous, newValue: record });
+  } else {
+    tscMasterContent.unshift(record);
+    tscAudit("Document Created", record, { newValue: record });
+  }
+  document.querySelector("#tscContentEditor").hidden = true;
+  const saved = await saveCommandData();
+  renderTscModule();
+  await kcInfo(saved
+    ? (status === "Draft" ? `${typeLabel} saved as draft.` : `${typeLabel} submitted for approval.`)
+    : `${typeLabel} has not been safely saved yet. A local backup is pending.`);
+}
+
+async function updateTscContentStatus(contentId, status) {
+  const item = tscContentById(contentId);
+  if (!item) return;
+  if (tscContentIsPublished(item) && status !== "Archived") {
+    await kcInfo("Published revisions are read-only. Create a future revision instead of editing historical evidence.");
+    return;
+  }
+  const previous = { ...item };
+  tscMasterContent = tscMasterContent.map((content) => content.contentId === contentId
+    ? { ...content, status, lastUpdated: new Date().toISOString() }
+    : content);
+  const updated = tscContentById(contentId);
+  const action = status === "Approved" ? "Document Approved" : status === "Archived" ? "Document Archived" : "Document Updated";
+  tscAudit(action, updated, { previousValue: previous, newValue: updated });
+  const saved = await saveCommandData();
+  renderTscModule();
+  await kcInfo(saved
+    ? (status === "Approved" ? "Controlled document approved." : "Controlled document archived.")
+    : "Controlled document update has not been safely saved yet. A local backup is pending.");
+}
+
+async function publishTscContent(contentId) {
+  const item = tscContentById(contentId);
+  if (!item || item.status !== "Approved") {
+    await kcInfo("Only approved documents can be published.");
+    return;
+  }
+  const duplicate = tscPublishedRevisions.some((revision) =>
+    revision.documentId === item.documentId && revision.revisionNumber === item.revision
+  );
+  if (duplicate) {
+    await kcInfo("This document revision has already been published. Historical published revisions cannot be overwritten.");
+    return;
+  }
+  const now = new Date().toISOString();
+  const published = tscEnsurePublishedRevisionForContent({ ...item, status: "Published" });
+  tscMasterContent = tscMasterContent.map((content) => content.contentId === contentId
+    ? { ...content, status: "Published", lastUpdated: now, publishedRevisionId: published?.revisionId || "" }
+    : content);
+  tscAudit("Document Published", published, { newValue: published, notes: "Published revision created as read-only evidence." });
+  selectedTscIssueId = published.revisionId;
+  const detailPanel = document.querySelector("[data-tsc-communication-detail]");
+  if (detailPanel) detailPanel.hidden = false;
+  const saved = await saveCommandData();
+  renderTscModule();
+  await kcInfo(saved
+    ? "Controlled document published. The published revision is now read-only."
+    : "Published revision has not been safely saved yet. A local backup is pending.");
+}
+
+async function saveTscIssue() {
+  if (tscIssueSaveInProgress) return;
+  const contentId = document.querySelector("#tscIssueContentIdInput")?.value || "";
+  const item = tscContentById(contentId);
+  const published = tscPublishedForContent(contentId);
+  const typeValidation = tscValidateCommunicationType(tscCommunicationTypeForContent(item || {}));
+  if (!item || !tscContentIsPublished(item) || !published || !typeValidation.ok) {
+    await kcInfo("Only published communications can be issued.");
+    return;
+  }
+  const communicationType = typeValidation.definition.communicationType;
+  const typeLabel = typeValidation.definition.displayName;
+  const isAnnouncement = communicationType === TSC_ANNOUNCEMENT_COMMUNICATION_TYPE;
+  const audience = document.querySelector("#tscIssueAudienceInput")?.value || "All Technicians";
+  const issueDate = document.querySelector("#tscIssueDateInput")?.value || today;
+  const dueDate = document.querySelector("#tscIssueDueDateInput")?.value || "";
+  const yesNoFlag = (document.querySelector("#tscIssueReminderInput")?.value || "Yes") === "Yes";
+  const notes = document.querySelector("#tscIssueNotesInput")?.value.trim() || "";
+  const staff = tscEligibleStaffForIssueAudience(audience);
+  if (!dueDate && !isAnnouncement) {
+    await kcInfo("Please choose a due date before issuing.");
+    return;
+  }
+  if (dueDate && dueDate < issueDate) {
+    await kcInfo("Due date cannot be before the issue date.");
+    return;
+  }
+  if (!staff.length) {
+    await kcInfo("No employees match that audience yet.");
+    return;
+  }
+  const saveButton = document.querySelector("[data-tsc-issue-save]");
+  tscIssueSaveInProgress = true;
+  if (saveButton) saveButton.disabled = true;
+  try {
+    const now = new Date().toISOString();
+    const issue = {
+      issueId: tscId("TSC-ISS"),
+      contentId,
+      publishedRevisionId: published.revisionId,
+      title: item.title,
+      documentId: item.documentId,
+      revision: item.revision,
+      audience,
+      selectedStaffIds: audience === "Selected Technicians" ? staff.map((person) => person.staffId) : [],
+      issueDate,
+      dueDate,
+      dailyReminder: isAnnouncement ? false : yesNoFlag,
+      acknowledgementRequired: isAnnouncement ? yesNoFlag : true,
+      expiresAt: isAnnouncement ? (dueDate || item.reviewDate || "") : "",
+      notes,
+      status: "Issued",
+      issuedBy: currentUserName(),
+      issuedAt: now,
+      createdAt: now,
+      updatedAt: now
+    };
+    const auditId = tscAudit("Toolbox Talk Issued", issue, { newValue: issue, notes: `${staff.length} assignment${staff.length === 1 ? "" : "s"} created.` });
+    issue.auditEventId = auditId;
+    const assignments = staff.map((person) => ({
+      assignmentId: tscId("TSC-ASG"),
+      issueId: issue.issueId,
+      issueCampaignId: issue.issueId,
+      contentId,
+      publishedRevisionId: published.revisionId,
+      staffId: person.staffId,
+      employeeId: person.staffId,
+      employeeName: person.name,
+      assignedDateTime: now,
+      dueDateTime: `${dueDate}T17:00:00.000Z`,
+      dueDate,
+      status: "Not Started",
+      priority: "Normal",
+      assignmentSource: typeLabel,
+      assignedBy: currentUserName(),
+      dailyReminder: isAnnouncement ? false : yesNoFlag,
+      acknowledgementRequired: isAnnouncement ? yesNoFlag : true,
+      lastReminderDate: "",
+      auditEventId: auditId
+    }));
+    tscIssueRecords.unshift(issue);
+    tscAssignmentRecords.unshift(...assignments);
+    document.querySelector("#tscIssueWizard").hidden = true;
+    selectedTscIssueId = issue.issueId;
+    const detailPanel = document.querySelector("[data-tsc-communication-detail]");
+    if (detailPanel) detailPanel.hidden = false;
+    const saved = await saveCommandData();
+    renderTscModule();
+    await kcInfo(saved
+      ? `${typeLabel} issued. Progress is now available in Communications.`
+      : `${typeLabel} has not been safely saved yet. A local backup is pending.`);
+  } finally {
+    tscIssueSaveInProgress = false;
+    if (saveButton) saveButton.disabled = false;
+  }
+}
+
 function render() {
   normalisePlannerItems();
   syncAttendanceFromPlanner();
@@ -9034,6 +14131,7 @@ function render() {
   renderCompliance();
   renderFines();
   renderStaff();
+  renderHolidayPlanner();
   renderTrainingMatrix();
   renderJobs();
   renderPlanner();
@@ -9051,6 +14149,7 @@ function render() {
   renderHistory();
   renderNotifications();
   renderProofingReports();
+  renderTscModule();
   updateProofingPreview();
   applyReviewModeShell();
   maskReviewModeSensitiveSections();
@@ -9125,24 +14224,861 @@ function saveFromForm() {
   render();
 }
 
+function isDirectorLocalUser(name = currentUserName()) {
+  return ["Kevin", "Alex"].includes(String(name || ""));
+}
+
+function syncDirectorsMenuVisibility() {
+  document.querySelectorAll(".director-only-nav").forEach((button) => {
+    button.classList.toggle("hidden", !isDirectorLocalUser());
+  });
+}
+
+async function directorsApi(path, options = {}) {
+  const response = await fetch(`/api/phase-10${path}`, {
+    ...options,
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Kingswood-User": currentUserName(),
+      ...(options.headers || {})
+    }
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.ok === false) throw new Error(body.message || "Directors Area request failed.");
+  return body;
+}
+
+function directorsSetStatus(message) {
+  const status = document.querySelector("#directorsStatus");
+  if (status) status.textContent = message;
+}
+
+function showDirectorsLocked(message = "") {
+  document.querySelector("#directorsLockPanel")?.classList.remove("hidden");
+  document.querySelector("#directorsWorkspace")?.classList.add("hidden");
+  const accessMessage = document.querySelector("#directorAccessMessage");
+  if (accessMessage) accessMessage.textContent = message || "This area is restricted to Kevin Eastman and Alex Lancaster.";
+}
+
+function showDirectorsWorkspace() {
+  document.querySelector("#directorsLockPanel")?.classList.add("hidden");
+  document.querySelector("#directorsWorkspace")?.classList.remove("hidden");
+}
+
+async function refreshDirectorsArea() {
+  if (!isDirectorLocalUser()) {
+    showDirectorsLocked("Director access is restricted to Kevin and Alex.");
+    return;
+  }
+  try {
+    await directorsApi("/director-session");
+    directorsAreaState = await directorsApi("/overview");
+    showDirectorsWorkspace();
+    await renderDirectorsArea();
+    directorsSetStatus(`Loaded ${new Date().toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit" })}`);
+  } catch (error) {
+    directorsAreaState = null;
+    showDirectorsLocked(error.message);
+  }
+}
+
+function directorsMetric(label, value, detail = "", targetTab = "", focus = "") {
+  const interactiveAttrs = targetTab
+    ? ` role="button" tabindex="0" data-director-overview-tab="${escapeHtml(targetTab)}"${focus ? ` data-director-overview-focus="${escapeHtml(focus)}"` : ""}`
+    : "";
+  return `
+    <article class="directors-metric${targetTab ? " directors-metric-action" : ""}"${interactiveAttrs}>
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      ${detail ? `<small>${escapeHtml(detail)}</small>` : ""}
+    </article>
+  `;
+}
+
+function directorsOverviewDate(dateValue) {
+  if (!dateValue) return "-";
+  const date = new Date(`${String(dateValue).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return formatDateUk(dateValue);
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function directorsOverviewHolidayDateRange(request = {}) {
+  const from = request.from || request.startDate || request.date || "";
+  const to = request.to || request.endDate || from;
+  if (!to || to === from) return directorsOverviewDate(from);
+  return `${directorsOverviewDate(from)} to ${directorsOverviewDate(to)}`;
+}
+
+function directorsOverviewHolidayWorkingDays(request = {}) {
+  const from = request.from || request.startDate || request.date || "";
+  const to = request.to || request.endDate || from;
+  const days = Number(request.workingDays || request.days || holidayCalculatedDays({ ...request, from, to }));
+  return `${formatLeaveNumber(days)} working day${days === 1 ? "" : "s"}`;
+}
+
+function directorsOverviewUpcomingHolidays(requests = []) {
+  const todayValue = localIsoDate();
+  const limit = new Date(`${todayValue}T00:00:00`);
+  limit.setDate(limit.getDate() + 90);
+  const limitValue = localIsoDate(limit);
+  return requests
+    .filter((request) => {
+      const from = String(request.from || request.startDate || request.date || "").slice(0, 10);
+      return from && from >= todayValue && from <= limitValue;
+    })
+    .sort((a, b) => String(a.from || a.startDate || a.date || "").localeCompare(String(b.from || b.startDate || b.date || "")));
+}
+
+function directorsLiveHolidayRows() {
+  return directorsOverviewUpcomingHolidays(holidayRequests.map((request, index) => ({ ...request, directorRecordIndex: index })))
+    .map((request) => `
+      <tr class="directors-live-row" role="button" tabindex="0" data-directors-holiday-index="${escapeHtml(request.directorRecordIndex)}">
+        <td><strong>${escapeHtml(request.name || request.employee || "Employee")}</strong></td>
+        <td>${escapeHtml(directorsOverviewHolidayDateRange(request))}</td>
+        <td>${escapeHtml(directorsOverviewHolidayWorkingDays(request))}</td>
+      </tr>
+    `).join("");
+}
+
+function directorsDueStatus(dateValue = "", soonDays = 14) {
+  const days = daysUntil(dateValue);
+  if (days < 0) return { label: "Overdue", className: "urgent" };
+  if (days <= soonDays) return { label: "Due soon", className: "warning" };
+  return { label: "Upcoming", className: "neutral" };
+}
+
+function directorsVehicleDeadlineRows() {
+  const limitValue = datePlusDays(localIsoDate(), 60);
+  const rows = [];
+  vehicles.map(asVehicleObject).forEach((vehicle) => {
+    const vehicleId = vehicle.vehicleId || vehicle.id || "";
+    [
+      ["MOT", vehicle.mot],
+      ["Service", vehicle.service],
+      ["Insurance", vehicle.insurance]
+    ].forEach(([requirement, dueDate]) => {
+      if (!dueDate || String(dueDate).slice(0, 10) > limitValue) return;
+      rows.push({ vehicle, vehicleId, requirement, dueDate: String(dueDate).slice(0, 10), status: directorsDueStatus(dueDate) });
+    });
+    vehicleDocumentsFor(vehicle).forEach((documentRecord) => {
+      const dueDate = String(documentRecord.expiryDate || "").slice(0, 10);
+      if (!dueDate || documentRecord.noExpiry || dueDate > limitValue) return;
+      rows.push({
+        vehicle,
+        vehicleId,
+        requirement: documentRecord.documentType || documentRecord.title || "Vehicle document",
+        dueDate,
+        status: directorsDueStatus(dueDate)
+      });
+    });
+    vehicleMaintenanceFor(vehicle).forEach((record) => {
+      const dueDate = String(record.followUpDate || "").slice(0, 10);
+      if (!dueDate || dueDate > limitValue) return;
+      rows.push({
+        vehicle,
+        vehicleId,
+        requirement: record.eventType ? `${record.eventType} follow-up` : "Maintenance follow-up",
+        dueDate,
+        status: directorsDueStatus(dueDate)
+      });
+    });
+  });
+  return rows
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .map((row) => `
+      <tr class="directors-live-row" role="button" tabindex="0" data-directors-vehicle-id="${escapeHtml(row.vehicleId)}">
+        <td><strong>${escapeHtml(row.vehicle.registration || "Vehicle")}</strong></td>
+        <td>${escapeHtml(row.requirement)}</td>
+        <td>${escapeHtml(directorsOverviewDate(row.dueDate))}</td>
+        <td><span class="status ${row.status.className}">${escapeHtml(row.status.label)}</span></td>
+      </tr>
+    `).join("");
+}
+
+function directorsReportAge(job = {}) {
+  const dateValue = String(job.date || "").slice(0, 10);
+  if (!dateValue) return "-";
+  const days = Math.max(0, daysUntil(dateValue) * -1);
+  if (days === 0) return "Today";
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+function directorsJobTechnicianNames(job = {}) {
+  const fromObjects = Array.isArray(job.assignedTechnicians)
+    ? job.assignedTechnicians.map((item) => item.name || item.technician || item.technicianName)
+    : [];
+  const fromNames = Array.isArray(job.technicians) ? job.technicians : [];
+  const fromIds = Array.isArray(job.technicianIds)
+    ? job.technicianIds.map((id) => staffProfiles.find((staff) => staff.technicianId === id || staff.staffId === id)?.name)
+    : [];
+  const names = [...fromObjects, ...fromNames, ...fromIds, job.technician]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  return [...new Set(names)];
+}
+
+function directorsJobMatchesTechnician(job = {}, technicianName = "") {
+  return directorsJobTechnicianNames(job).some((name) => name.toLowerCase() === String(technicianName || "").toLowerCase());
+}
+
+function directorsOutstandingReportItems(technicianName = "") {
+  return jobs
+    .map((job, index) => ({ job, index }))
+    .filter(({ job }) => !technicianName || directorsJobMatchesTechnician(job, technicianName))
+    .filter(({ job }) => !jobReportReceived(job) && (job.report === "Awaiting" || String(job.date || "") <= localIsoDate()))
+    .map(({ job, index }) => ({
+      job,
+      index,
+      overdue: String(job.date || "") < localIsoDate(),
+      status: String(job.date || "") < localIsoDate() ? "Overdue" : "Report required"
+    }))
+    .sort((a, b) => Number(b.overdue) - Number(a.overdue) || String(a.job.date || "").localeCompare(String(b.job.date || "")));
+}
+
+function directorsOutstandingReportRows(technicianName = "") {
+  return directorsOutstandingReportItems(technicianName)
+    .map(({ job, index, status }) => `
+      <tr class="directors-live-row" role="button" tabindex="0" data-directors-job-index="${escapeHtml(index)}">
+        <td>${escapeHtml(job.technician || "Unassigned")}</td>
+        <td><strong>${escapeHtml(job.number || job.reference || "No reference")}</strong></td>
+        <td>${escapeHtml(job.client || job.address || job.title || "No customer/site")}</td>
+        <td><span class="status ${status === "Overdue" ? "urgent" : "warning"}">${escapeHtml(status)}</span></td>
+        <td>${escapeHtml(directorsReportAge(job))}</td>
+      </tr>
+    `).join("");
+}
+
+function directorsPerformancePeriodBounds(period = activeDirectorPerformancePeriod) {
+  const now = new Date(`${localIsoDate()}T00:00:00`);
+  if (period === "previous-month") {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { start: localIsoDate(start), end: localIsoDate(end) };
+  }
+  if (period === "this-year") {
+    return { start: `${now.getFullYear()}-01-01`, end: `${now.getFullYear()}-12-31` };
+  }
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { start: localIsoDate(start), end: localIsoDate(end) };
+}
+
+function directorsPerformancePeriodOptions() {
+  return [
+    ["this-month", "This month"],
+    ["previous-month", "Previous month"],
+    ["this-year", "This year"]
+  ].map(([value, label]) => `<option value="${value}"${activeDirectorPerformancePeriod === value ? " selected" : ""}>${label}</option>`).join("");
+}
+
+function directorsLabourSharesForJob(job = {}) {
+  const techniciansForJob = directorsJobTechnicianNames(job);
+  if (!techniciansForJob.length) return [];
+  const totalPence = 22000;
+  const basePence = Math.floor(totalPence / techniciansForJob.length);
+  let remainder = totalPence - (basePence * techniciansForJob.length);
+  return techniciansForJob.map((name) => {
+    const pence = basePence + (remainder > 0 ? 1 : 0);
+    remainder -= 1;
+    return { name, pence };
+  });
+}
+
+function directorsTechnicianPerformanceRows() {
+  const techniciansToShow = activeTechnicianAssignmentOptions();
+  const bounds = directorsPerformancePeriodBounds();
+  const sourceJobs = dashboardJobSource();
+  const completedJobs = sourceJobs
+    .filter(jobCompleted)
+    .filter((job) => {
+      const date = String(job.date || job.completedAt || job.reportSubmittedAt || "").slice(0, 10);
+      return date && date >= bounds.start && date <= bounds.end;
+    });
+  const stats = techniciansToShow.map((staff) => ({
+    name: staff.name,
+    outstandingReports: directorsOutstandingReportItems(staff.name).length,
+    completedJobs: 0,
+    labourPence: 0
+  }));
+  const statsByName = new Map(stats.map((item) => [item.name.toLowerCase(), item]));
+  completedJobs.forEach((job) => {
+    directorsLabourSharesForJob(job).forEach((share) => {
+      const stat = statsByName.get(share.name.toLowerCase());
+      if (!stat) return;
+      stat.completedJobs += 1;
+      stat.labourPence += share.pence;
+    });
+  });
+  const rankedStats = stats.sort((a, b) => b.labourPence - a.labourPence);
+  const hasLabourValue = rankedStats.some((stat) => stat.labourPence > 0);
+  let previousLabourPence = null;
+  let previousPosition = 0;
+  return rankedStats
+    .map((stat, index) => {
+      const leaguePosition = !hasLabourValue
+        ? "-"
+        : stat.labourPence === previousLabourPence
+          ? previousPosition
+          : index + 1;
+      previousLabourPence = stat.labourPence;
+      previousPosition = leaguePosition;
+      return `
+      <tr>
+        <td>${escapeHtml(String(leaguePosition))}</td>
+        <td><strong>${escapeHtml(stat.name)}</strong></td>
+        <td>${stat.outstandingReports > 0
+          ? `<button class="directors-report-count" type="button" data-directors-performance-reports="${escapeHtml(stat.name)}" aria-label="${escapeHtml(`${stat.name} has ${stat.outstandingReports} outstanding report${stat.outstandingReports === 1 ? "" : "s"}`)}">${escapeHtml(String(stat.outstandingReports))}</button>`
+          : '<span class="directors-report-count-zero">0</span>'}</td>
+        <td>${escapeHtml(String(stat.completedJobs))}</td>
+        <td>${escapeHtml(money(stat.labourPence / 100))}</td>
+      </tr>
+    `;
+    }).join("");
+}
+
+function renderDirectorsTechnicianPerformance() {
+  const rows = directorsTechnicianPerformanceRows();
+  const selectedRows = activeDirectorPerformanceTechnician ? directorsOutstandingReportRows(activeDirectorPerformanceTechnician) : "";
+  return `
+    <section class="directors-panel directors-live-section directors-performance-section">
+      <div class="directors-performance-heading">
+        <h3>Technician Performance</h3>
+        <label>Period <select id="directorPerformancePeriodSelect">${directorsPerformancePeriodOptions()}</select></label>
+      </div>
+      <table class="compact-table directors-live-table directors-performance-table">
+        <thead><tr><th>League position</th><th>Technician name</th><th>Outstanding reports</th><th>Completed jobs</th><th>Labour Value Generated</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5">No active technicians found.</td></tr>'}</tbody>
+      </table>
+      ${activeDirectorPerformanceTechnician ? `
+        <div class="directors-performance-reports" id="directorTechnicianOutstandingReports">
+          <h4>${escapeHtml(activeDirectorPerformanceTechnician)} outstanding reports</h4>
+          ${selectedRows ? `
+            <table class="compact-table directors-live-table">
+              <thead><tr><th>Technician</th><th>Job reference</th><th>Customer / site</th><th>Status</th><th>Age</th></tr></thead>
+              <tbody>${selectedRows}</tbody>
+            </table>
+          ` : '<p class="empty-state compact-empty">No outstanding reports for this technician.</p>'}
+        </div>
+      ` : ""}
+    </section>
+  `;
+}
+
+function directorsLiveSection(title, emptyText, headers, rowsHtml) {
+  return `
+    <section class="directors-panel directors-live-section">
+      <h3>${escapeHtml(title)}</h3>
+      ${rowsHtml ? `
+        <table class="compact-table directors-live-table">
+          <thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      ` : `<p class="empty-state compact-empty">${escapeHtml(emptyText)}</p>`}
+    </section>
+  `;
+}
+
+function renderDirectorsOverview() {
+  const holidayRows = directorsLiveHolidayRows();
+  const vehicleRows = directorsVehicleDeadlineRows();
+  return `
+    <div class="directors-live-overview">
+      ${directorsLiveSection("Upcoming Staff Holidays", "No approved holidays within the next 90 days.", ["Employee", "Dates", "Working days"], holidayRows)}
+      ${directorsLiveSection("Upcoming Vehicle Deadlines", "No vehicle deadlines within the next 60 days.", ["Vehicle", "Requirement", "Due date", "Status"], vehicleRows)}
+      ${renderDirectorsTechnicianPerformance()}
+    </div>
+  `;
+}
+
+function activateDirectorsOverviewRow(row) {
+  if (!row) return false;
+  if (row.dataset.directorsHolidayIndex) {
+    openHolidayPlannerRecord(row.dataset.directorsHolidayIndex);
+    return true;
+  }
+  if (row.dataset.directorsVehicleId) {
+    showSection("vehicles");
+    renderVehicles();
+    renderVehicleRecordDetail(row.dataset.directorsVehicleId);
+    return true;
+  }
+  if (row.dataset.directorsJobIndex) {
+    openJobDetail(row.dataset.directorsJobIndex);
+    return true;
+  }
+  return false;
+}
+
+function directorsHolidayNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function directorsHolidayRound(value) {
+  return Math.round(directorsHolidayNumber(value) * 100) / 100;
+}
+
+function directorsBankHolidayUsage(entitlement = {}) {
+  const totalBankHolidays = directorsHolidayNumber(entitlement.bankHolidaysCounted);
+  const bankHolidays = Array.isArray(entitlement.bankHolidayDates)
+    ? entitlement.bankHolidayDates
+    : [];
+  const uniqueDates = [...new Set(bankHolidays
+    .map((holiday) => String(holiday?.date || holiday || ""))
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)))];
+
+  if (!uniqueDates.length || !totalBankHolidays) {
+    return { past: 0, future: totalBankHolidays };
+  }
+
+  const today = localIsoDate();
+  const valuePerDate = totalBankHolidays / uniqueDates.length;
+  const pastDates = uniqueDates.filter((date) => date <= today).length;
+  const futureDates = uniqueDates.length - pastDates;
+  return {
+    past: directorsHolidayRound(pastDates * valuePerDate),
+    future: directorsHolidayRound(futureDates * valuePerDate)
+  };
+}
+
+function directorsHolidayDisplayBalance(entitlement = {}, person = {}) {
+  const openingEntitlement = directorsHolidayNumber(
+    entitlement.totalAnnualEntitlement ?? entitlement.calculatedEntitlement ?? person.holidayAllowance,
+    NaN
+  );
+  const remaining = directorsHolidayNumber(
+    entitlement.remainingEntitlement ?? person.holidayRemaining,
+    NaN
+  );
+  const employeeLeaveTaken = directorsHolidayNumber(entitlement.approvedLeaveTaken ?? person.holidayUsed);
+  const futureBookedLeave = directorsHolidayNumber(entitlement.approvedFutureLeave ?? person.holidayBooked);
+  const bankHolidayUsage = directorsBankHolidayUsage(entitlement);
+  const used = directorsHolidayRound(employeeLeaveTaken + bankHolidayUsage.past);
+  const futureCommitted = directorsHolidayRound(futureBookedLeave + bankHolidayUsage.future + directorsHolidayNumber(entitlement.companyClosureDays));
+  const barUsed = directorsHolidayRound(used + futureCommitted);
+  const barRemaining = Number.isFinite(openingEntitlement)
+    ? directorsHolidayRound(Math.max(0, openingEntitlement - barUsed))
+    : remaining;
+  const reconciledTotal = Number.isFinite(openingEntitlement) && Number.isFinite(remaining)
+    ? directorsHolidayRound(used + remaining + futureCommitted)
+    : NaN;
+  return {
+    totalAnnualEntitlement: openingEntitlement,
+    used,
+    barUsed,
+    barRemaining,
+    remaining,
+    futureCommitted,
+    employeeLeaveTaken,
+    futureBookedLeave,
+    bankHolidaysCounted: entitlement.bankHolidaysCounted,
+    companyClosureDays: entitlement.companyClosureDays || 0,
+    employeeBookedLeaveTaken: employeeLeaveTaken,
+    reconciledTotal
+  };
+}
+
+function holidayBar(entitlement = {}) {
+  const used = Number(entitlement.used ?? entitlement.holidayUsed);
+  const remaining = Number(entitlement.remaining ?? entitlement.holidayRemaining);
+  const total = Number(entitlement.totalAnnualEntitlement ?? entitlement.totalEntitlement ?? entitlement.holidayAllowance);
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(used) || !Number.isFinite(remaining)) {
+    return '<span class="holiday-mini-bar holiday-mini-bar-empty" aria-label="No holiday entitlement data recorded"></span>';
+  }
+  const safeUsed = Math.max(0, used);
+  const safeRemaining = Math.max(0, remaining);
+  const usedWidth = Math.min(100, (safeUsed / total) * 100);
+  const label = `${safeUsed} days used, ${safeRemaining} days remaining from ${total} days entitlement`;
+  return `<span class="holiday-mini-bar" aria-label="${escapeHtml(label)}" data-used-days="${escapeHtml(safeUsed)}" data-total-entitlement="${escapeHtml(total)}" data-used-width="${escapeHtml(usedWidth.toFixed(2))}" data-bank-holidays="${escapeHtml(entitlement.bankHolidaysCounted ?? 0)}" data-company-closure-days="${escapeHtml(entitlement.companyClosureDays ?? 0)}" data-employee-booked-leave="${escapeHtml(entitlement.employeeBookedLeaveTaken ?? safeUsed)}" data-future-committed-days="${escapeHtml(entitlement.futureCommitted ?? 0)}" data-remaining-entitlement="${escapeHtml(safeRemaining)}" data-reconciled-total="${escapeHtml(entitlement.reconciledTotal ?? "")}"><span class="holiday-mini-bar-used" style="width:${usedWidth.toFixed(2)}%"></span></span>`;
+}
+
+function formatAbsenceDayValue(value) {
+  const number = Number(value || 0);
+  return Number.isInteger(number) ? String(number) : number.toFixed(1);
+}
+
+function directorsAbsenceTotalForPerson(person = {}, year = String(new Date().getFullYear())) {
+  const staff = staffProfiles.find((item) =>
+    (person.staffId && item.staffId === person.staffId) || item.name === person.name);
+  if (staff) {
+    const summary = annualAttendanceSummary(staff, year);
+    return Number(summary.sickDays || 0)
+      + Number(summary.absentDays || 0)
+      + Number(summary.otherAuthorisedAbsenceDays || 0)
+      + Number(summary.unauthorisedAbsenceDays || 0);
+  }
+  return Number(person.sicknessDays || 0)
+    + Number(person.otherAbsenceDays || 0)
+    + Number(person.unpaidLeave || 0);
+}
+
+function renderDirectorsAbsence() {
+  const employees = directorsAreaState?.overview?.employees || [];
+  const years = directorsAreaState?.overview?.holidayYears || [String(new Date().getFullYear())];
+  const selectedYear = document.getElementById("directorAbsenceYearSelect")?.value || years[0] || String(new Date().getFullYear());
+  return `
+    <div class="directors-panel">
+      <h3>Absence and Holidays</h3>
+      <div class="directors-payroll-toolbar directors-absence-toolbar">
+        <label>Leave year <select id="directorAbsenceYearSelect">${years.map((year) => `<option value="${escapeHtml(year)}"${year === selectedYear ? " selected" : ""}>${escapeHtml(year)}</option>`).join("")}</select></label>
+      </div>
+      <table class="compact-table directors-absence-table">
+        <thead><tr><th>Employee</th><th>Role</th><th>Total entitlement</th><th>Bank holidays</th><th>Days used</th><th>Future committed</th><th>Remaining</th><th>Absence</th></tr></thead>
+        <tbody>${employees.map((person) => {
+          const entitlement = person.holidayEntitlementsByYear?.[selectedYear] || {};
+          const holidayBalance = directorsHolidayDisplayBalance(entitlement, person);
+          const absenceTotal = directorsAbsenceTotalForPerson(person, selectedYear);
+          return `<tr>
+            <td><strong>${escapeHtml(person.name)}</strong><br><small>${escapeHtml(person.staffId)}</small></td>
+            <td>${escapeHtml(person.role || "Staff")}</td>
+            <td>${holidayBar({
+              ...holidayBalance,
+              used: holidayBalance.barUsed,
+              remaining: holidayBalance.barRemaining,
+              reconciledTotal: Number.isFinite(holidayBalance.totalAnnualEntitlement)
+                ? directorsHolidayRound(holidayBalance.barUsed + holidayBalance.barRemaining)
+                : holidayBalance.reconciledTotal
+            })}<small>${escapeHtml(`${formatAbsenceDayValue(holidayBalance.barUsed)} used / ${Number.isFinite(holidayBalance.barRemaining) ? formatAbsenceDayValue(holidayBalance.barRemaining) : "n/a"} remaining`)}</small></td>
+            <td>${escapeHtml(entitlement.bankHolidaysCounted ?? 0)}</td>
+            <td>${escapeHtml(formatAbsenceDayValue(holidayBalance.used))}</td>
+            <td>${escapeHtml(formatAbsenceDayValue(holidayBalance.futureCommitted))}</td>
+            <td>${escapeHtml(Number.isFinite(holidayBalance.remaining) ? formatAbsenceDayValue(holidayBalance.remaining) : "Not recorded")}</td>
+            <td><span class="directors-absence-total">${escapeHtml(formatAbsenceDayValue(absenceTotal))}</span></td>
+          </tr>`;
+        }).join("") || '<tr><td colspan="8">No active employee holiday records found.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function payrollPeriodOptions() {
+  return (directorsAreaState?.payrollPeriods || []).map((period) => `<option value="${escapeHtml(period.periodId)}"${period.periodId === activeDirectorPayrollPeriod ? " selected" : ""}>${escapeHtml(period.payrollMonth)} - ${escapeHtml(period.status)} v${escapeHtml(period.version)}</option>`).join("");
+}
+
+async function loadDirectorPeriod(periodId) {
+  if (!periodId) return null;
+  const payload = await directorsApi(`/payroll-periods/${encodeURIComponent(periodId)}`);
+  return payload.period;
+}
+
+function directorsPayrollExceptionReason(issue = "") {
+  const text = String(issue || "").toLowerCase();
+  if (text.includes("payroll reference")) return "The accountant payroll reference is missing from the staff record.";
+  if (text.includes("normal days") || text.includes("hours")) return "The employee's normal working pattern has not been recorded for payroll review.";
+  if (text.includes("holiday")) return "Holiday information needs review before payroll sign-off.";
+  if (text.includes("absence") || text.includes("sick")) return "Absence information needs a director check before payroll sign-off.";
+  if (text.includes("advance")) return "A salary advance needs review before payroll sign-off.";
+  return "This payroll item is incomplete or needs a director decision before final approval.";
+}
+
+function directorsPayrollExceptionAction(issue = "") {
+  const text = String(issue || "").toLowerCase();
+  if (text.includes("payroll reference")) return "Add the payroll reference to the stable staff record.";
+  if (text.includes("normal days") || text.includes("hours")) return "Update the employee working pattern in Staff Management.";
+  if (text.includes("holiday")) return "Check the absence and holiday record, then refresh payroll preparation.";
+  if (text.includes("absence") || text.includes("sick")) return "Review the absence record and confirm whether payroll needs adjustment.";
+  if (text.includes("advance")) return "Confirm the advance amount, date and accountant note.";
+  return "Review the payroll period and correct the source record or approve with director acknowledgement.";
+}
+
+function directorsPayrollExceptionRowsFromPeriod(period = {}) {
+  return (period.entries || []).flatMap((entry) => (entry.exceptions || []).map((issue) => ({
+    periodId: period.periodId,
+    payrollMonth: period.payrollMonth,
+    employee: entry.employee,
+    issue,
+    reason: directorsPayrollExceptionReason(issue),
+    action: directorsPayrollExceptionAction(issue)
+  })));
+}
+
+async function directorsPayrollExceptionRows() {
+  const summaries = (directorsAreaState?.payrollPeriods || []).filter((period) => Number(period.exceptionCount || 0) > 0);
+  const periods = await Promise.all(summaries.map(async (period) => {
+    try {
+      return await loadDirectorPeriod(period.periodId);
+    } catch {
+      return null;
+    }
+  }));
+  return periods.filter(Boolean).flatMap(directorsPayrollExceptionRowsFromPeriod);
+}
+
+async function renderDirectorsPayrollExceptionsPanel() {
+  if (activeDirectorPayrollFocus !== "exceptions") return "";
+  const rows = await directorsPayrollExceptionRows();
+  return `
+    <div class="directors-exceptions-panel" id="directorPayrollExceptionsPanel">
+      <h3>Payroll Exceptions Requiring Attention</h3>
+      ${rows.length ? `
+        <table class="compact-table directors-table">
+          <thead><tr><th>Employee</th><th>Issue</th><th>Reason it requires attention</th><th>Action needed</th></tr></thead>
+          <tbody>${rows.map((row) => `
+            <tr>
+              <td><strong>${escapeHtml(row.employee || "Employee")}</strong><br><small>${escapeHtml(row.payrollMonth || "")}</small></td>
+              <td>${escapeHtml(row.issue)}</td>
+              <td>${escapeHtml(row.reason)}</td>
+              <td>${escapeHtml(row.action)}</td>
+            </tr>
+          `).join("")}</tbody>
+        </table>
+      ` : '<p class="empty-state">No payroll exceptions require attention.</p>'}
+    </div>
+  `;
+}
+
+async function renderDirectorsPayroll(period = null) {
+  const periods = directorsAreaState?.payrollPeriods || [];
+  if (!period && activeDirectorPayrollPeriod) {
+    try { period = await loadDirectorPeriod(activeDirectorPayrollPeriod); } catch { period = null; }
+  }
+  const exceptionsPanel = await renderDirectorsPayrollExceptionsPanel();
+  const staffOptions = staffProfiles
+    .filter((staff) =>
+      staff.staffId
+      && !["inactive", "left"].includes(String(staff.employmentStatus || staff.status || "Active").toLowerCase())
+      && staff.payrollActive === true
+      && staff.directorAccessAuthority !== true
+      && String(staff.role || "").toLowerCase() !== "director"
+    )
+    .map((staff) => `<option value="${escapeHtml(staff.staffId || "")}">${escapeHtml(staff.name || "")}</option>`)
+    .join("");
+  const payrollPreparation = `
+    <div class="directors-panel directors-payroll-preparation-panel">
+      <h3>Payroll Preparation</h3>
+      <p class="panel-note">Create or open a monthly payroll record for review and accountant export.</p>
+      ${exceptionsPanel}
+      <div class="directors-payroll-toolbar">
+        <label>Payroll month <input id="directorPayrollMonthInput" type="month" value=""></label>
+        <button class="primary-button" type="button" id="createDirectorPayrollPeriodButton" disabled>Create Month</button>
+        <label>Open month <select id="directorPayrollPeriodSelect"><option value="">Select period</option>${payrollPeriodOptions()}</select></label>
+      </div>
+      ${period ? `
+        <div class="directors-period-summary">
+          <span class="status ${period.status === "Approved" || period.status === "Exported" ? "ok" : "warning"}">${escapeHtml(period.status)}</span>
+          <strong>${escapeHtml(period.payrollMonth)} payroll preparation</strong>
+          <span>Version ${escapeHtml(period.version)}</span>
+          <span>${escapeHtml((period.entries || []).length)} staff included</span>
+        </div>
+        <div class="directors-payroll-actions">
+          <button class="secondary-button" type="button" id="directorMarkReadyButton" data-period-version="${escapeHtml(period.version)}"${period.status !== "Draft" ? " disabled" : ""}>Ready for Review</button>
+          <button class="primary-button" type="button" id="directorApprovePayrollButton" data-period-version="${escapeHtml(period.version)}"${period.status !== "Ready for Review" ? " disabled" : ""}>Approve</button>
+          <button class="secondary-button" type="button" id="directorExportPayrollButton" data-period-version="${escapeHtml(period.version)}"${!["Approved", "Exported"].includes(period.status) ? " disabled" : ""}>Export Excel</button>
+        </div>
+        <details class="directors-advance-panel">
+          <summary>Record salary advance</summary>
+          <div class="directors-advance-grid">
+            <label>Employee <select id="directorAdvanceStaffInput">${staffOptions}</select></label>
+            <label>Amount <input id="directorAdvanceAmountInput" type="number" min="0.01" step="0.01"></label>
+            <label>Date paid <input id="directorAdvanceDateInput" type="date" value="${escapeHtml(localIsoDate())}"></label>
+            <label>Note <input id="directorAdvanceNoteInput" type="text"></label>
+            <button class="primary-button" type="button" id="directorSaveAdvanceButton" data-period-version="${escapeHtml(period.version)}">Save advance</button>
+          </div>
+        </details>
+        <table class="compact-table directors-table">
+          <thead><tr><th>Employee</th><th>Payroll Ref</th><th>Holiday</th><th>Sick</th><th>Absence</th><th>Advances</th><th>Exceptions</th></tr></thead>
+          <tbody>${(period.entries || []).map((entry) => `<tr><td>${escapeHtml(entry.employee)}</td><td>${escapeHtml(entry.payrollReference || "Not recorded")}</td><td>${escapeHtml(entry.approvedHolidayDays || 0)}</td><td>${escapeHtml(entry.sickDays || 0)}</td><td>${escapeHtml(entry.unpaidAbsenceDays || 0)}</td><td>${escapeHtml(entry.salaryAdvancesTotal || 0)}</td><td>${(entry.exceptions || []).map((item) => `<span class="status warning">${escapeHtml(item)}</span>`).join(" ") || '<span class="status ok">Clear</span>'}</td></tr>`).join("")}</tbody>
+        </table>
+      ` : `<p class="empty-state directors-payroll-empty-state">Select or create a payroll month to begin.</p>`}
+    </div>
+  `;
+  return `${payrollPreparation}${renderDirectorsExports()}`;
+}
+
+function renderDirectorsExports() {
+  const exports = directorsAreaState?.exportHistory || [];
+  return `
+    <div class="directors-panel directors-payroll-export-history-panel">
+      <h3>Payroll Export History</h3>
+      <table class="compact-table directors-payroll-export-table">
+        <thead><tr><th>Month</th><th>File</th><th>Version</th><th>Exported</th><th>Action</th></tr></thead>
+        <tbody>${exports.map((item) => `<tr><td>${escapeHtml(item.payrollMonth)}</td><td class="payroll-export-file">${escapeHtml(item.fileName)}</td><td>${escapeHtml(item.version)}</td><td>${escapeHtml(formatDateTimeUkShort(item.exportedAt))}</td><td><a class="secondary-button payroll-download-button" href="/api/phase-10/exports/${encodeURIComponent(item.exportId)}/download" target="_blank" rel="noopener">Download</a></td></tr>`).join("") || '<tr><td colspan="5">No payroll workbooks have been exported yet.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderDirectorsCompanyDetails() {
+  const entity = directorsAreaState?.legalEntities?.find((item) => item.legalEntityId === "LE-KWL-13950997") || {};
+  const tradingLines = Array.isArray(entity.tradingAddressLines) ? entity.tradingAddressLines.join("\n") : "";
+  const registeredLines = Array.isArray(entity.registeredOfficeAddressLines) ? entity.registeredOfficeAddressLines.join("\n") : "";
+  return `
+    <div class="directors-panel">
+      <h3>Company Details</h3>
+      <p class="panel-note">Authoritative legal-entity details used by payroll workbooks and future generated documents. This record is restricted to directors and referenced by stable legal entity ID.</p>
+      <form id="directorCompanyDetailsForm" class="directors-company-form">
+        <label>Legal entity ID <input name="legalEntityId" type="text" value="${escapeHtml(entity.legalEntityId || "LE-KWL-13950997")}" readonly></label>
+        <label>Legal company name <input name="legalCompanyName" type="text" value="${escapeHtml(entity.legalCompanyName || "")}" required></label>
+        <label>Trading name <input name="tradingName" type="text" value="${escapeHtml(entity.tradingName || "")}" required></label>
+        <label class="full">Trading address lines <textarea name="tradingAddressLines" rows="3" required>${escapeHtml(tradingLines)}</textarea></label>
+        <label>Trading town <input name="tradingTown" type="text" value="${escapeHtml(entity.tradingTown || "")}" required></label>
+        <label>Trading postcode <input name="tradingPostcode" type="text" value="${escapeHtml(entity.tradingPostcode || "")}" required></label>
+        <label class="full">Registered office address lines <textarea name="registeredOfficeAddressLines" rows="3" required>${escapeHtml(registeredLines)}</textarea></label>
+        <label>Registered office town <input name="registeredOfficeTown" type="text" value="${escapeHtml(entity.registeredOfficeTown || "")}" required></label>
+        <label>Registered office postcode <input name="registeredOfficePostcode" type="text" value="${escapeHtml(entity.registeredOfficePostcode || "")}" required></label>
+        <label>Company registration number <input name="companyRegistrationNumber" type="text" value="${escapeHtml(entity.companyRegistrationNumber || "")}" required></label>
+        <label>VAT registration number <input name="vatRegistrationNumber" type="text" value="${escapeHtml(entity.vatRegistrationNumber || "")}" required></label>
+        <label>Telephone <input name="telephoneNumber" type="text" value="${escapeHtml(entity.telephoneNumber || "")}" required></label>
+        <label>General email <input name="generalEmail" type="email" value="${escapeHtml(entity.generalEmail || "")}" required></label>
+        <label>Website <input name="website" type="text" value="${escapeHtml(entity.website || "")}" required></label>
+        <label class="full">Approved logo reference <input name="approvedLogoReference" type="text" value="${escapeHtml(entity.approvedLogoReference || "")}" required></label>
+        <div class="directors-company-logo-preview full" aria-label="Approved Kingswood logo preview">
+          ${entity.approvedLogoReference ? `<img src="${escapeHtml(entity.approvedLogoReference)}" alt="Approved Kingswood logo">` : "<span>No approved logo selected.</span>"}
+        </div>
+        <label class="full">Document footer text <textarea name="documentFooterText" rows="2">${escapeHtml(entity.documentFooterText || "")}</textarea></label>
+        <label>Status <select name="status"><option value="Active"${entity.status !== "Inactive" ? " selected" : ""}>Active</option><option value="Inactive"${entity.status === "Inactive" ? " selected" : ""}>Inactive</option></select></label>
+        <div class="directors-company-meta">
+          <span>Last updated by ${escapeHtml(entity.lastUpdatedBy || "Not recorded")}</span>
+          <span>${escapeHtml(entity.lastUpdatedAt ? new Date(entity.lastUpdatedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "No timestamp recorded")}</span>
+        </div>
+        <div class="directors-payroll-actions">
+          <button class="primary-button" type="submit">Save Company Details</button>
+          <span id="directorCompanyDetailsMessage" class="save-status" role="status"></span>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+async function renderDirectorsArea() {
+  if (activeDirectorTab === "technicians") activeDirectorTab = "overview";
+  if (activeDirectorTab === "exports") activeDirectorTab = "payroll";
+  document.querySelectorAll("[data-director-tab]").forEach((tab) => tab.classList.toggle("active", tab.dataset.directorTab === activeDirectorTab));
+  const content = document.querySelector("#directorsContent");
+  if (!content || !directorsAreaState) return;
+  if (activeDirectorTab === "absence") content.innerHTML = renderDirectorsAbsence();
+  else if (activeDirectorTab === "payroll") content.innerHTML = await renderDirectorsPayroll();
+  else if (activeDirectorTab === "company-details") content.innerHTML = renderDirectorsCompanyDetails();
+  else content.innerHTML = renderDirectorsOverview();
+}
+
+async function createDirectorPayrollPeriod() {
+  try {
+    const payload = await directorsApi("/payroll-periods", {
+      method: "POST",
+      body: JSON.stringify({ payrollMonth: document.querySelector("#directorPayrollMonthInput")?.value || "" })
+    });
+    activeDirectorPayrollPeriod = payload.period.periodId;
+    activeDirectorTab = "payroll";
+    await refreshDirectorsArea();
+  } catch (error) {
+    await kcInfo(error.message);
+  }
+}
+
+async function updateDirectorPayrollStatus(status, version, acknowledgeUnresolved = false) {
+  if (!activeDirectorPayrollPeriod) return;
+  try {
+    await directorsApi(`/payroll-periods/${encodeURIComponent(activeDirectorPayrollPeriod)}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status, version: Number(version), acknowledgeUnresolved })
+    });
+    activeDirectorTab = "payroll";
+    await refreshDirectorsArea();
+  } catch (error) {
+    if (status === "Approved" && /acknowledgement/i.test(error.message)) {
+      const confirmed = await kcConfirmAction("Payroll exceptions remain. Approve this period with director acknowledgement?", "Approve");
+      if (confirmed) return updateDirectorPayrollStatus(status, version, true);
+    }
+    await kcInfo(status === "Approved" ? `Payroll approval failed: ${error.message}` : error.message);
+  }
+}
+
+async function saveDirectorSalaryAdvance(version) {
+  if (!activeDirectorPayrollPeriod) return;
+  try {
+    await directorsApi(`/payroll-periods/${encodeURIComponent(activeDirectorPayrollPeriod)}/advance`, {
+      method: "POST",
+      body: JSON.stringify({
+        version: Number(version),
+        staffId: document.querySelector("#directorAdvanceStaffInput")?.value || "",
+        amount: document.querySelector("#directorAdvanceAmountInput")?.value || "",
+        datePaid: document.querySelector("#directorAdvanceDateInput")?.value || "",
+        note: document.querySelector("#directorAdvanceNoteInput")?.value || ""
+      })
+    });
+    activeDirectorTab = "payroll";
+    await refreshDirectorsArea();
+  } catch (error) {
+    await kcInfo(error.message);
+  }
+}
+
+async function exportDirectorPayroll(version) {
+  if (!activeDirectorPayrollPeriod) return;
+  try {
+    const payload = await directorsApi(`/payroll-periods/${encodeURIComponent(activeDirectorPayrollPeriod)}/export`, {
+      method: "POST",
+      body: JSON.stringify({ version: Number(version) })
+    });
+    await refreshDirectorsArea();
+    if (payload.export?.exportId) window.open(`/api/phase-10/exports/${encodeURIComponent(payload.export.exportId)}/download`, "_blank", "noopener");
+  } catch (error) {
+    await kcInfo(`Payroll export failed: ${error.message}`);
+  }
+}
+
+async function saveDirectorCompanyDetails(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+  payload.tradingAddressLines = String(payload.tradingAddressLines || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  payload.registeredOfficeAddressLines = String(payload.registeredOfficeAddressLines || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const message = document.querySelector("#directorCompanyDetailsMessage");
+  try {
+    const result = await directorsApi("/company-details", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    directorsAreaState.legalEntities = [result.legalEntity, ...(directorsAreaState.legalEntities || []).filter((item) => item.legalEntityId !== result.legalEntity.legalEntityId)];
+    if (message) message.textContent = "Company details saved.";
+    await refreshDirectorsArea();
+    activeDirectorTab = "company-details";
+    await renderDirectorsArea();
+  } catch (error) {
+    if (message) message.textContent = error.message;
+    await kcInfo(error.message);
+  }
+}
+
 function showSection(sectionId) {
   const section = document.querySelector(`#${CSS.escape(sectionId)}`);
   if (!section) return;
+  if (sectionId === "directors" && !isDirectorLocalUser()) {
+    showDirectorsLocked("Director access is restricted to Kevin and Alex.");
+  }
+  if (sectionId !== "settings") {
+    weatherThemePreviewValue = "live";
+    seasonalThemePreviewValue = "none";
+  }
   document.querySelectorAll(".section-panel").forEach((section) => {
     section.classList.toggle("active", section.id === sectionId);
   });
   document.querySelectorAll(".nav-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.section === sectionId);
   });
+  syncSidebarGroupsForSection(sectionId);
+  document.body.dataset.activeSection = sectionId;
+  if (sectionId === "dashboard") {
+    startDashboardRevolutAutoRefresh({ immediate: true });
+  } else {
+    stopDashboardRevolutAutoRefresh();
+  }
   document.querySelector("#pageTitle").textContent = section.dataset.title;
   localStorage.setItem(sectionStorageKey, sectionId);
   updateProofingFrame(sectionId);
   updateSectionUrl(sectionId);
+  applyDashboardHeaderTheme(lastWeatherCode);
   if (sectionId === "tracking" || sectionId === "split-screen") {
     window.setTimeout(() => {
       renderTracking();
       renderSplitScreen();
     }, 80);
+  }
+  if (sectionId === "directors") {
+    void refreshDirectorsArea();
   }
 }
 
@@ -9178,6 +15114,16 @@ function applyGlobalSearch() {
 
 document.querySelectorAll(".nav-button").forEach((button) => {
   button.addEventListener("click", () => showSection(button.dataset.section));
+});
+
+document.querySelectorAll(".nav-group-toggle").forEach((button) => {
+  button.addEventListener("click", () => {
+    const group = button.closest(".nav-group");
+    const shouldOpen = button.getAttribute("aria-expanded") !== "true";
+    document.querySelectorAll(".nav-group").forEach((item) => {
+      setSidebarGroupOpen(item, shouldOpen && item === group);
+    });
+  });
 });
 
 document.addEventListener("click", (event) => {
@@ -9265,7 +15211,23 @@ document.addEventListener("click", async (event) => {
   renderProofingPhotoCards(kind);
   updateProofingPreview();
 });
+
+document.addEventListener("submit", async (event) => {
+  if (event.target?.id === "directorCompanyDetailsForm") {
+    await saveDirectorCompanyDetails(event);
+  }
+});
 document.addEventListener("click", async (event) => {
+  const dispatchChangeButton = event.target.closest("[data-job-dispatch-change]");
+  if (dispatchChangeButton) {
+    await markJobDispatchChanged(dispatchChangeButton.dataset.jobDispatchChange);
+    return;
+  }
+  const dispatchCancelButton = event.target.closest("[data-job-dispatch-cancel]");
+  if (dispatchCancelButton) {
+    await cancelJobDispatch(dispatchCancelButton.dataset.jobDispatchCancel);
+    return;
+  }
   const trackingButton = event.target.closest("[data-tracking-vehicle]");
   if (!trackingButton) return;
   selectTrackingVehicle(trackingButton.dataset.trackingVehicle, true);
@@ -9333,6 +15295,20 @@ sickCallForm?.addEventListener("submit", async (event) => {
     sickCallDialog.close();
   }
 });
+attendanceForm?.addEventListener("submit", async (event) => {
+  if (event.submitter?.value === "cancel") {
+    return;
+  }
+  event.preventDefault();
+  await saveAttendanceDialog(event.submitter?.value || "default");
+});
+[
+  attendanceTypeInput,
+  attendanceStartDate,
+  attendanceEndDate,
+  attendanceOngoingInput,
+  attendanceDayType
+].forEach((field) => field?.addEventListener("change", refreshAttendanceDialog));
 document.querySelector("#plannerBoard").addEventListener("click", (event) => {
   if (event.target.closest("button")) {
     return;
@@ -9375,14 +15351,48 @@ document.querySelector("#valuationClientFilter").addEventListener("change", rend
 document.querySelector("#valuationStatusFilter").addEventListener("change", renderValuations);
 document.querySelector("#exportArkCsvButton")?.addEventListener("click", () => exportValuationGroup("ark"));
 document.querySelector("#exportJgCsvButton")?.addEventListener("click", () => exportValuationGroup("jg"));
+document.querySelector("#exportVergoCsvButton")?.addEventListener("click", () => exportValuationGroup("vergo"));
 document.querySelector("#exportOtherCsvButton")?.addEventListener("click", () => exportValuationGroup("other"));
 document.querySelector("#valuationGraphButton").addEventListener("click", showValuationGraph);
 document.querySelector("#generateArkValuationButton").addEventListener("click", () => generateValuationWorkbook("ark"));
 document.querySelector("#generateJgValuationButton").addEventListener("click", () => generateValuationWorkbook("jg"));
+document.querySelector("#generateVergoValuationButton").addEventListener("click", () => generateValuationWorkbook("vergo"));
 document.querySelector("#generateOtherValuationButton").addEventListener("click", () => generateValuationWorkbook("other"));
 closeValuationGraphButton?.addEventListener("click", () => valuationGraphDialog.close());
 document.querySelector("#staffSearch")?.addEventListener("input", renderStaff);
 document.querySelector("#attendanceStatusFilter")?.addEventListener("change", renderStaff);
+["#holidayPlannerEmployeeFilter", "#holidayPlannerStatusFilter", "#holidayPlannerMonthInput", "#holidayPlannerShowDeclined", "#holidayPlannerShowCancelled"].forEach((selector) => {
+  document.querySelector(selector)?.addEventListener("change", (event) => {
+    if (selector === "#holidayPlannerMonthInput") {
+      holidayPlannerSetMonth(event.target.value);
+    }
+    expandedHolidayPlannerDay = "";
+    renderHolidayPlanner();
+  });
+});
+document.querySelector("#holidayPlannerSearch")?.addEventListener("input", () => {
+  expandedHolidayPlannerDay = "";
+  renderHolidayPlanner();
+});
+document.querySelector("#holidayPlannerTodayButton")?.addEventListener("click", () => {
+  holidayPlannerSetMonth(today.slice(0, 7));
+  expandedHolidayPlannerDay = "";
+  renderHolidayPlanner();
+});
+document.querySelector("#holidayPlannerPrevButton")?.addEventListener("click", () => {
+  const date = holidayPlannerMonthStart(activeHolidayPlannerMonth);
+  date.setMonth(date.getMonth() - 1);
+  holidayPlannerSetMonth(holidayPlannerMonthKeyFromDate(date));
+  expandedHolidayPlannerDay = "";
+  renderHolidayPlanner();
+});
+document.querySelector("#holidayPlannerNextButton")?.addEventListener("click", () => {
+  const date = holidayPlannerMonthStart(activeHolidayPlannerMonth);
+  date.setMonth(date.getMonth() + 1);
+  holidayPlannerSetMonth(holidayPlannerMonthKeyFromDate(date));
+  expandedHolidayPlannerDay = "";
+  renderHolidayPlanner();
+});
 document.querySelector("#trainingSearch")?.addEventListener("input", () => {
   activeTrainingFilter = "all";
   renderTrainingMatrix();
@@ -9416,9 +15426,130 @@ document.querySelector("#exportTrainingExcelButton")?.addEventListener("click", 
     renderAssets();
   });
 });
+document.querySelector("#historyPageSize")?.addEventListener("change", (event) => {
+  localStorage.setItem(historyPageSizeStorageKey, event.target.value);
+  historyCurrentPage = 1;
+  renderHistory();
+});
+["#historyStatusFilter", "#historyDateFilter", "#historyTechnicianFilter", "#historyClientFilter", "#historySort"].forEach((selector) => {
+  document.querySelector(selector)?.addEventListener("change", () => {
+    historyCurrentPage = 1;
+    renderHistory();
+  });
+});
+document.querySelector("#historySearch")?.addEventListener("input", () => {
+  window.clearTimeout(historySearchDebounceTimer);
+  historySearchDebounceTimer = window.setTimeout(() => {
+    historyCurrentPage = 1;
+    renderHistory();
+  }, 180);
+});
+document.querySelector("#historyClearSearch")?.addEventListener("click", () => {
+  const input = document.querySelector("#historySearch");
+  if (input) input.value = "";
+  historyCurrentPage = 1;
+  renderHistory();
+});
+document.querySelector("#historyResetFilters")?.addEventListener("click", () => {
+  ["#historySearch", "#historyStatusFilter", "#historyDateFilter", "#historyTechnicianFilter", "#historyClientFilter", "#historySort"].forEach((selector) => {
+    const field = document.querySelector(selector);
+    if (!field) return;
+    field.value = selector === "#historySort" ? "newest" : "all";
+    if (selector === "#historySearch") field.value = "";
+  });
+  historyCurrentPage = 1;
+  renderHistory();
+});
+document.querySelector("#historyPrevPage")?.addEventListener("click", () => {
+  if (historyCurrentPage > 1) {
+    historyCurrentPage -= 1;
+    renderHistory();
+  }
+});
+document.querySelector("#historyNextPage")?.addEventListener("click", () => {
+  historyCurrentPage += 1;
+  renderHistory();
+});
 document.querySelector("#exportAssetsCsvButton")?.addEventListener("click", () => exportAssets("csv"));
 document.querySelector("#exportAssetsExcelButton")?.addEventListener("click", () => exportAssets("xlsx"));
-globalSearch.addEventListener("input", applyGlobalSearch);
+document.querySelector("#sendTodayScheduleButton")?.addEventListener("click", () => sendScheduleToTechnicians(localIsoDate(), "Today"));
+document.querySelector("#sendTomorrowScheduleButton")?.addEventListener("click", () => sendScheduleToTechnicians(datePlusDays(localIsoDate(), 1), "Tomorrow"));
+globalSearch?.addEventListener("input", applyGlobalSearch);
+document.addEventListener("keydown", async (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const directorsLiveRow = event.target.closest?.(".directors-live-row");
+  if (directorsLiveRow) {
+    event.preventDefault();
+    activateDirectorsOverviewRow(directorsLiveRow);
+    return;
+  }
+  const directorOverviewCard = event.target.closest?.("[data-director-overview-tab]");
+  if (!directorOverviewCard) return;
+  event.preventDefault();
+  activeDirectorTab = directorOverviewCard.dataset.directorOverviewTab;
+  activeDirectorPayrollFocus = directorOverviewCard.dataset.directorOverviewFocus || "";
+  await renderDirectorsArea();
+});
+document.addEventListener("change", async (event) => {
+  if (event.target?.id === "directorPerformancePeriodSelect") {
+    activeDirectorPerformancePeriod = event.target.value || "this-month";
+    activeDirectorPerformanceTechnician = "";
+    await renderDirectorsArea();
+    return;
+  }
+  if (event.target?.id === "weatherThemePreviewSelect") {
+    setWeatherThemePreview(event.target.value);
+  }
+  if (event.target?.id === "seasonalThemePreviewSelect") {
+    setSeasonalThemePreview(event.target.value);
+  }
+  if (event.target?.id === "christmasThemeEndDateInput") {
+    setChristmasThemeEndDate(event.target.value);
+  }
+  if (["tscIssueAudienceInput", "tscIssueSelectedStaffInput", "tscIssueDateInput", "tscIssueDueDateInput", "tscIssueReminderInput"].includes(event.target?.id)) {
+    updateTscIssueConfirmation();
+  }
+  if (["tscAnnouncementAudienceInput", "tscAnnouncementSelectedStaffInput", "tscAnnouncementAckInput", "tscAnnouncementExpiryInput"].includes(event.target?.id)) {
+    updateTscAnnouncementConfirmation();
+  }
+  if (event.target?.matches("[data-vehicle-assignment-index]")) {
+    await updateVehicleAssignment(event.target.dataset.vehicleAssignmentIndex, event.target.value);
+  }
+  if (event.target?.matches("[data-vehicle-document-file]")) {
+    const entry = await readVehicleRecordFile(event.target.files?.[0]);
+    if (entry?.error) await kcInfo(entry.error);
+    else vehicleDocumentDraft = entry;
+    renderVehicleRecordDetail(activeVehicleRecordId);
+  }
+  if (event.target?.matches("[data-vehicle-maintenance-file]")) {
+    const entry = await readVehicleRecordFile(event.target.files?.[0]);
+    if (entry?.error) await kcInfo(entry.error);
+    else vehicleMaintenanceDraft = entry;
+    renderVehicleRecordDetail(activeVehicleRecordId);
+  }
+  if (event.target?.matches("[data-replace-vehicle-document]")) {
+    await replaceVehicleDocument(event.target.dataset.replaceVehicleDocument, event.target.files?.[0]);
+  }
+  if (event.target?.id === "vehicleInspectionReviewFilter") {
+    renderVehicleInspectionReviews();
+    renderVehicleInspectionDetail("");
+  }
+  if (event.target?.id === "directorPayrollPeriodSelect") {
+    activeDirectorPayrollPeriod = event.target.value;
+    activeDirectorTab = "payroll";
+    await renderDirectorsArea();
+  }
+  if (event.target?.id === "directorAbsenceYearSelect") {
+    await renderDirectorsArea();
+  }
+});
+document.addEventListener("input", (event) => {
+  if (event.target?.id === "directorPayrollMonthInput") {
+    const button = document.querySelector("#createDirectorPayrollPeriodButton");
+    if (button) button.disabled = !event.target.value;
+  }
+});
+document.addEventListener("visibilitychange", updateHeaderSceneMotionState);
 publishFeedsButton?.addEventListener("click", publishIntegrationFeeds);
 refreshFeedsButton?.addEventListener("click", renderIntegrationFeeds);
 syncNowButton?.addEventListener("click", syncNow);
@@ -9434,8 +15565,87 @@ pinForm?.addEventListener("submit", (event) => {
   unlockHub(selectedUser);
 });
 lockHubButton?.addEventListener("click", lockHub);
+document.querySelector("#directorLogoutButton")?.addEventListener("click", async () => {
+  try {
+    await directorsApi("/director-logout", { method: "POST", body: "{}" });
+  } catch {
+    // Closing the local directors panel should still clear the visible screen.
+  }
+  directorsAreaState = null;
+  showSection("dashboard");
+});
 
 document.addEventListener("click", async (event) => {
+  const directorsPerformanceReportsButton = event.target.closest("[data-directors-performance-reports]");
+  if (directorsPerformanceReportsButton) {
+    activeDirectorPerformanceTechnician = directorsPerformanceReportsButton.dataset.directorsPerformanceReports || "";
+    await renderDirectorsArea();
+    document.querySelector("#directorTechnicianOutstandingReports")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return;
+  }
+
+  const directorsOpenStaffButton = event.target.closest("[data-directors-open-staff]");
+  if (directorsOpenStaffButton) {
+    openStaffDetail(directorsOpenStaffButton.dataset.directorsOpenStaff);
+    return;
+  }
+
+  const directorsLiveRow = event.target.closest(".directors-live-row");
+  if (directorsLiveRow && activateDirectorsOverviewRow(directorsLiveRow)) {
+    return;
+  }
+
+  const directorOverviewCard = event.target.closest("[data-director-overview-tab]");
+  if (directorOverviewCard) {
+    activeDirectorTab = directorOverviewCard.dataset.directorOverviewTab;
+    activeDirectorPayrollFocus = directorOverviewCard.dataset.directorOverviewFocus || "";
+    await renderDirectorsArea();
+    return;
+  }
+
+  const directorTab = event.target.closest("[data-director-tab]");
+  if (directorTab) {
+    activeDirectorTab = directorTab.dataset.directorTab;
+    activeDirectorPayrollFocus = "";
+    await renderDirectorsArea();
+    return;
+  }
+
+  const createPayrollButton = event.target.closest("#createDirectorPayrollPeriodButton");
+  if (createPayrollButton) {
+    await createDirectorPayrollPeriod();
+    return;
+  }
+
+  const periodSelect = event.target.closest("#directorPayrollPeriodSelect");
+  if (periodSelect) {
+    return;
+  }
+
+  const markReadyButton = event.target.closest("#directorMarkReadyButton");
+  if (markReadyButton) {
+    await updateDirectorPayrollStatus("Ready for Review", markReadyButton.dataset.periodVersion);
+    return;
+  }
+
+  const approvePayrollButton = event.target.closest("#directorApprovePayrollButton");
+  if (approvePayrollButton) {
+    await updateDirectorPayrollStatus("Approved", approvePayrollButton.dataset.periodVersion);
+    return;
+  }
+
+  const exportPayrollButton = event.target.closest("#directorExportPayrollButton");
+  if (exportPayrollButton) {
+    await exportDirectorPayroll(exportPayrollButton.dataset.periodVersion);
+    return;
+  }
+
+  const saveAdvanceButton = event.target.closest("#directorSaveAdvanceButton");
+  if (saveAdvanceButton) {
+    await saveDirectorSalaryAdvance(saveAdvanceButton.dataset.periodVersion);
+    return;
+  }
+
   const publishButton = event.target.closest("[data-publish-feeds]");
   if (publishButton) {
     publishIntegrationFeeds();
@@ -9460,10 +15670,155 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const resetHeaderThemeButton = event.target.closest("#resetHeaderThemePreviewButton");
+  if (resetHeaderThemeButton) {
+    resetHeaderThemePreview();
+    return;
+  }
+
   const plannerWeekTab = event.target.closest("[data-planner-week]");
   if (plannerWeekTab) {
     activePlannerWeek = plannerWeekTab.dataset.plannerWeek;
     renderPlanner();
+    return;
+  }
+
+  const tscTabButton = event.target.closest("[data-tsc-tab]");
+  if (tscTabButton) {
+    const section = document.querySelector("#training-safety-compliance");
+    const selectedTab = tscTabButton.dataset.tscTab || "dashboard";
+    section?.querySelectorAll("[data-tsc-tab]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.tscTab === selectedTab);
+    });
+    section?.querySelectorAll("[data-tsc-panel]").forEach((panel) => {
+      panel.classList.toggle("active", panel.dataset.tscPanel === selectedTab);
+    });
+    return;
+  }
+
+  const tscNewContentButton = event.target.closest("[data-tsc-content-new]");
+  if (tscNewContentButton) {
+    openTscContentEditor(null, TSC_TOOLBOX_TALK_COMMUNICATION_TYPE);
+    return;
+  }
+
+  const tscNewAnnouncementButton = event.target.closest("[data-tsc-announcement-new]");
+  if (tscNewAnnouncementButton) {
+    openTscAnnouncementEditor();
+    return;
+  }
+
+  const tscCancelAnnouncementButton = event.target.closest("[data-tsc-announcement-cancel]");
+  if (tscCancelAnnouncementButton) {
+    document.querySelector("#tscAnnouncementEditor").hidden = true;
+    return;
+  }
+
+  const tscSaveAnnouncementButton = event.target.closest("[data-tsc-announcement-save-draft]");
+  if (tscSaveAnnouncementButton) {
+    await saveTscAnnouncement("Draft");
+    return;
+  }
+
+  const tscSendAnnouncementButton = event.target.closest("[data-tsc-announcement-send]");
+  if (tscSendAnnouncementButton) {
+    await sendTscAnnouncement();
+    return;
+  }
+
+  const tscCancelContentButton = event.target.closest("[data-tsc-content-cancel]");
+  if (tscCancelContentButton) {
+    document.querySelector("#tscContentEditor").hidden = true;
+    return;
+  }
+
+  const tscSaveDraftButton = event.target.closest("[data-tsc-content-save-draft]");
+  if (tscSaveDraftButton) {
+    await saveTscContent("Draft");
+    return;
+  }
+
+  const tscSubmitContentButton = event.target.closest("[data-tsc-content-submit]");
+  if (tscSubmitContentButton) {
+    await saveTscContent("Submitted for Approval");
+    return;
+  }
+
+  const tscEditContentButton = event.target.closest("[data-tsc-content-edit]");
+  if (tscEditContentButton) {
+    const item = tscContentById(tscEditContentButton.dataset.tscContentEdit);
+    if (tscCommunicationTypeForContent(item || {}) === TSC_ANNOUNCEMENT_COMMUNICATION_TYPE) {
+      openTscAnnouncementEditor(item);
+    } else {
+      openTscContentEditor(item);
+    }
+    return;
+  }
+
+  const tscViewContentButton = event.target.closest("[data-tsc-content-view]");
+  if (tscViewContentButton) {
+    await viewTscContent(tscViewContentButton.dataset.tscContentView);
+    return;
+  }
+
+  const tscCloneContentButton = event.target.closest("[data-tsc-content-clone]");
+  if (tscCloneContentButton) {
+    cloneTscContent(tscCloneContentButton.dataset.tscContentClone);
+    return;
+  }
+
+  const tscApproveContentButton = event.target.closest("[data-tsc-content-approve]");
+  if (tscApproveContentButton) {
+    await updateTscContentStatus(tscApproveContentButton.dataset.tscContentApprove, "Approved");
+    return;
+  }
+
+  const tscArchiveContentButton = event.target.closest("[data-tsc-content-archive]");
+  if (tscArchiveContentButton) {
+    await updateTscContentStatus(tscArchiveContentButton.dataset.tscContentArchive, "Archived");
+    return;
+  }
+
+  const tscPublishContentButton = event.target.closest("[data-tsc-content-publish]");
+  if (tscPublishContentButton) {
+    await publishTscContent(tscPublishContentButton.dataset.tscContentPublish);
+    return;
+  }
+
+  const tscIssueContentButton = event.target.closest("[data-tsc-content-issue]");
+  if (tscIssueContentButton) {
+    await openTscIssueWizard(tscIssueContentButton.dataset.tscContentIssue);
+    return;
+  }
+
+  const tscIssueCancelButton = event.target.closest("[data-tsc-issue-cancel]");
+  if (tscIssueCancelButton) {
+    document.querySelector("#tscIssueWizard").hidden = true;
+    return;
+  }
+
+  const tscIssueSaveButton = event.target.closest("[data-tsc-issue-save]");
+  if (tscIssueSaveButton) {
+    await saveTscIssue();
+    return;
+  }
+
+  const tscDetailButton = event.target.closest("[data-tsc-detail-open]");
+  if (tscDetailButton) {
+    selectedTscIssueId = tscDetailButton.dataset.tscDetailOpen || "";
+    const detailPanel = document.querySelector("[data-tsc-communication-detail]");
+    if (detailPanel) {
+      detailPanel.hidden = false;
+      renderTscCommunicationDetail();
+      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      detailPanel.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
+    }
+    return;
+  }
+
+  const weeklyLeaveButton = event.target.closest("[data-weekly-leave-open]");
+  if (weeklyLeaveButton) {
+    openHolidayPlannerRecord(weeklyLeaveButton.dataset.weeklyLeaveOpen);
     return;
   }
 
@@ -9482,6 +15837,26 @@ document.addEventListener("click", async (event) => {
   const declineHolidayButton = event.target.closest("[data-decline-holiday]");
   if (declineHolidayButton) {
     declineHolidayRequest(declineHolidayButton.dataset.declineHoliday);
+    return;
+  }
+
+  const staffNotificationButton = event.target.closest("[data-open-staff-notification]");
+  if (staffNotificationButton) {
+    openStaffNotification(staffNotificationButton.dataset.openStaffNotification);
+    return;
+  }
+
+  const holidayPlannerOpenButton = event.target.closest("[data-holiday-planner-open]");
+  if (holidayPlannerOpenButton) {
+    openHolidayPlannerRecord(holidayPlannerOpenButton.dataset.holidayPlannerOpen);
+    return;
+  }
+
+  const holidayPlannerDayButton = event.target.closest("[data-holiday-day]");
+  if (holidayPlannerDayButton) {
+    const date = holidayPlannerDayButton.dataset.holidayDay || "";
+    expandedHolidayPlannerDay = expandedHolidayPlannerDay === date ? "" : date;
+    renderHolidayPlanner();
     return;
   }
 
@@ -9554,6 +15929,68 @@ document.addEventListener("click", async (event) => {
       link.download = activeCertificateRecord.documentFileName || activeCertificateRecord.certificate || "certificate";
       link.click();
     }
+      return;
+  }
+
+  async function openCompletedReportFolder(reportId, button) {
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "Opening...";
+    try {
+      let opened = false;
+      for (const url of hubApiUrls("/api/phase-05e/open-report-folder")) {
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reportId })
+          });
+          const data = await response.json().catch(() => ({}));
+          if (response.ok && data.ok && (data.launchAccepted || data.opened || data.validated)) {
+            opened = true;
+            break;
+          }
+          if (data?.message) {
+            await kcInfo(data.message);
+            return;
+          }
+        } catch {
+          // Try the next local helper port.
+        }
+      }
+      if (!opened) {
+        await kcInfo("Unable to open the OneDrive folder.");
+      }
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+
+  const openReportFolderButton = event.target.closest("[data-open-report-folder]");
+  if (openReportFolderButton) {
+    openCompletedReportFolder(openReportFolderButton.dataset.openReportFolder, openReportFolderButton);
+    return;
+  }
+
+  const historyExpandButton = event.target.closest("[data-history-expand]");
+  if (historyExpandButton) {
+    const card = historyExpandButton.closest(".history-card");
+    const expanded = historyExpandButton.getAttribute("aria-expanded") === "true";
+    historyExpandButton.setAttribute("aria-expanded", String(!expanded));
+    card?.classList.toggle("expanded", !expanded);
+    return;
+  }
+
+  const viewPhase05eReportButton = event.target.closest("[data-view-phase05e-report]");
+  if (viewPhase05eReportButton) {
+    openPhase05eReportDetail(viewPhase05eReportButton.dataset.viewPhase05eReport);
+    return;
+  }
+
+  const viewHistoryJobButton = event.target.closest("[data-view-job]");
+  if (viewHistoryJobButton) {
+    openJobDetail(viewHistoryJobButton.dataset.viewJob);
     return;
   }
 
@@ -9635,6 +16072,12 @@ document.addEventListener("click", async (event) => {
   const replaceTrainingCertificateButton = event.target.closest("[data-replace-training-certificate]");
   if (replaceTrainingCertificateButton) {
     openDataDialog("training", replaceTrainingCertificateButton.dataset.replaceTrainingCertificate);
+    return;
+  }
+
+  const trainingLifecycleButton = event.target.closest("[data-training-lifecycle]");
+  if (trainingLifecycleButton) {
+    await updateTrainingLifecycle(trainingLifecycleButton.dataset.trainingIndex, trainingLifecycleButton.dataset.trainingLifecycle);
     return;
   }
 
@@ -9779,13 +16222,26 @@ document.addEventListener("click", async (event) => {
   const staffAttendanceButton = event.target.closest("[data-staff-detail-attendance]");
   if (staffAttendanceButton) {
     staffDetailDialog?.close();
-    openDataDialog("attendance", "", {
-      date: today,
-      name: staffAttendanceButton.dataset.staffDetailAttendance,
-      status: "Absent - Called in Sick",
-      category: "General Illness",
-      returnToWorkCompleted: false
-    });
+    openAttendanceDialog(staffAttendanceButton.dataset.staffDetailAttendance);
+    return;
+  }
+
+  const editAttendanceButton = event.target.closest("[data-edit-attendance]");
+  if (editAttendanceButton) {
+    const record = attendanceRecords[Number(editAttendanceButton.dataset.editAttendance)];
+    if (record) openAttendanceDialog(record.name, editAttendanceButton.dataset.editAttendance);
+    return;
+  }
+
+  const voidAttendanceButton = event.target.closest("[data-void-attendance]");
+  if (voidAttendanceButton) {
+    const record = attendanceRecords[Number(voidAttendanceButton.dataset.voidAttendance)];
+    if (!record || attendanceIsVoid(record)) return;
+    const reason = await kcInput("Please enter the reason for voiding this attendance record.", "Void reason");
+    if (reason === "cancel") return;
+    attendanceRecordIndex.value = voidAttendanceButton.dataset.voidAttendance;
+    attendanceCorrectionReason.value = reason || "";
+    await saveAttendanceDialog("void");
     return;
   }
 
@@ -9802,9 +16258,63 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const openStaffHolidayPlannerButton = event.target.closest("[data-open-staff-holiday-planner]");
+  if (openStaffHolidayPlannerButton) {
+    staffDetailDialog?.close();
+    openStaffHolidayPlanner(openStaffHolidayPlannerButton.dataset.openStaffHolidayPlanner);
+    return;
+  }
+
   const manageButton = event.target.closest("[data-manage]");
   if (manageButton?.dataset.manage) {
     openDataDialog(manageButton.dataset.manage);
+    return;
+  }
+
+  const removeVehicleAssignmentButton = event.target.closest("[data-remove-vehicle-assignment]");
+  if (removeVehicleAssignmentButton) {
+    await updateVehicleAssignment(removeVehicleAssignmentButton.dataset.removeVehicleAssignment, "");
+    return;
+  }
+
+  const viewVehicleRecordButton = event.target.closest("[data-view-vehicle-record]");
+  if (viewVehicleRecordButton) {
+    vehicleDocumentDraft = null;
+    vehicleMaintenanceDraft = null;
+    renderVehicleRecordDetail(viewVehicleRecordButton.dataset.viewVehicleRecord);
+    return;
+  }
+
+  const closeVehicleRecordButton = event.target.closest("[data-close-vehicle-record]");
+  if (closeVehicleRecordButton) {
+    activeVehicleRecordId = "";
+    vehicleDocumentDraft = null;
+    vehicleMaintenanceDraft = null;
+    renderVehicleRecordDetail("");
+    return;
+  }
+
+  const openVehicleDocumentButton = event.target.closest("[data-open-vehicle-document]");
+  if (openVehicleDocumentButton) {
+    await openVehicleDocument(openVehicleDocumentButton.dataset.openVehicleDocument);
+    return;
+  }
+
+  const supersedeVehicleDocumentButton = event.target.closest("[data-supersede-vehicle-document]");
+  if (supersedeVehicleDocumentButton) {
+    await supersedeVehicleDocument(supersedeVehicleDocumentButton.dataset.supersedeVehicleDocument);
+    return;
+  }
+
+  const refreshVehicleInspectionsButton = event.target.closest("[data-refresh-vehicle-inspections]");
+  if (refreshVehicleInspectionsButton) {
+    await refreshVehicleInspectionReviews();
+    return;
+  }
+
+  const viewVehicleInspectionButton = event.target.closest("[data-view-vehicle-inspection]");
+  if (viewVehicleInspectionButton) {
+    renderVehicleInspectionDetail(viewVehicleInspectionButton.dataset.viewVehicleInspection);
     return;
   }
 
@@ -9817,6 +16327,12 @@ document.addEventListener("click", async (event) => {
   const deleteButton = event.target.closest("[data-delete-record]");
   if (deleteButton) {
     deleteDataRecord(deleteButton.dataset.deleteRecord, deleteButton.dataset.recordIndex);
+    return;
+  }
+
+  const phase05eReportButton = event.target.closest("[data-open-phase05e-report]");
+  if (phase05eReportButton) {
+    openPhase05eReportDetail(phase05eReportButton.dataset.openPhase05eReport);
     return;
   }
 
@@ -9848,6 +16364,35 @@ dataForm.addEventListener("submit", async (event) => {
     dataDialogSaving = false;
     if (dataSaveButton) dataSaveButton.disabled = false;
     if (dataSaveSystemButton) dataSaveSystemButton.disabled = false;
+  }
+});
+
+document.addEventListener("submit", async (event) => {
+  const inspectionReviewForm = event.target.closest("[data-vehicle-inspection-review-form]");
+  if (inspectionReviewForm) {
+    event.preventDefault();
+    await saveVehicleInspectionReview(inspectionReviewForm);
+    return;
+  }
+
+  const defectReviewForm = event.target.closest("[data-vehicle-defect-review-form]");
+  if (defectReviewForm) {
+    event.preventDefault();
+    await saveVehicleDefectReview(defectReviewForm);
+    return;
+  }
+
+  const vehicleDocumentForm = event.target.closest("[data-vehicle-document-form]");
+  if (vehicleDocumentForm) {
+    event.preventDefault();
+    await saveVehicleDocument(vehicleDocumentForm);
+    return;
+  }
+
+  const vehicleMaintenanceForm = event.target.closest("[data-vehicle-maintenance-form]");
+  if (vehicleMaintenanceForm) {
+    event.preventDefault();
+    await saveVehicleMaintenance(vehicleMaintenanceForm);
   }
 });
 
@@ -9902,11 +16447,20 @@ tableBody.addEventListener("click", (event) => {
   }
 });
 
+["#dashboardJobDateFilter", "#dashboardTechnicianFilter", "#dashboardStatusFilter"].forEach((selector) => {
+  document.querySelector(selector)?.addEventListener("change", renderDashboard);
+});
+
 installNavIcons();
+syncSidebarGroupsForSection(document.querySelector(".nav-button.active")?.dataset.section || "dashboard");
 initialiseAuth();
+syncDirectorsMenuVisibility();
 updateLiveDateTime();
 setInterval(updateLiveDateTime, 30000);
+applyDashboardHeaderTheme();
+updateHeaderSceneMotionState();
 updateOrpingtonWeather();
 setInterval(updateOrpingtonWeather, 600000);
 loadCommandData();
+
 

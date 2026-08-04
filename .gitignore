@@ -11,3 +11,14 @@ data/backups/
 data/tech-app-pins-private.json
 tmp/
 visual-check-*.png
+
+# Revolut Business API certificate material
+Kingswood Secure Secrets/
+**/Kingswood Secure Secrets/
+**/Revolut Business API/
+**/kingswood-revolut-private.pem
+**/kingswood-revolut-public.cer
+**/revolut-client-id.secret
+**/client-assertion.jwt.secret
+**/latest-consent-url.secret
+**/revolut-oauth-tokens.secret.json
