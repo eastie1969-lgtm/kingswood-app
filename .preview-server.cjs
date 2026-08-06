@@ -1556,8 +1556,13 @@ function phase10WriteData(data) {
 }
 
 function revolutReadSecretFile(filePath) {
-  if (!fs.existsSync(filePath)) throw new Error("Revolut connection is not configured.");
-  return fs.readFileSync(filePath, "utf8").trim();
+  const renderSecretPath = path.join("/etc/secrets", path.basename(filePath));
+  const candidates = [filePath, renderSecretPath]
+    .filter(Boolean)
+    .filter((candidate, index, list) => list.indexOf(candidate) === index);
+  const match = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!match) throw new Error("Revolut connection is not configured.");
+  return fs.readFileSync(match, "utf8").trim();
 }
 
 function revolutBase64Url(value) {
@@ -1612,11 +1617,17 @@ function revolutHttpsJson(endpoint, options = {}) {
 }
 
 function revolutReadTokens() {
+  const renderBootstrapTokenFile = path.join("/etc/secrets", path.basename(revolutTokenFile));
+  if (!fs.existsSync(revolutTokenFile) && fs.existsSync(renderBootstrapTokenFile)) {
+    fs.mkdirSync(path.dirname(revolutTokenFile), { recursive: true });
+    fs.copyFileSync(renderBootstrapTokenFile, revolutTokenFile);
+  }
   if (!fs.existsSync(revolutTokenFile)) return null;
   return JSON.parse(fs.readFileSync(revolutTokenFile, "utf8") || "{}");
 }
 
 function revolutWriteTokens(tokens) {
+  fs.mkdirSync(path.dirname(revolutTokenFile), { recursive: true });
   fs.writeFileSync(revolutTokenFile, `${JSON.stringify(tokens, null, 2)}\n`, "utf8");
 }
 

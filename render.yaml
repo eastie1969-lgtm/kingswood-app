@@ -19,3 +19,5 @@ services:
         value: /var/data/proofing-reports
       - key: OPENAI_MODEL
         value: gpt-5.4-mini
+      - key: REVOLUT_BUSINESS_API_DIR
+        value: /var/data/revolut-business-api
