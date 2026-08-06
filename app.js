@@ -1030,9 +1030,9 @@ const dataModels = {
       ["residentPhone", "Resident phone"],
       ["technician", "Technician", "job-technician-select"],
       ["rpeRequired", "Mandatory RPE required", "checkbox"],
-      ["jobDetails", "Job details", "snippet-textarea"],
+      ["jobDetails", "Work instructions / job details", "snippet-textarea"],
       ["reportNotes", "Report notes", "textarea"],
-      ["photos", "Screenshot / photos", "snippet-textarea"],
+      ["photos", "Pre-work images or reference screenshots", "snippet-textarea"],
       ["cost", "Valuation cost", "number"]
     ]
   },
@@ -1560,7 +1560,12 @@ function companyDocumentReminderSummary() {
 }
 
 function staffNames() {
-  return [...new Set(staffProfiles.map((staff) => staff.name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  return [...new Set(staffProfiles
+    .filter((staff) => String(staff.status || "Active").toLowerCase() !== "left")
+    .filter((staff) => String(staff.role || "").toLowerCase().includes("technician") || staff.technicianId)
+    .map((staff) => staff.name)
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
 }
 
 function renderSelectField(key, label, value, options, displayLabel = (option) => option) {
@@ -1601,6 +1606,25 @@ function renderJobTechnicianField(key, label, value, jobDate = today) {
       </select>
     </label>
   `;
+}
+
+function dataDialogProgressMessage(collection = "") {
+  const messages = {
+    jobs: "Checking job details...",
+    clients: "Checking client details...",
+    vehicles: "Checking vehicle details...",
+    compliance: "Checking compliance details...",
+    training: "Checking training details...",
+    staff: "Checking staff details...",
+    holidays: "Checking holiday details...",
+    companyHolidays: "Checking company holiday details...",
+    planner: "Checking planner details...",
+    attendance: "Checking attendance details...",
+    documents: "Checking document details...",
+    assets: "Checking asset details...",
+    fines: "Checking fine details..."
+  };
+  return messages[collection] || "Checking details...";
 }
 
 function iconSvg(name) {
@@ -3906,11 +3930,17 @@ function openDataDialog(collection, index = "", seed = {}) {
       return renderSelectField(key, label, fieldValue(item, key), ["Reassign job", "Cancel job"]);
     }
     if (type === "snippet-textarea") {
+      const placeholder = key === "photos"
+        ? "Paste or drag pre-work reference images here, or type image notes."
+        : "Paste or type the job instructions, access notes or work details.";
+      const hint = key === "photos"
+        ? "Accepts pasted screenshots or dragged image files."
+        : "Use this for written job-pack information. Reference images belong in the image field below.";
       return `
         <label class="full-width snippet-label">
           ${label}
-          <textarea class="snippet-target" data-field="${key}" data-snippet-field="${key}" rows="4" placeholder="Paste or drag a Snipping Tool screenshot here, or type notes.">${value}</textarea>
-          <span class="field-hint">Accepts typed notes, pasted screenshots, or dragged image files.</span>
+          <textarea class="snippet-target" data-field="${key}" data-snippet-field="${key}" rows="4" placeholder="${escapeHtml(placeholder)}">${value}</textarea>
+          <span class="field-hint">${escapeHtml(hint)}</span>
         </label>
       `;
     }
@@ -5847,6 +5877,14 @@ async function saveDataDialog(action = "default") {
     item.createdAt = item.createdAt || new Date().toISOString();
     item.updatedAt = new Date().toISOString();
   }
+  if (collection === "clients") {
+    if (!item.title) {
+      setDataDialogStatus("Please enter the client name.", "error");
+      await kcInfo("Please enter the client name before saving.");
+      return false;
+    }
+    item.description = item.description || "";
+  }
   if (collection === "documents") {
     if (!companyDocumentCategories.includes(item.category)) {
       await kcInfo("Please choose a valid Company Documents category.");
@@ -6166,12 +6204,30 @@ function escapeHtml(value) {
 
 function daysUntil(dateValue) {
   const oneDay = 24 * 60 * 60 * 1000;
-  return Math.ceil((new Date(dateValue) - new Date(today)) / oneDay);
+  const parseLocalDate = (value) => {
+    const [year, month, day] = String(value || "").slice(0, 10).split("-").map(Number);
+    if (!year || !month || !day) return null;
+    const parsed = new Date(year, month - 1, day);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+  const target = parseLocalDate(dateValue);
+  const baseline = parseLocalDate(today);
+  if (!target || !baseline) return Number.POSITIVE_INFINITY;
+  return Math.ceil((target - baseline) / oneDay);
 }
 
 function isReminderDate(dateValue) {
   const days = daysUntil(dateValue);
-  return days >= 0 && days <= 45;
+  return Number.isFinite(days) && days <= 45;
+}
+
+function vehicleExpiryStatus(dateValue, reminderDays = 45) {
+  if (!dateValue) return { label: "-", className: "neutral", days: Number.POSITIVE_INFINITY };
+  const days = daysUntil(dateValue);
+  if (!Number.isFinite(days)) return { label: String(dateValue), className: "neutral", days };
+  if (days < 0) return { label: formatDateUk(dateValue), className: "urgent", days };
+  if (days <= reminderDays) return { label: formatDateUk(dateValue), className: "warning", days };
+  return { label: formatDateUk(dateValue), className: "ok", days };
 }
 
 function complianceStatus(item) {
@@ -9036,7 +9092,7 @@ async function parseProofingNotesWithAi() {
   }
 
   parseNativeProofingNotes.disabled = true;
-  proofingSetStatus("AI is preparing the proofing report sections...");
+  proofingSetStatus("Preparing the proofing report sections...");
 
   try {
     const response = await fetch("/api/ai-proofing-report", {
@@ -9051,11 +9107,11 @@ async function parseProofingNotesWithAi() {
     applyProofingDraft(result.draft);
     proofingSetStatus(result.aiUsed
       ? "AI report sections populated. Please review and edit before saving."
-      : "Report sections populated locally. Add/check the OpenAI key to use AI."
+      : "Report sections populated locally. Please review and edit before saving."
     );
   } catch (error) {
     parseProofingNotesLocally();
-    proofingSetStatus(`${error.message} Local parsing has been used for now.`, true);
+    proofingSetStatus("Report sections populated locally. Please review and edit before saving.", false);
   } finally {
     parseNativeProofingNotes.disabled = false;
   }
@@ -9795,13 +9851,15 @@ function renderVehicles() {
   document.querySelector("#vehiclesTableBody").innerHTML = vehicles.map((rawVehicle, index) => {
     const vehicle = asVehicleObject(rawVehicle);
     const assigned = vehicleAssignedTechnician(vehicle);
+    const motStatus = vehicleExpiryStatus(vehicle.mot);
+    const insuranceStatus = vehicleExpiryStatus(vehicle.insurance);
     return `
     <tr>
       <td><strong>${escapeHtml(vehicle.registration)}</strong><br><span class="meta">${escapeHtml(vehicle.vehicleId)}</span></td>
       <td>${escapeHtml(vehicle.vehicle)}</td>
       <td>${escapeHtml(vehicle.driver || assigned?.name || "-")}</td>
-      <td><span class="status ${isReminderDate(vehicle.mot) ? "warning" : "ok"}">${escapeHtml(vehicle.mot || "-")}</span></td>
-      <td><span class="status ${isReminderDate(vehicle.insurance) ? "warning" : "ok"}">${escapeHtml(vehicle.insurance || "-")}</span></td>
+      <td><span class="status ${motStatus.className}">${escapeHtml(motStatus.label)}</span></td>
+      <td><span class="status ${insuranceStatus.className}">${escapeHtml(insuranceStatus.label)}</span></td>
       <td><span class="status ${vehicle.tracker === "Active" ? "ok" : "warning"}">${escapeHtml(vehicle.tracker || "-")}</span></td>
       <td>${vehicleAssignmentSelect(vehicle, index)}</td>
       <td><div class="record-actions"><button class="secondary-button" type="button" data-view-vehicle-record="${escapeHtml(vehicle.vehicleId || "")}">View</button>${recordButtons("vehicles", index)}</div></td>
@@ -11916,7 +11974,7 @@ function renderCards(target, items) {
     const item = target === "#settingsGrid" ? rawItem : asCardObject(rawItem);
     const settingsMeta = target === "#settingsGrid" ? settingsCardMeta[index] : null;
     const iconName = settingsMeta?.[0] || (target === "#documentsGrid" ? "folder" : target === "#clientsGrid" ? "building" : "dashboard");
-    const badgeText = settingsMeta?.[1]?.() || (collection ? `${items.length} records` : "Ready");
+    const badgeText = settingsMeta?.[1]?.() || (collection === "clients" ? "Client record" : collection === "documents" ? "Document record" : "Ready");
     const settingsAction = target === "#settingsGrid" ? ` role="button" tabindex="0" data-settings-action="${item.id}"` : "";
     return `
     <article class="module-card"${settingsAction}>
@@ -16354,7 +16412,7 @@ dataForm.addEventListener("submit", async (event) => {
   dataDialogSaving = true;
   if (dataSaveButton) dataSaveButton.disabled = true;
   if (dataSaveSystemButton) dataSaveSystemButton.disabled = true;
-  setDataDialogStatus("Checking job details...", "");
+  setDataDialogStatus(dataDialogProgressMessage(dataCollectionInput.value), "");
   try {
     const saved = await saveDataDialog(event.submitter?.value || "default");
     if (saved !== false) {

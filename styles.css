@@ -5096,12 +5096,15 @@ form {
 }
 
 .record-actions {
+  align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }
 
 .record-actions button {
+  flex: 0 0 auto;
   min-height: 34px;
   padding: 7px 10px;
 }
@@ -5582,7 +5585,8 @@ label {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 table {
@@ -14148,7 +14152,7 @@ main {
 
 /* Dashboard header account-block width refinement v260. */
 .topbar {
-  grid-template-columns: minmax(390px, 1fr) minmax(170px, 190px) minmax(270px, 300px) minmax(112px, 128px) !important;
+  grid-template-columns: minmax(300px, 1fr) minmax(170px, 190px) minmax(270px, 300px) minmax(112px, 128px) !important;
   max-width: 100%;
   overflow: hidden;
 }
@@ -14166,6 +14170,11 @@ main {
 .topbar-title-block h1,
 .topbar-title-block .user-greeting {
   min-width: 0;
+}
+
+.topbar-title-block h1 {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .topbar-title-block .topbar-revolut-balance {
@@ -14211,13 +14220,13 @@ main {
 
 @media (max-width: 1500px) {
   .topbar {
-    grid-template-columns: minmax(360px, 1fr) minmax(160px, 180px) minmax(255px, 285px) minmax(108px, 122px) !important;
+    grid-template-columns: minmax(280px, 1fr) minmax(160px, 180px) minmax(255px, 285px) minmax(108px, 122px) !important;
   }
 }
 
 @media (max-width: 1320px) {
   .topbar {
-    grid-template-columns: minmax(330px, 1fr) minmax(150px, 170px) minmax(238px, 270px) minmax(104px, 118px) !important;
+    grid-template-columns: minmax(250px, 1fr) minmax(145px, 165px) minmax(225px, 255px) minmax(104px, 118px) !important;
     padding-left: 14px !important;
     padding-right: 14px !important;
   }
