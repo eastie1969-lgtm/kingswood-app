@@ -394,6 +394,90 @@ function writeJsonSafely(filePath, content, backupPrefix) {
   return backupPath;
 }
 
+function defaultCommandCentreDataFile() {
+  return path.join(root, "data", "command-centre-data.json");
+}
+
+function commandDataStaffCount(data = {}) {
+  return Array.isArray(data.staffProfiles) ? data.staffProfiles.length : 0;
+}
+
+function commandDataHasKevinDirector(data = {}) {
+  return (data.staffProfiles || []).some((profile) =>
+    directorTextValue(profile.staffId) === DIRECTOR_STAFF.Kevin.staffId
+    && directorTextValue(profile.role).toLowerCase() === "director"
+  );
+}
+
+function commandDataLooksLikeBrowserFallback(data = {}) {
+  const staffCount = commandDataStaffCount(data);
+  if (!staffCount || staffCount > 6) return false;
+  const staffNames = new Set((data.staffProfiles || []).map((profile) => directorTextValue(profile.name).toLowerCase()));
+  const fallbackNames = ["dan", "mason", "aiden", "kev"].filter((name) => staffNames.has(name)).length;
+  return fallbackNames >= 2 && !commandDataHasKevinDirector(data);
+}
+
+function commandDataLooksUnsafeToSave(incoming = {}, existing = {}) {
+  const existingStaffCount = commandDataStaffCount(existing);
+  const incomingStaffCount = commandDataStaffCount(incoming);
+  if (!incomingStaffCount) return true;
+  if (commandDataLooksLikeBrowserFallback(incoming)) return true;
+  return existingStaffCount > 0 && incomingStaffCount < Math.max(2, Math.ceil(existingStaffCount / 2));
+}
+
+function kevinDirectorProfileForMigration(existingProfile = {}) {
+  return {
+    ...existingProfile,
+    staffId: DIRECTOR_STAFF.Kevin.staffId,
+    name: DIRECTOR_STAFF.Kevin.name,
+    role: "Director",
+    status: "Active",
+    employmentStatus: "Active",
+    directorAccessAuthority: true,
+    phase10DirectorAccess: true,
+    payrollActive: false
+  };
+}
+
+function migrateKevinDirectorAccess(data = {}) {
+  const staffProfiles = Array.isArray(data.staffProfiles) ? data.staffProfiles : [];
+  const index = staffProfiles.findIndex((profile) =>
+    directorTextValue(profile.staffId) === DIRECTOR_STAFF.Kevin.staffId
+  );
+  if (index >= 0) {
+    const existing = staffProfiles[index];
+    const repaired = kevinDirectorProfileForMigration(existing);
+    const changed = JSON.stringify(existing) !== JSON.stringify(repaired);
+    if (!changed) return { data: { ...data, staffProfiles }, changed: false };
+    const nextProfiles = staffProfiles.slice();
+    nextProfiles[index] = repaired;
+    return { data: { ...data, staffProfiles: nextProfiles }, changed: true };
+  }
+  return {
+    data: { ...data, staffProfiles: [...staffProfiles, kevinDirectorProfileForMigration()] },
+    changed: true
+  };
+}
+
+function ensureHostedCommandDataReady() {
+  const bundledDataFile = defaultCommandCentreDataFile();
+  if (!fs.existsSync(dataFile) && dataFile !== bundledDataFile && fs.existsSync(bundledDataFile)) {
+    fs.mkdirSync(path.dirname(dataFile), { recursive: true });
+    fs.copyFileSync(bundledDataFile, dataFile);
+  }
+  if (!fs.existsSync(dataFile)) return;
+  let data = {};
+  try {
+    data = JSON.parse(fs.readFileSync(dataFile, "utf8") || "{}");
+  } catch {
+    return;
+  }
+  const migration = migrateKevinDirectorAccess(data);
+  if (migration.changed) {
+    writeJsonSafely(dataFile, `${JSON.stringify(migration.data, null, 2)}\n`, "command-centre-data");
+  }
+}
+
 function csvEscape(value) {
   const text = String(value ?? "");
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -4044,6 +4128,7 @@ function phase05bFeedForSession(session) {
 }
 
 function readCommandCentreData() {
+  ensureHostedCommandDataReady();
   if (!fs.existsSync(dataFile)) return {};
   try {
     return JSON.parse(fs.readFileSync(dataFile, "utf8") || "{}");
@@ -6983,10 +7068,18 @@ const server = http.createServer((request, response) => {
     request.on("end", () => {
       try {
         const parsed = JSON.parse(body);
-        if (Array.isArray(parsed.vehicles)) {
-          parsed.vehicles = normaliseVehicleCollection(parsed.vehicles);
+        const existing = readCommandCentreData();
+        if (commandDataLooksUnsafeToSave(parsed, existing)) {
+          response.writeHead(409, { ...jsonHeaders, "Content-Type": "application/json; charset=utf-8" });
+          response.end(JSON.stringify({ saved: false, message: "Hosted data save rejected because the submitted data is incomplete." }));
+          return;
         }
-        const backupPath = writeJsonSafely(dataFile, `${JSON.stringify(parsed, null, 2)}\n`, "command-centre-data");
+        const migrated = migrateKevinDirectorAccess(parsed);
+        const safeData = migrated.data;
+        if (Array.isArray(parsed.vehicles)) {
+          safeData.vehicles = normaliseVehicleCollection(parsed.vehicles);
+        }
+        const backupPath = writeJsonSafely(dataFile, `${JSON.stringify(safeData, null, 2)}\n`, "command-centre-data");
         response.writeHead(200, { ...jsonHeaders, "Content-Type": "application/json; charset=utf-8" });
         response.end(JSON.stringify({ saved: true, backupPath, dataFile }));
       } catch {
