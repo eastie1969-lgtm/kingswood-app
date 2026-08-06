@@ -14148,7 +14148,60 @@ main {
 
 /* Dashboard header account-block width refinement v260. */
 .topbar {
-  grid-template-columns: minmax(210px, 1fr) minmax(170px, 190px) minmax(270px, 300px) minmax(112px, 128px) !important;
+  grid-template-columns: minmax(390px, 1fr) minmax(170px, 190px) minmax(270px, 300px) minmax(112px, 128px) !important;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.topbar-title-block {
+  align-items: center;
+  column-gap: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  min-width: 0;
+  padding-right: 0 !important;
+}
+
+.topbar-title-block .eyebrow,
+.topbar-title-block h1,
+.topbar-title-block .user-greeting {
+  min-width: 0;
+}
+
+.topbar-title-block .topbar-revolut-balance {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  justify-self: end;
+  position: static;
+  right: auto;
+  top: auto;
+  transform: none;
+}
+
+.topbar-onedrive {
+  display: grid;
+  gap: 4px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.topbar-onedrive strong,
+.topbar-onedrive .onedrive-status-line,
+.topbar-onedrive .last-saved-line {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.topbar-onedrive .onedrive-status-line {
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-onedrive .last-saved-line {
+  display: block;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .topbar .user-panel {
@@ -14158,27 +14211,78 @@ main {
 
 @media (max-width: 1500px) {
   .topbar {
-    grid-template-columns: minmax(205px, 1fr) minmax(165px, 185px) minmax(265px, 295px) minmax(112px, 124px) !important;
+    grid-template-columns: minmax(360px, 1fr) minmax(160px, 180px) minmax(255px, 285px) minmax(108px, 122px) !important;
   }
 }
 
 @media (max-width: 1320px) {
   .topbar {
-    grid-template-columns: minmax(190px, 1fr) minmax(160px, 175px) minmax(250px, 280px) minmax(108px, 120px) !important;
+    grid-template-columns: minmax(330px, 1fr) minmax(150px, 170px) minmax(238px, 270px) minmax(104px, 118px) !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  .topbar-title-block {
+    grid-template-columns: minmax(0, 1fr) 122px;
+  }
+
+  .topbar-title-block .topbar-revolut-balance {
+    width: 122px;
+  }
+
+  .topbar-title-block .topbar-revolut-balance strong {
+    font-size: 19px;
   }
 }
 
 @media (max-width: 1180px) {
   .topbar {
-    grid-template-columns: minmax(190px, 1fr) minmax(160px, 175px) minmax(250px, 280px) minmax(108px, 120px) !important;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 260px) !important;
+    grid-auto-rows: auto;
   }
 
   body[data-active-section="dashboard"] .topbar-title-block {
     padding-right: 0;
   }
 
+  .topbar-title-block {
+    grid-column: 1 / -1;
+  }
+
+  .topbar-onedrive,
+  .topbar-live-block,
+  .topbar .user-panel {
+    min-height: 68px;
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .topbar-title-block {
+    grid-template-columns: minmax(0, 1fr) minmax(116px, 126px);
+  }
+
+  .topbar-live-block {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .topbar .user-panel {
+    justify-self: stretch;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar-title-block {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .topbar-title-block .topbar-revolut-balance {
-    display: none !important;
+    justify-self: start;
+    margin-top: 8px;
+    width: min(160px, 100%);
   }
 }
 
