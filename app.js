@@ -894,6 +894,7 @@ const pinMessage = document.querySelector("#pinMessage");
 const userGreeting = document.querySelector("#userGreeting");
 const signedInUser = document.querySelector("#signedInUser");
 const lockHubButton = document.querySelector("#lockHubButton");
+const mobileMenuButton = document.querySelector("#mobileMenuButton");
 const publishFeedsButton = document.querySelector("#publishFeedsButton");
 const refreshFeedsButton = document.querySelector("#refreshFeedsButton");
 const integrationStatus = document.querySelector("#integrationStatus");
@@ -15188,6 +15189,16 @@ function showSection(sectionId) {
   if (sectionId === "directors") {
     void refreshDirectorsArea();
   }
+  closeMobileMenu();
+}
+
+function setMobileMenuOpen(open) {
+  document.body.classList.toggle("mobile-menu-open", Boolean(open));
+  mobileMenuButton?.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function closeMobileMenu() {
+  setMobileMenuOpen(false);
 }
 
 function updateProofingFrame(sectionId) {
@@ -15222,6 +15233,27 @@ function applyGlobalSearch() {
 
 document.querySelectorAll(".nav-button").forEach((button) => {
   button.addEventListener("click", () => showSection(button.dataset.section));
+});
+
+mobileMenuButton?.addEventListener("click", () => {
+  setMobileMenuOpen(!document.body.classList.contains("mobile-menu-open"));
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && document.body.classList.contains("mobile-menu-open")) {
+    closeMobileMenu();
+  }
+});
+
+document.addEventListener("click", (event) => {
+  if (!document.body.classList.contains("mobile-menu-open")) {
+    return;
+  }
+  const target = event.target;
+  if (target instanceof Element && (target.closest(".sidebar") || target.closest("#mobileMenuButton"))) {
+    return;
+  }
+  closeMobileMenu();
 });
 
 document.querySelectorAll(".nav-group-toggle").forEach((button) => {

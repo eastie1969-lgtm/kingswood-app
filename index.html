@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Kingswood Command Centre</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-    <link rel="stylesheet" href="styles.css?v=260">
+    <link rel="stylesheet" href="styles.css?v=261">
   </head>
   <body class="locked">
     <section class="auth-screen" id="authScreen" aria-label="Command Centre PIN">
@@ -37,7 +37,7 @@
     </section>
 
     <div class="app-shell kw-dashboard-layout">
-      <aside class="sidebar kw-sidebar">
+      <aside class="sidebar kw-sidebar" id="mobileSidebar">
         <div class="brand-block">
           <div class="brand-animated-lockup" aria-label="Kingswood Connect">
             <img class="brand-animated-emblem" src="assets/kingswood-k-emblem.png" alt="">
@@ -132,6 +132,7 @@
               <small id="dashboardRevolutStatus" class="hidden">Low balance</small>
             </div>
           </div>
+          <button class="mobile-menu-button" id="mobileMenuButton" type="button" aria-controls="mobileSidebar" aria-expanded="false">Menu</button>
           <div class="topbar-onedrive" aria-label="OneDrive status">
             <span>OneDrive status</span>
             <strong id="storageStatus">Checking OneDrive</strong>
@@ -2482,6 +2483,6 @@
     </dialog>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="app.js?v=259"></script>
+    <script src="app.js?v=261"></script>
   </body>
 </html>
