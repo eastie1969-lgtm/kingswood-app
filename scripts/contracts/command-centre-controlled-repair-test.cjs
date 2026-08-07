@@ -49,6 +49,8 @@ assert.strictEqual(august2026.indexOf("2026-08-06") % 7, 3, "6 August 2026 must 
 const lastTableShellRule = css.slice(css.lastIndexOf(".table-shell"));
 assert.match(lastTableShellRule, /overflow-x:\s*auto/, "Active table shell styling must allow horizontal scrolling instead of clipping actions.");
 assert.match(css, /\.record-actions\s*{[\s\S]*flex-wrap:\s*wrap/, "Record action controls must wrap rather than clip.");
+assert.match(css, /\.history-toolbar\s*{[\s\S]*display:\s*flex[\s\S]*flex-wrap:\s*wrap/, "Job History filters must wrap within the panel instead of clipping.");
+assert.match(css, /\.valuation-toolbar\s*{[\s\S]*display:\s*flex[\s\S]*flex-wrap:\s*wrap/, "Valuation filters must wrap within the panel instead of clipping.");
 assert.match(css, /\.topbar-title-block h1\s*{[\s\S]*overflow-wrap:\s*anywhere/, "Long page titles must wrap within the header title area.");
 
 console.log("Command Centre controlled repair checks passed.");
