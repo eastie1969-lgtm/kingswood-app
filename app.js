@@ -3329,6 +3329,16 @@ async function fetchFirstHubApi(path, options = {}) {
   return null;
 }
 
+function commandCentreApiOptions(options = {}) {
+  return {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      "X-Kingswood-User": currentUserName()
+    }
+  };
+}
+
 async function loadPhase05eCompletedReports() {
   const response = await fetchFirstHubApi("/api/phase-05e/hub-report-status", { cache: "no-store" });
   if (!response) {
@@ -3383,7 +3393,7 @@ async function loadCommandData() {
   updateOneDriveHeaderStatus("OneDrive unavailable", "Checking OneDrive storage");
   if (location.protocol === "file:") {
     try {
-      const serverResponse = await fetchFirstHubApi("/api/data", { cache: "no-store" });
+      const serverResponse = await fetchFirstHubApi("/api/data", commandCentreApiOptions({ cache: "no-store" }));
       if (redirectFileViewToHub(serverResponse?.url)) return;
       const response = serverResponse || await fetch("data/command-centre-data.json", { cache: "no-store" });
       if (response.ok) {
@@ -3419,7 +3429,7 @@ async function loadCommandData() {
   }
 
   try {
-    const response = await fetch("/api/data", { cache: "no-store" });
+    const response = await fetch("/api/data", commandCentreApiOptions({ cache: "no-store" }));
     const data = await response.json();
 
     if (Object.keys(data).length > 0) {
@@ -3468,13 +3478,13 @@ async function saveCommandData() {
   updateOneDriveHeaderStatus("Saving to OneDrive", "Writing live office data");
 
   if (location.protocol === "file:") {
-    const response = await fetchFirstHubApi("/api/data", {
+    const response = await fetchFirstHubApi("/api/data", commandCentreApiOptions({
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify(payload, null, 2)
-    });
+    }));
     if (!response) {
       keepPendingOneDriveBackup(payload, "OneDrive helper unavailable");
       await syncStaffRecordsFolder({ warnOnFailure: true });
@@ -3494,13 +3504,13 @@ async function saveCommandData() {
   }
 
   try {
-    const response = await fetch("/api/data", {
+    const response = await fetch("/api/data", commandCentreApiOptions({
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify(payload, null, 2)
-    });
+    }));
 
     if (!response.ok) {
       keepPendingOneDriveBackup(payload, "OneDrive data save failed");

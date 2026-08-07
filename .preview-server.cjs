@@ -7043,6 +7043,11 @@ const server = http.createServer((request, response) => {
   }
 
   if (request.url === "/api/data" && request.method === "GET") {
+    const commandCentreUser = phase10DirectorIdentityFromRequest(request);
+    if (!commandCentreUser) {
+      sendJson(response, 401, { ok: false, message: "Authenticated Command Centre identity required." }, dynamicJsonHeaders(request));
+      return;
+    }
     fs.readFile(dataFile, "utf8", (error, content) => {
       if (error) {
         response.writeHead(200, { ...jsonHeaders, "Content-Type": "application/json; charset=utf-8" });
@@ -7061,6 +7066,11 @@ const server = http.createServer((request, response) => {
   }
 
   if (request.url === "/api/data" && request.method === "POST") {
+    const commandCentreUser = phase10DirectorIdentityFromRequest(request);
+    if (!commandCentreUser) {
+      sendJson(response, 401, { saved: false, message: "Authenticated Command Centre identity required." }, dynamicJsonHeaders(request));
+      return;
+    }
     let body = "";
     request.on("data", (chunk) => {
       body += chunk;
