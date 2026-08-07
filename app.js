@@ -3256,6 +3256,46 @@ function commandData() {
   };
 }
 
+const hostedCommandDataArrayKeys = [
+  "ramsItems",
+  "proofingReports",
+  "jobs",
+  "vehicles",
+  "technicians",
+  "staffProfiles",
+  "attendanceRecords",
+  "holidayRequests",
+  "staffNotifications",
+  "tscMasterContent",
+  "tscPublishedRevisions",
+  "tscIssueRecords",
+  "tscAssignmentRecords",
+  "tscEvidenceRecords",
+  "universalAuditEvents",
+  "companyHolidays",
+  "trainingMatrix",
+  "weeklyPlanner",
+  "jobDispatchSchedules",
+  "vehicleInspectionRecords",
+  "actionItems",
+  "emailTemplates",
+  "reportTemplates",
+  "ramsTemplates",
+  "companyDocuments",
+  "assets",
+  "complianceItems",
+  "fines",
+  "valuations",
+  "clients"
+];
+
+function completeHostedCommandData(data = {}) {
+  return hostedCommandDataArrayKeys.reduce((complete, key) => {
+    if (!Array.isArray(complete[key])) complete[key] = [];
+    return complete;
+  }, { ...data });
+}
+
 function applyCommandData(data) {
   if (Array.isArray(data.ramsItems)) ramsItems = data.ramsItems;
   if (Array.isArray(data.proofingReports)) proofingReports = data.proofingReports;
@@ -3399,7 +3439,7 @@ async function loadCommandData() {
       if (response.ok) {
         const data = await response.json();
         if (Object.keys(data).length > 0) {
-          applyCommandData(data);
+          applyCommandData(serverResponse ? completeHostedCommandData(data) : data);
           leaveResetChanged = enforceAnnualLeaveRenewal();
           oneDriveLiveDataLoaded = Boolean(serverResponse);
           updateOneDriveHeaderStatus(
@@ -3433,7 +3473,7 @@ async function loadCommandData() {
     const data = await response.json();
 
     if (Object.keys(data).length > 0) {
-      applyCommandData(data);
+      applyCommandData(completeHostedCommandData(data));
       leaveResetChanged = enforceAnnualLeaveRenewal();
       const valuationSyncChanged = syncValuationsFromJobs();
       oneDriveLiveDataLoaded = true;

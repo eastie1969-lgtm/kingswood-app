@@ -422,7 +422,7 @@ function commandDataLooksUnsafeToSave(incoming = {}, existing = {}) {
   const incomingStaffCount = commandDataStaffCount(incoming);
   if (!incomingStaffCount) return true;
   if (commandDataLooksLikeBrowserFallback(incoming)) return true;
-  return existingStaffCount > 0 && incomingStaffCount < Math.max(2, Math.ceil(existingStaffCount / 2));
+  return existingStaffCount > 1 && incomingStaffCount < Math.max(2, Math.ceil(existingStaffCount / 2));
 }
 
 function kevinDirectorProfileForMigration(existingProfile = {}) {
