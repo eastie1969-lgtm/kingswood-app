@@ -19,7 +19,8 @@
     "test:phase10": "node scripts/contracts/phase-10-directors-area-test.js && node scripts/contracts/phase-10-holiday-entitlement-classification-test.js",
     "smoke:phase10": "node scripts/contracts/phase-10-directors-area-browser-smoke.js",
     "demo:phase10-payroll": "node scripts/contracts/phase-10-payroll-sample-demo.js",
-    "smoke:phase12-sidebar": "node scripts/contracts/phase-12-sidebar-grouping-smoke.js"
+    "smoke:phase12-sidebar": "node scripts/contracts/phase-12-sidebar-grouping-smoke.js",
+    "audit:header-matrix": "node scripts/contracts/command-centre-header-matrix.cjs"
   },
   "engines": {
     "node": ">=20"

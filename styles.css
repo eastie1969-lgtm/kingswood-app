@@ -14969,7 +14969,7 @@ body.locked .app-shell {
   visibility: hidden;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   body {
     min-width: 0;
   }
@@ -15086,5 +15086,86 @@ body.locked .app-shell {
   .sidebar,
   .kw-sidebar {
     transition: none;
+  }
+}
+
+/* Shared Command Centre header containment and readable page titles v262. */
+.topbar {
+  grid-template-columns: minmax(390px, 1fr) minmax(160px, 180px) minmax(255px, 285px) minmax(108px, 122px) !important;
+  max-width: 100%;
+  min-width: 0;
+  overflow: visible;
+}
+
+.topbar-title-block {
+  min-width: 0;
+}
+
+.topbar-title-block h1,
+body[data-active-section="dashboard"] .topbar-title-block h1 {
+  hyphens: none;
+  max-width: 100%;
+  overflow-wrap: normal;
+  text-wrap: balance;
+  word-break: normal;
+}
+
+.topbar-title-block .eyebrow {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.topbar-title-block h1,
+body[data-active-section="dashboard"] .topbar-title-block h1 {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.topbar-title-block .user-greeting {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.topbar-onedrive,
+.topbar-live-block,
+.topbar .user-panel {
+  max-width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 1320px) {
+  .topbar {
+    grid-template-columns: minmax(390px, 1fr) minmax(145px, 165px) minmax(225px, 255px) minmax(104px, 118px) !important;
+  }
+}
+
+@media (max-width: 1260px) {
+  body {
+    min-width: 0;
+  }
+
+  .app-shell {
+    min-width: 0;
+  }
+
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 280px) !important;
+    grid-auto-rows: auto;
+  }
+
+  .topbar-title-block {
+    grid-column: 1 / -1;
+  }
+
+  .topbar-onedrive,
+  .topbar-live-block,
+  .topbar .user-panel {
+    min-height: 68px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto !important;
   }
 }
