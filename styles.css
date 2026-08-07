@@ -5821,7 +5821,8 @@ main {
 }
 
 .valuation-toolbar {
-  grid-template-columns: 140px 110px 210px 190px minmax(280px, 1fr);
+  display: flex;
+  flex-wrap: wrap;
 }
 
 #valuations input,
