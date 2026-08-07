@@ -110,7 +110,19 @@ async function checkLayout(page) {
     const missingSections = sections.filter((section) => !document.querySelector(`#${CSS.escape(section)}`));
     const privateBeforeAuth = document.body.classList.contains("locked") && document.querySelector(".workspace")?.offsetParent !== null;
     const sampleTextVisible = /Demo Client|Example Client|Sample Customer|Test Customer/i.test(document.body.innerText);
-    const badTables = Array.from(document.querySelectorAll("table")).filter((table) => table.getBoundingClientRect().right > doc.clientWidth + 2).length;
+    const badTables = Array.from(document.querySelectorAll("table")).filter((table) => {
+      const rect = table.getBoundingClientRect();
+      if (rect.width === 0 || rect.right <= doc.clientWidth + 2) return false;
+      let parent = table.parentElement;
+      while (parent && parent !== document.body) {
+        const style = getComputedStyle(parent);
+        if ((style.overflowX === "auto" || style.overflowX === "scroll") && parent.clientWidth < table.scrollWidth) {
+          return false;
+        }
+        parent = parent.parentElement;
+      }
+      return true;
+    }).length;
     const controlsTooSmall = Array.from(document.querySelectorAll("button, input, select, textarea, a[href]"))
       .filter((element) => element.offsetParent !== null)
       .filter((element) => {
