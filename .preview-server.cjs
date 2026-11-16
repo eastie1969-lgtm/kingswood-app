@@ -3,6 +3,7 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { createDirectorAuth, isDirectorRoute, sameOrigin } = require("./director-auth.cjs");
 const { execFile } = require("child_process");
 
 const { createTechnicianFeed } = require("./packages/shared-models/technician-feed-contract");
@@ -235,6 +236,9 @@ const jsonHeaders = {
 };
 
 function dynamicJsonHeaders(request) {
+  if (isDirectorRoute(new URL(request.url, "http://localhost").pathname)) {
+    return { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Vary": "Origin" };
+  }
   const origin = request.headers.origin || "*";
   return {
     ...jsonHeaders,
@@ -1289,12 +1293,13 @@ function readRequestBody(request) {
 const phase05bSessions = new Map();
 const phase05bSessionCookie = "kw_phase5b_session";
 const phase05bSessionTtlMs = 30 * 60 * 1000;
-const phase10DirectorSessions = new Map();
-const phase10DirectorSessionCookie = "kw_phase10_director_session";
-const phase10DirectorSessionTtlMs = 30 * 60 * 1000;
-const phase10DirectorPins = Object.freeze({
-  Kevin: "1969",
-  Alex: "1981"
+const directorAuth = createDirectorAuth({
+  credentials: {
+    Kevin: process.env.KINGSWOOD_DIRECTOR_KEVIN_PIN,
+    Alex: process.env.KINGSWOOD_DIRECTOR_ALEX_PIN
+  },
+  contextForName: (name) => phase10DirectorContextForName(readCommandCentreData(), name),
+  production: process.env.NODE_ENV === "production"
 });
 const phase05bPilotContext = Object.freeze({
   userId: "USR-TECH-IAN-DICKENS",
@@ -1543,9 +1548,8 @@ function getPhase05bSession(request) {
   return { ok: true, session };
 }
 
-function phase10CookieValue(sessionId, maxAgeSeconds = Math.floor(phase10DirectorSessionTtlMs / 1000)) {
-  const safeId = encodeURIComponent(sessionId || "");
-  return `${phase10DirectorSessionCookie}=${safeId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeSeconds}`;
+function phase10CookieValue(sessionId, maxAgeSeconds) {
+  return directorAuth.cookie(sessionId, maxAgeSeconds);
 }
 
 function phase10DirectorContextForName(data, name) {
@@ -1571,32 +1575,8 @@ function phase10DirectorIdentityFromRequest(request) {
   return directorTextValue(Array.isArray(header) ? header[0] : header);
 }
 
-function createPhase10DirectorSession(context, ttlMs = phase10DirectorSessionTtlMs) {
-  const sessionId = crypto.randomBytes(32).toString("base64url");
-  const createdAt = new Date();
-  const expiresAt = new Date(createdAt.getTime() + ttlMs);
-  phase10DirectorSessions.set(sessionId, {
-    sessionId,
-    context,
-    createdAt: createdAt.toISOString(),
-    expiresAt: expiresAt.toISOString()
-  });
-  return phase10DirectorSessions.get(sessionId);
-}
-
 function getPhase10DirectorSession(request) {
-  const sessionId = parseCookies(request)[phase10DirectorSessionCookie];
-  const session = sessionId ? phase10DirectorSessions.get(sessionId) : null;
-  if (session && new Date(session.expiresAt).getTime() > Date.now()) return { ok: true, session };
-  if (session) {
-    phase10DirectorSessions.delete(sessionId);
-  }
-  const commandCentreUser = phase10DirectorIdentityFromRequest(request);
-  if (!commandCentreUser) return { ok: false, status: 401, message: "Authenticated Command Centre identity required." };
-  const context = phase10DirectorContextForName(readCommandCentreData(), commandCentreUser);
-  if (!context) return { ok: false, status: 403, message: "Director access is restricted to Kevin and Alex." };
-  const newSession = createPhase10DirectorSession(context);
-  return { ok: true, session: newSession, setCookie: phase10CookieValue(newSession.sessionId) };
+  return directorAuth.session(request);
 }
 
 function phase10ReadData() {
@@ -6168,6 +6148,32 @@ async function saveRamsPdf(payload) {
 const server = http.createServer((request, response) => {
   const routePath = new URL(request.url, `http://${request.headers.host || "127.0.0.1"}`).pathname;
 
+  if (isDirectorRoute(routePath)) {
+    const configuredOrigin = process.env.RENDER_EXTERNAL_URL
+      || (process.env.NODE_ENV === "production" ? "https://kingswood-hub.onrender.com" : undefined);
+    if (!sameOrigin(request, configuredOrigin)) {
+      sendJson(response, 403, { ok: false, message: "Same-origin request required." }, dynamicJsonHeaders(request));
+      return;
+    }
+    if (routePath.startsWith("/api/revolut/") && request.method !== "GET" && request.method !== "OPTIONS") {
+      sendJson(response, 405, { ok: false, message: "This endpoint is read-only." }, dynamicJsonHeaders(request));
+      return;
+    }
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+      if (!(request.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
+        sendJson(response, 415, { ok: false, message: "JSON request required." }, dynamicJsonHeaders(request));
+        return;
+      }
+      if (routePath !== "/api/phase-10/director-login") {
+        const auth = getPhase10DirectorSession(request);
+        if (!auth.ok || !directorAuth.csrf(request, auth.session)) {
+          sendJson(response, auth.ok ? 403 : auth.status, { ok: false, message: auth.ok ? "Invalid CSRF token." : auth.message }, dynamicJsonHeaders(request));
+          return;
+        }
+      }
+    }
+  }
+
   if (request.method === "OPTIONS") {
     response.writeHead(204, dynamicJsonHeaders(request));
     response.end();
@@ -6189,17 +6195,15 @@ const server = http.createServer((request, response) => {
     readRequestBody(request)
       .then((body) => {
         const payload = JSON.parse(body || "{}");
-        const directorKey = normaliseDirectorName(payload.name);
-        const data = readCommandCentreData();
-        const context = phase10DirectorContextForName(data, directorKey);
-        if (!context || phase10DirectorPins[directorKey] !== directorTextValue(payload.pin)) {
-          sendJson(response, 403, { ok: false, message: "Director access is restricted to Kevin and Alex." }, dynamicJsonHeaders(request));
+        const result = directorAuth.login(request, payload);
+        if (!result.ok) {
+          sendJson(response, result.status, { ok: false, message: result.message }, dynamicJsonHeaders(request));
           return;
         }
-        const session = createPhase10DirectorSession(context);
-        sendJson(response, 200, { ok: true, director: context, expiresAt: session.expiresAt }, {
+        const session = result.session;
+        sendJson(response, 200, { ok: true, director: session.context, expiresAt: session.expiresAt, csrfToken: session.csrfToken }, {
           ...dynamicJsonHeaders(request),
-          "Set-Cookie": phase10CookieValue(session.sessionId)
+          "Set-Cookie": result.setCookie
         });
       })
       .catch((error) => sendJson(response, 400, { ok: false, message: error.message || "Director login failed." }, dynamicJsonHeaders(request)));
@@ -6207,8 +6211,7 @@ const server = http.createServer((request, response) => {
   }
 
   if (routePath === "/api/phase-10/director-logout" && request.method === "POST") {
-    const sessionId = parseCookies(request)[phase10DirectorSessionCookie];
-    if (sessionId) phase10DirectorSessions.delete(sessionId);
+    directorAuth.logout(request);
     sendJson(response, 200, { ok: true }, {
       ...dynamicJsonHeaders(request),
       "Set-Cookie": phase10CookieValue("", 0)
@@ -6222,7 +6225,7 @@ const server = http.createServer((request, response) => {
       sendJson(response, sessionResult.status, { ok: false, message: sessionResult.message }, dynamicJsonHeaders(request));
       return;
     }
-    sendJson(response, 200, { ok: true, director: sessionResult.session.context, expiresAt: sessionResult.session.expiresAt }, {
+    sendJson(response, 200, { ok: true, director: sessionResult.session.context, expiresAt: sessionResult.session.expiresAt, csrfToken: sessionResult.session.csrfToken }, {
       ...dynamicJsonHeaders(request),
       ...(sessionResult.setCookie ? { "Set-Cookie": sessionResult.setCookie } : {})
     });
@@ -7280,7 +7283,7 @@ const server = http.createServer((request, response) => {
   const safePath = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
   const filePath = path.join(root, safePath === "/" ? "index.html" : safePath);
 
-  if (!filePath.startsWith(root)) {
+  if (!filePath.startsWith(root + path.sep) || safePath.split(/[/\\]/).some(part => part.startsWith("."))) {
     response.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
     response.end("Forbidden");
     return;
@@ -7308,3 +7311,4 @@ if (phase05eRecoveryResult.recovered || phase05eRecoveryResult.error) {
 }
 
 server.listen(port, host);
+

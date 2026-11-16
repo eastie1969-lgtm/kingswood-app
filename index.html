@@ -27,7 +27,7 @@
           </label>
           <label>
             PIN
-            <input id="pinInput" type="password" inputmode="numeric" autocomplete="current-password" maxlength="4" placeholder="Enter your PIN" required>
+            <input id="pinInput" type="password" inputmode="numeric" autocomplete="current-password" maxlength="64" placeholder="Enter your PIN" required>
           </label>
           <button class="primary-button auth-submit" type="submit">Sign In</button>
           <span id="pinMessage" class="pin-message" role="alert"></span>
@@ -2052,12 +2052,14 @@
             <div class="module-card directors-lock-panel" id="directorsLockPanel">
               <span class="status warning">Restricted</span>
               <h2>Directors’ Area</h2>
-              <p id="directorAccessMessage" role="alert">This area is restricted to Kevin Eastman and Alex Lancaster.</p>
+              <p id="directorAccessMessage" role="alert">Sign in with your private director PIN to continue.</p>
+              <button id="directorSignInButton" type="button">Sign in as a director</button>
             </div>
             <div class="directors-workspace hidden" id="directorsWorkspace">
               <div class="section-heading-row">
                 <div>
                   <h2>Company Oversight</h2>
+                  <button id="directorLogoutButton" type="button">Lock director access</button>
                 </div>
               </div>
               <div class="directors-tabs" role="tablist" aria-label="Directors Area sections">
@@ -2483,6 +2485,6 @@
     </dialog>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="app.js?v=262"></script>
+    <script src="app.js?v=263"></script>
   </body>
 </html>

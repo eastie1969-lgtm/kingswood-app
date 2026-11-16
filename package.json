@@ -5,6 +5,7 @@
   "description": "Kingswood Connect central command centre.",
   "scripts": {
     "start": "node .preview-server.cjs",
+    "test:director-auth": "node --test scripts/contracts/director-auth.test.cjs",
     "check": "node --check app.js && node --check .preview-server.cjs",
     "test:phase09a": "node scripts/phase-09a-vehicle-assignment-tests.cjs",
     "smoke:phase09a": "node scripts/phase-09a-browser-smoke.cjs",
@@ -29,3 +30,4 @@
     "playwright": "^1.54.0"
   }
 }
+

@@ -76,8 +76,6 @@ let testTrackingVehicles = [
   }
 ];
 const authorisedUsers = {
-  Kevin: "1969",
-  Alex: "1981",
   Jodie: "1991"
 };
 
@@ -2486,6 +2484,32 @@ function maskReviewModeSensitiveSections() {
   }
 }
 
+let directorSession = null;
+let directorExpiryTimer = null;
+let directorAuthGeneration = 0;
+let directorLogoutPromise = Promise.resolve();
+
+function clearDirectorSession() {
+  directorAuthGeneration += 1;
+  directorSession = null;
+  window.clearTimeout(directorExpiryTimer);
+  directorExpiryTimer = null;
+  directorsAreaState = null;
+  document.querySelector("#directorsContent")?.replaceChildren();
+  showDirectorsLocked("Please sign in with your director PIN.");
+  dashboardRevolutLastSuccess = null;
+  dashboardRevolutBalanceLoadedAt = 0;
+  stopDashboardRevolutAutoRefresh();
+  document.querySelector("#dashboardRevolutCard")?.classList.add("hidden");
+  setDashboardRevolutText("Unavailable", "", "Last updated: not yet");
+}
+
+function acceptDirectorSession(result) {
+  directorSession = result;
+  window.clearTimeout(directorExpiryTimer);
+  directorExpiryTimer = window.setTimeout(() => lockHub(), Math.max(0, Date.parse(result.expiresAt) - Date.now()));
+}
+
 function unlockHub(name) {
   if (isReviewMode()) {
     applyReviewModeShell();
@@ -2506,6 +2530,15 @@ function lockHub() {
   if (isReviewMode()) {
     applyReviewModeShell();
     return;
+  }
+  const csrfToken = directorSession?.csrfToken;
+  clearDirectorSession();
+  if (csrfToken) {
+    directorLogoutPromise = fetch("/api/phase-10/director-logout", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+      body: "{}"
+    }).catch(() => {});
   }
   localStorage.removeItem(authStorageKey);
   document.body.classList.add("locked");
@@ -2528,13 +2561,23 @@ function currentUserName() {
   return localStorage.getItem(authStorageKey) || "Kevin";
 }
 
-function initialiseAuth() {
+async function initialiseAuth() {
   if (isReviewMode()) {
     applyReviewModeShell();
     return;
   }
   const rememberedUser = localStorage.getItem(authStorageKey);
-  if (rememberedUser) {
+  if (rememberedUser && isDirectorLocalUser(rememberedUser)) {
+    try {
+      const result = await directorsApi("/director-session");
+      acceptDirectorSession(result);
+      unlockHub(result.director.displayName);
+      if (document.body.dataset.activeSection === "directors") await refreshDirectorsArea();
+      if (document.body.dataset.activeSection === "dashboard") startDashboardRevolutAutoRefresh({ immediate: true });
+    } catch {
+      lockHub();
+    }
+  } else if (rememberedUser) {
     unlockHub(rememberedUser);
   } else {
     lockHub();
@@ -8289,7 +8332,7 @@ async function refreshDashboardRevolutBalance(options = {}) {
   const force = options.force === true;
   const card = document.querySelector("#dashboardRevolutCard");
   if (!card) return;
-  if (!isDirectorLocalUser()) {
+  if (!isDirectorLocalUser() || !directorSession) {
     card.classList.add("hidden");
     return;
   }
@@ -8298,6 +8341,7 @@ async function refreshDashboardRevolutBalance(options = {}) {
   if (!force && !manual && dashboardRevolutBalanceLoadedAt && now - dashboardRevolutBalanceLoadedAt < 60000) return;
   if (dashboardRevolutBalanceLoading) return;
 
+  const authGeneration = directorAuthGeneration;
   dashboardRevolutBalanceLoading = true;
   setDashboardRevolutText(
     document.querySelector("#dashboardRevolutBalance")?.textContent || "Unavailable",
@@ -8308,12 +8352,14 @@ async function refreshDashboardRevolutBalance(options = {}) {
   try {
     const response = await fetch("/api/revolut/gbp-balance", {
       cache: "no-store",
-      credentials: "same-origin",
-      headers: {
-        "X-Kingswood-User": currentUserName()
-      }
+      credentials: "same-origin"
     });
     const payload = await response.json().catch(() => ({}));
+    if (authGeneration !== directorAuthGeneration) return;
+    if ([401, 403].includes(response.status)) {
+      lockHub();
+      return;
+    }
     if (!response.ok || payload.ok === false) {
       throw new Error(payload.message || "Revolut balance is unavailable.");
     }
@@ -8338,6 +8384,7 @@ async function refreshDashboardRevolutBalance(options = {}) {
       setDashboardRevolutText(dashboardRevolutLastSuccess.balanceText, dashboardRevolutLastSuccess.statusText, dashboardRevolutLastSuccess.updatedText);
     }
   } catch (error) {
+    if (authGeneration !== directorAuthGeneration) return;
     if (dashboardRevolutLastSuccess) {
       setRevolutLowBalanceState(card, dashboardRevolutLastSuccess.availableBalance);
       setDashboardRevolutText(dashboardRevolutLastSuccess.balanceText, dashboardRevolutLastSuccess.statusText, dashboardRevolutLastSuccess.updatedText);
@@ -8352,7 +8399,7 @@ async function refreshDashboardRevolutBalance(options = {}) {
 
 function startDashboardRevolutAutoRefresh(options = {}) {
   const card = document.querySelector("#dashboardRevolutCard");
-  if (!card || !isDirectorLocalUser()) return;
+  if (!card || !isDirectorLocalUser() || !directorSession) return;
   if (options.immediate) {
     refreshDashboardRevolutBalance({ force: true });
   }
@@ -14344,17 +14391,22 @@ function syncDirectorsMenuVisibility() {
 }
 
 async function directorsApi(path, options = {}) {
+  const authGeneration = directorAuthGeneration;
   const response = await fetch(`/api/phase-10${path}`, {
     ...options,
     credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
-      "X-Kingswood-User": currentUserName(),
+      ...(directorSession?.csrfToken ? { "X-CSRF-Token": directorSession.csrfToken } : {}),
       ...(options.headers || {})
     }
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok || body.ok === false) throw new Error(body.message || "Directors Area request failed.");
+  if (authGeneration !== directorAuthGeneration) throw new Error("Sign-in changed. Please try again.");
+  if (!response.ok || body.ok === false) {
+    if (path !== "/director-login" && [401, 403].includes(response.status)) lockHub();
+    throw new Error(body.message || "Directors Area request failed.");
+  }
   return body;
 }
 
@@ -14381,7 +14433,8 @@ async function refreshDirectorsArea() {
     return;
   }
   try {
-    await directorsApi("/director-session");
+    const session = await directorsApi("/director-session");
+    acceptDirectorSession(session);
     directorsAreaState = await directorsApi("/overview");
     showDirectorsWorkspace();
     await renderDirectorsArea();
@@ -15693,25 +15746,39 @@ document.addEventListener("visibilitychange", updateHeaderSceneMotionState);
 publishFeedsButton?.addEventListener("click", publishIntegrationFeeds);
 refreshFeedsButton?.addEventListener("click", renderIntegrationFeeds);
 syncNowButton?.addEventListener("click", syncNow);
-pinForm?.addEventListener("submit", (event) => {
+pinForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const selectedUser = loginNameInput.value;
   const pin = pinInput.value.trim();
-  if (!selectedUser || authorisedUsers[selectedUser] !== pin) {
-    pinMessage.textContent = "Name or PIN not recognised.";
-    pinInput.select();
-    return;
+  pinInput.value = "";
+  pinMessage.textContent = "Signing in…";
+  const submit = pinForm.querySelector('[type="submit"]');
+  if (submit) submit.disabled = true;
+  try {
+    if (isDirectorLocalUser(selectedUser)) {
+      await directorLogoutPromise;
+      const result = await directorsApi("/director-login", {
+        method: "POST", body: JSON.stringify({ name: selectedUser, pin })
+      });
+      acceptDirectorSession(result);
+      unlockHub(result.director.displayName);
+    } else {
+      if (!selectedUser || authorisedUsers[selectedUser] !== pin) throw new Error("Name or PIN not recognised.");
+      clearDirectorSession();
+      unlockHub(selectedUser);
+    }
+    if (document.body.dataset.activeSection === "directors") await refreshDirectorsArea();
+    if (document.body.dataset.activeSection === "dashboard") startDashboardRevolutAutoRefresh({ immediate: true });
+  } catch (error) {
+    pinMessage.textContent = error.message || "Sign-in is unavailable. Please try again.";
+  } finally {
+    if (submit) submit.disabled = false;
   }
-  unlockHub(selectedUser);
 });
 lockHubButton?.addEventListener("click", lockHub);
-document.querySelector("#directorLogoutButton")?.addEventListener("click", async () => {
-  try {
-    await directorsApi("/director-logout", { method: "POST", body: "{}" });
-  } catch {
-    // Closing the local directors panel should still clear the visible screen.
-  }
-  directorsAreaState = null;
+document.querySelector("#directorSignInButton")?.addEventListener("click", lockHub);
+document.querySelector("#directorLogoutButton")?.addEventListener("click", () => {
+  lockHub();
   showSection("dashboard");
 });
 
@@ -16602,5 +16669,6 @@ updateHeaderSceneMotionState();
 updateOrpingtonWeather();
 setInterval(updateOrpingtonWeather, 600000);
 loadCommandData();
+
 
 
