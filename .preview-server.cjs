@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { createDirectorAuth, isDirectorRoute, sameOrigin } = require("./director-auth.cjs");
+const { createRevolutAutomationAuth } = require("./revolut-automation-auth.cjs");
 const { execFile } = require("child_process");
 
 const { createTechnicianFeed } = require("./packages/shared-models/technician-feed-contract");
@@ -1293,6 +1294,11 @@ function readRequestBody(request) {
 const phase05bSessions = new Map();
 const phase05bSessionCookie = "kw_phase5b_session";
 const phase05bSessionTtlMs = 30 * 60 * 1000;
+const revolutAutomationAuth = createRevolutAutomationAuth({
+  enabled: process.env.KINGSWOOD_REVOLUT_AUTOMATION_ENABLED === "true",
+  audience: process.env.KINGSWOOD_REVOLUT_AUTOMATION_AUDIENCE
+});
+
 const directorAuth = createDirectorAuth({
   credentials: {
     Kevin: process.env.KINGSWOOD_DIRECTOR_KEVIN_PIN,
@@ -6269,6 +6275,29 @@ const server = http.createServer((request, response) => {
     return;
   }
 
+  // Separate read-only machine route; never creates a director session.
+  if (routePath === "/api/automation/revolut/gbp-balance") {
+    if (request.method !== "GET") {
+      sendJson(response, 405, { ok: false }, { "Allow": "GET", "Cache-Control": "no-store" });
+      return;
+    }
+    revolutAutomationAuth(request).then(async (auth) => {
+      if (!auth.ok) {
+        sendJson(response, auth.status, { ok: false, message: "Automation access unavailable." }, { "Cache-Control": "no-store" });
+        return;
+      }
+      try {
+        const snapshot = await revolutGbpBalanceSnapshot();
+        // Explicit allowlist: no account identifiers, transactions or credentials.
+        const safe = Object.fromEntries(["ok", "connected", "currency", "activeGbpAccountFound", "availableBalance", "lastUpdatedAt"].map(k => [k, snapshot[k]]));
+        sendJson(response, 200, safe, { "Cache-Control": "no-store" });
+      } catch {
+        sendJson(response, 502, { ok: false, connected: false, message: "Balance unavailable." }, { "Cache-Control": "no-store" });
+      }
+    });
+    return;
+  }
+
   if (routePath === "/api/revolut/gbp-balance" && request.method === "GET") {
     const sessionResult = getPhase10DirectorSession(request);
     if (!sessionResult.ok) {
@@ -7311,4 +7340,5 @@ if (phase05eRecoveryResult.recovered || phase05eRecoveryResult.error) {
 }
 
 server.listen(port, host);
+
 
