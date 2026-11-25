@@ -4,6 +4,8 @@
   "private": true,
   "description": "Kingswood Connect central command centre.",
   "scripts": {
+    "dev:demo": "node scripts/dev-demo.cjs",
+    "test:cloud": "node --test scripts/contracts/director-auth.test.cjs scripts/contracts/cloud-runtime.test.cjs revolut-automation-auth.test.cjs revolut-route.test.cjs",
     "start": "node .preview-server.cjs",
     "test:director-auth": "node --test scripts/contracts/director-auth.test.cjs",
     "check": "node --check app.js && node --check .preview-server.cjs",

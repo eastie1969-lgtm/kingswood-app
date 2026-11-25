@@ -70,6 +70,8 @@ const {
 } = require("./packages/shared-models/directors-area");
 const { calculateHolidayEntitlement, countedBankHolidays } = require("./packages/shared-models/holiday-entitlement");
 
+const { configureCloudStorage, isOfficeRoute, isPublicAsset, allowedDocument } = require("./cloud-runtime.cjs");
+configureCloudStorage(process.env, __dirname);
 const root = __dirname;
 const port = Number(process.env.PORT || 8126);
 const host = process.env.HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
@@ -237,7 +239,7 @@ const jsonHeaders = {
 };
 
 function dynamicJsonHeaders(request) {
-  if (isDirectorRoute(new URL(request.url, "http://localhost").pathname)) {
+  if (isDirectorRoute(new URL(request.url, "http://localhost").pathname) || (process.env.NODE_ENV === "production" && isOfficeRoute(new URL(request.url, "http://localhost").pathname))) {
     return { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Vary": "Origin" };
   }
   const origin = request.headers.origin || "*";
@@ -1577,6 +1579,10 @@ function phase10DirectorContextForName(data, name) {
 }
 
 function phase10DirectorIdentityFromRequest(request) {
+  if (process.env.NODE_ENV === "production") {
+    const auth = directorAuth.session(request);
+    return auth.ok ? auth.session.context.displayName : "";
+  }
   const header = request.headers["x-kingswood-user"];
   return directorTextValue(Array.isArray(header) ? header[0] : header);
 }
@@ -6154,6 +6160,28 @@ async function saveRamsPdf(payload) {
 const server = http.createServer((request, response) => {
   const routePath = new URL(request.url, `http://${request.headers.host || "127.0.0.1"}`).pathname;
 
+  if (process.env.NODE_ENV === "production" && isOfficeRoute(routePath)) {
+    const configuredOrigin = process.env.RENDER_EXTERNAL_URL || "https://kingswood-hub.onrender.com";
+    if (!sameOrigin(request, configuredOrigin)) {
+      sendJson(response, 403, { ok: false, message: "Same-origin request required." }, dynamicJsonHeaders(request));
+      return;
+    }
+    const auth = getPhase10DirectorSession(request);
+    if (!auth.ok) {
+      sendJson(response, auth.status, { ok: false, message: auth.message }, dynamicJsonHeaders(request));
+      return;
+    }
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && !directorAuth.csrf(request, auth.session)) {
+      sendJson(response, 403, { ok: false, message: "Invalid CSRF token." }, dynamicJsonHeaders(request));
+      return;
+    }
+  }
+
+  if (routePath === "/api/runtime" && request.method === "GET") {
+    sendJson(response, 200, { storageMode: process.env.NODE_ENV === "production" ? "cloud" : "local" }, { "Cache-Control": "no-store" });
+    return;
+  }
+
   if (isDirectorRoute(routePath)) {
     const configuredOrigin = process.env.RENDER_EXTERNAL_URL
       || (process.env.NODE_ENV === "production" ? "https://kingswood-hub.onrender.com" : undefined);
@@ -7045,6 +7073,14 @@ const server = http.createServer((request, response) => {
   if (request.url.startsWith("/api/local-file") && request.method === "GET") {
     const url = new URL(request.url, `http://${request.headers.host || "127.0.0.1"}`);
     const filePath = url.searchParams.get("path") || "";
+    if (process.env.NODE_ENV === "production" && !allowedDocument(filePath, [
+      proofingReportDir, fieldReportsRootDir, ramsDocumentDir, staffRecordsDir, employeesRootDir,
+      trainingMatrixExportsDir, finesAndChargesDir, companyComplianceDir, assetsRootDir,
+      vehicleRecordsRootDir, directorsPayrollExportDir
+    ])) {
+      sendJson(response, 404, { ok: false, message: "Document not found." }, dynamicJsonHeaders(request));
+      return;
+    }
     if (!filePath || !fs.existsSync(filePath)) {
       response.writeHead(404, { ...jsonHeaders, "Content-Type": "application/json; charset=utf-8" });
       response.end(JSON.stringify({ message: "File not found" }));
@@ -7308,9 +7344,20 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  const requestPath = decodeURIComponent(new URL(request.url, `http://localhost:${port}`).pathname);
+  let requestPath;
+  try { requestPath = decodeURIComponent(new URL(request.url, `http://localhost:${port}`).pathname); }
+  catch {
+    response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+    response.end("Invalid path");
+    return;
+  }
+  if (process.env.NODE_ENV === "production" && !isPublicAsset(requestPath)) {
+    response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    response.end("Not found");
+    return;
+  }
   const safePath = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
-  const filePath = path.join(root, safePath === "/" ? "index.html" : safePath);
+  const filePath = path.join(root, requestPath === "/" ? "index.html" : safePath);
 
   if (!filePath.startsWith(root + path.sep) || safePath.split(/[/\\]/).some(part => part.startsWith("."))) {
     response.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
