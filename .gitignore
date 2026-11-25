@@ -1,4 +1,10 @@
 .env.local
+.env
+.env.*
+!.env.local.example
+test-results/
+data/
+RAMS/
 node_modules/
 npm-debug.log*
 hub-server.log

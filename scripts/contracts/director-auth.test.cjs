@@ -143,12 +143,25 @@ test("actual server routes enforce sessions and CSRF; balance remains read-only"
     assert.equal((await call(route, "GET", undefined, { "X-Kingswood-User": "Kevin" })).status, 401);
   }
   assert.equal(balanceReads, 0);
+  for (const route of ["/api/data", "/api/phase-05e/hub-report-status", "/api/local-file?path=/etc/passwd", "/api/runtime"]) {
+    assert.equal((await call(route)).status, 401, route);
+    assert.equal((await call(route, "GET", undefined, { "X-Kingswood-User": "Kevin" })).status, 401, route);
+  }
+  for (const route of ["/api/publish-feeds", "/api/save-rams-pdf", "/api/staff-records", "/api/phase-07/jobs/dispatch"]) {
+    assert.equal((await call(route, "POST", {})).status, 401, route);
+  }
+  assert.equal((await call("/api/phase-05b/technician-feed")).status, 401);
   assert.equal((await call("/api/phase-10/director-login", "POST", { name: "Jodie", pin: credentials.Kevin })).status, 403);
   const signed = await call("/api/phase-10/director-login", "POST", { name: "Kevin", pin: credentials.Kevin });
   assert.equal(signed.status, 200);
   assert.ok(signed.body.csrfToken);
   const cookie = signed.headers["set-cookie"][0].split(";")[0];
   const headers = { Cookie: cookie, "X-CSRF-Token": signed.body.csrfToken };
+  assert.equal((await call("/api/data", "GET", undefined, headers)).status, 200);
+  assert.equal((await call("/api/runtime", "GET", undefined, headers)).body.storageMode, "cloud");
+  assert.equal((await call("/api/publish-feeds", "POST", {}, { Cookie: cookie })).status, 403);
+  assert.equal((await call("/api/publish-feeds", "POST", {}, { ...headers, Origin: "https://attacker.invalid" })).status, 403);
+  assert.equal((await call("/api/local-file?path=" + encodeURIComponent(path.join(dataDir, "command-centre-data.json")), "GET", undefined, headers)).status, 404);
   assert.equal((await call("/api/phase-10/director-session", "GET", undefined, headers)).status, 200);
   const balance = await call("/api/revolut/gbp-balance", "GET", undefined, headers);
   assert.equal(balance.status, 200);

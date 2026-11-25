@@ -126,14 +126,16 @@ function updateOneDriveHeaderStatus(status, detail = "") {
     "Local backup pending": { label: "Save pending", state: "pending" },
     "OneDrive unavailable": { label: "Offline", state: "offline" }
   };
-  const display = statusMap[safeStatus] || { label: "Error", state: "error" };
+  const storedDisplay = statusMap[safeStatus] || { label: "Error", state: "error" };
+  const display = { ...storedDisplay };
+  if (runtimeStorageMode === "cloud" && display.state === "synced") display.label = "Cloud saved";
   const statusDetail = display.state === "synced"
     ? formatOneDriveSaveTime(lastSaved)
     : detail || (display.state === "pending"
       ? "Local backup kept safely"
       : display.state === "saving"
         ? "Writing office data"
-        : "OneDrive not connected");
+        : runtimeStorageMode === "cloud" ? "Cloud storage unavailable" : "OneDrive not connected");
   storageStatus.innerHTML = `<span class="onedrive-status-line"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(display.label)}</span><span class="last-saved-line">${escapeHtml(statusDetail)}</span>`;
   storageStatus.dataset.status = display.state;
 }
@@ -2488,6 +2490,32 @@ let directorSession = null;
 let directorExpiryTimer = null;
 let directorAuthGeneration = 0;
 let directorLogoutPromise = Promise.resolve();
+let runtimeStorageMode = "local";
+const originalHubFetch = window.fetch.bind(window);
+window.fetch = function(input, options = {}) {
+  const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url, window.location.href);
+  if (url.origin === window.location.origin && url.pathname.startsWith("/api/") && directorSession?.csrfToken) {
+    const headers = new Headers(options.headers || (input instanceof Request ? input.headers : undefined));
+    if (!headers.has("X-CSRF-Token")) headers.set("X-CSRF-Token", directorSession.csrfToken);
+    return originalHubFetch(input, { ...options, headers });
+  }
+  return originalHubFetch(input, options);
+};
+
+async function loadRuntimeStorageMode() {
+  try {
+    const response = await fetch("/api/runtime", { cache: "no-store" });
+    if (response.ok) runtimeStorageMode = (await response.json()).storageMode === "cloud" ? "cloud" : "local";
+  } catch { /* Keep the last known mode while disconnected. */ }
+  const statusPanel = storageStatus?.closest(".topbar-onedrive");
+  if (statusPanel) {
+    const label = runtimeStorageMode === "cloud" ? "Cloud storage" : "OneDrive status";
+    statusPanel.setAttribute("aria-label", label);
+    const heading = statusPanel.querySelector(":scope > span");
+    if (heading) heading.textContent = label;
+  }
+  updateOneDriveHeaderStatus();
+}
 
 function clearDirectorSession() {
   directorAuthGeneration += 1;
@@ -2524,6 +2552,7 @@ function unlockHub(name) {
   if (loginNameInput) loginNameInput.value = name;
   if (pinMessage) pinMessage.textContent = "";
   syncDirectorsMenuVisibility();
+  void loadRuntimeStorageMode();
 }
 
 function lockHub() {
@@ -3514,6 +3543,7 @@ async function loadCommandData() {
 
   try {
     const response = await fetch("/api/data", commandCentreApiOptions({ cache: "no-store" }));
+    if (!response.ok) throw new Error(response.status === 401 ? "Please sign in to load saved data." : "Saved data could not be loaded.");
     const data = await response.json();
 
     if (Object.keys(data).length > 0) {
@@ -3632,7 +3662,7 @@ async function syncNow() {
   }
   const saved = await publishIntegrationFeeds();
   if (saved) {
-    await kcInfo("OneDrive save complete.");
+    await kcInfo(runtimeStorageMode === "cloud" ? "Cloud save complete." : "OneDrive save complete.");
   } else {
     updateOneDriveHeaderStatus("Local backup pending", "Data has not been safely saved to OneDrive yet");
     await kcInfo("OneDrive is unavailable or did not confirm the save. A local backup is pending and the Hub has not marked this as safely saved.");
@@ -15762,6 +15792,7 @@ pinForm?.addEventListener("submit", async (event) => {
       });
       acceptDirectorSession(result);
       unlockHub(result.director.displayName);
+      await loadCommandData();
     } else {
       if (!selectedUser || authorisedUsers[selectedUser] !== pin) throw new Error("Name or PIN not recognised.");
       clearDirectorSession();
@@ -16660,7 +16691,10 @@ tableBody.addEventListener("click", (event) => {
 
 installNavIcons();
 syncSidebarGroupsForSection(document.querySelector(".nav-button.active")?.dataset.section || "dashboard");
-initialiseAuth();
+initialiseAuth().then(() => {
+  if (!document.body.classList.contains("locked") && !isReviewMode()) return loadCommandData();
+  render();
+});
 syncDirectorsMenuVisibility();
 updateLiveDateTime();
 setInterval(updateLiveDateTime, 30000);
@@ -16668,7 +16702,6 @@ applyDashboardHeaderTheme();
 updateHeaderSceneMotionState();
 updateOrpingtonWeather();
 setInterval(updateOrpingtonWeather, 600000);
-loadCommandData();
 
 
 
