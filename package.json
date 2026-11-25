@@ -4,6 +4,8 @@
   "private": true,
   "description": "Kingswood Connect central command centre.",
   "scripts": {
+    "test:visit-intake": "node --test scripts/contracts/visit-intake.test.cjs scripts/contracts/visit-staging.test.cjs scripts/contracts/visit-intake-http.test.cjs",
+    "smoke:visit-intake": "node scripts/contracts/visit-intake-review-browser.cjs",
     "start": "node .preview-server.cjs",
     "test:director-auth": "node --test scripts/contracts/director-auth.test.cjs",
     "check": "node --check app.js && node --check .preview-server.cjs",

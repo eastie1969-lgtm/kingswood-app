@@ -6989,12 +6989,24 @@ function openJobDetail(index) {
       <p>${escapeHtml(reportText)}</p>
     </section>
     ${renderCompletedReportMetadata(job)}
+    ${window.KINGSWOOD_VISIT_INTAKE && isDirectorLocalUser() ? `<section class="job-detail-section"><h3>Technician visit identity</h3><p>${job.intakeVerification?.verified ? `ARK ${escapeHtml(job.intakeVerification.arkReference)} verified for ${escapeHtml(job.intakeVerification.address)}${job.intakeVerification.flat ? `, ${escapeHtml(job.intakeVerification.flat)}` : ''}.` : 'Confirm the ARK reference and exact address/flat before receiving technician evidence.'}</p><button type="button" class="secondary-button" onclick="verifyTechnicianVisitIdentity(${Number(index)})">Verify visit identity</button></section>` : ''}
     <section class="job-detail-section">
       <h3>Pictures</h3>
       ${renderJobAttachments(job)}
     </section>
   `;
   jobDetailDialog.showModal();
+}
+
+async function verifyTechnicianVisitIdentity(index){
+ const job=jobs[Number(index)];if(!job)return;
+ const reference=window.prompt('Enter the ARK reference you have checked for this address/flat:',job.intakeVerification?.arkReference||'');
+ if(reference===null)return;
+ if(!window.confirm(`Confirm you checked ARK ${reference} against ${job.address}${job.flat?', '+job.flat:''}. This verifies identity only and does not approve or save a report.`))return;
+ try{
+  const result=await directorsApi('/visit-intake-verification',{method:'POST',body:JSON.stringify({jobId:job.jobId||job.id,arkReference:reference.trim(),address:job.address,flat:job.flat||'',assignmentVersion:Number(job.dispatchVersion||1),confirmed:true})});
+  job.intakeVerification=result.verification;openJobDetail(index);
+ }catch(e){await kcInfo(e.message);}
 }
 
 function openPhase05eReportDetail(reportId) {

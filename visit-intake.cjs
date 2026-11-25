@@ -1,7 +1,8 @@
-// Isolated pilot only. No tracker, report approval or ARK mutations.
+// Visit evidence receipt only. No tracker, report approval or ARK mutations.
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
+const {immutableWrite}=require('./durable-file.cjs');
 const sha = b => createHash('sha256').update(b).digest('hex');
 const fail = (status, message) => { throw Object.assign(new Error(message), {status}); };
 const noteBytes = record => Buffer.from(`KINGSWOOD VISIT INTAKE — RECEIVED FOR REVIEW\nARK: ${record.arkReference}\nAddress: ${record.address}\nFlat: ${record.flat}\nDate: ${record.visitDate}\nTechnician: ${record.technician}\n\n${record.notes}\n\nMissing/limited evidence: ${record.missingEvidenceReason||'None declared'}\n\n${record.workflow}\n`);
@@ -39,10 +40,19 @@ class GraphStore {
 
 function createIntake({store, ledgerDir, jobs, fault = async()=>{}}) {
   const locks = new Map();
+  function context(session,p){
+    const job=jobs().find(j=>j.jobId===p.jobId);
+    if(!job||job.assignedTechnicianId!==session.context.technicianId)fail(403,'Assigned job required.');
+    if(job.cancelled)fail(409,'This job has been cancelled or withdrawn. Draft retained for office review.');
+    if(!job.intakeVerified||!job.arkReference||!job.address)fail(422,'Office must verify the ARK reference and address first.');
+    const value={jobId:job.jobId,arkReference:job.arkReference,address:job.address,flat:job.flat||'',visitId:job.visitId||job.jobId,assignmentVersion:job.assignmentVersion||1};
+    if(p.assignmentVersion!==undefined&&p.assignmentVersion!==value.assignmentVersion)fail(409,'Job assignment changed. Keep this draft for office review.');
+    return value;
+  }
   async function expected(session, p) {
     if (!/^[a-f0-9-]{36}$/.test(p.submissionId || '')) fail(422,'Invalid submission ID.');
     const job = jobs().find(j => j.jobId === p.jobId);
-    if (!job || job.assignedTechnicianId !== session.context.technicianId) fail(403,'Assigned job required.');
+    context(session,p);
     // Explicit office-verified mapping, never a technician-entered reference/address.
     if (!job.intakeVerified || !job.arkReference || !job.address) fail(422,'Office must verify the ARK reference and address first.');
     return {job, owner:session.context.technicianId};
@@ -51,7 +61,12 @@ function createIntake({store, ledgerDir, jobs, fault = async()=>{}}) {
     const {owner} = await expected(session,p);
     let saved;
     try { saved = JSON.parse(await fs.readFile(path.join(ledgerDir,p.submissionId+'.json'),'utf8')); }
-    catch(e) { if(e.code==='ENOENT') return {ok:true,verified:false}; throw e; }
+    catch(e) {
+      if(e.code!=='ENOENT')throw e;
+      const folder=await store.get(store.rootId,p.submissionId);if(!folder)return {ok:true,verified:false};
+      const intent=await store.get(folder.id,'intake-intent.json');if(!intent)return {ok:true,verified:false};
+      saved=JSON.parse((await store.read(intent)).toString());
+    }
     if (saved.owner !== owner || saved.record.jobId !== p.jobId) fail(403,'Submission owner differs.');
     const folder = await store.folder(store.rootId,p.submissionId);
     const manifest = await store.get(folder.id,'submission.json');
@@ -89,14 +104,16 @@ function createIntake({store, ledgerDir, jobs, fault = async()=>{}}) {
         const safe=f.originalName.replace(/[\\/:*?"<>|#%\x00-\x1f]/g,'-').replace(/[. ]+$/,'').slice(-150)||'image';
         return {originalName:f.originalName,name:`${String(i+1).padStart(2,'0')}-${safe}`,type:f.type,label,bytes:bytes.length,sha256:sha(bytes),buffer:bytes};
       });
-      const record={schema:1,submissionId:p.submissionId,jobId:job.jobId,arkReference:job.arkReference,address:job.address,flat:job.flat||'',technician:session.context.fullName,technicianId:owner,visitDate:p.visitDate,notes:p.notes,missingEvidenceReason:reason,reviewRequired:reason.length>0||photos.length<6,workflow:'Received for review; Albert template, Second Look and Kevin approval required before ARK save',photos:photos.map(({buffer,...f})=>f)};
+      const record={schema:2,submissionId:p.submissionId,jobId:job.jobId,visitId:job.visitId||job.jobId,assignmentVersion:job.assignmentVersion||1,arkReference:job.arkReference,address:job.address,flat:job.flat||'',technician:session.context.fullName,technicianId:owner,visitDate:p.visitDate,notes:p.notes,missingEvidenceReason:reason,reviewRequired:reason.length>0||photos.length<6,workflow:'Received for review; Albert template, Second Look and Kevin approval required before ARK save',photos:photos.map(({buffer,...f})=>f)};
       const digest=sha(JSON.stringify(record));
+      const folder=await store.folder(store.rootId,p.submissionId);
+      // Bind the immutable cloud identity before a local ledger can be created.
+      // This also prevents a changed retry poisoning recovery after disk loss.
+      await store.ensure(folder.id,'intake-intent.json',Buffer.from(JSON.stringify({owner,digest,record})));
       await fs.mkdir(ledgerDir,{recursive:true});
       const ledger=path.join(ledgerDir,p.submissionId+'.json');
-      try { await fs.writeFile(ledger,JSON.stringify({owner,digest,record}),{flag:'wx'}); }
-      catch(e) { if(e.code!=='EEXIST')throw e; const old=JSON.parse(await fs.readFile(ledger)); if(old.digest!==digest) fail(409,'This receipt already has different content. Office review required.'); }
+      await immutableWrite(ledger,Buffer.from(JSON.stringify({owner,digest,record})));
       const prior=await status(session,p); if(prior.verified)return prior;
-      const folder=await store.folder(store.rootId,p.submissionId);
       const note=noteBytes(record);
       const files=[await store.ensure(folder.id,'technician-note.txt',note)];
       for(const photo of photos) { files.push(await store.ensure(folder.id,photo.name,photo.buffer)); await fault('after-photo',files.length-1); }
@@ -106,6 +123,6 @@ function createIntake({store, ledgerDir, jobs, fault = async()=>{}}) {
       return receipt;
     } finally { locks.delete(p.submissionId); }
   }
-  return {submit,status};
+  return {submit,status,context};
 }
 module.exports={GraphStore,createIntake,sha};

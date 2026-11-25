@@ -29,7 +29,7 @@
     });
   }
   const el=id=>document.getElementById(id);
-  function message(s) {el('intakeMessage').textContent=s;}
+  function message(s) {if(el('intakeMessage'))el('intakeMessage').textContent=s;}
   function snapshot() {
     active.visitDate=el('intakeDate').value;active.notes=el('intakeNotes').value;active.missingEvidenceReason=el('intakeReason').value;
     return structuredClone(active);
@@ -66,16 +66,31 @@
     message('Received for review — notes and every photo verified in OneDrive. This is not an approved or saved ARK report.');
     el('intakeSubmit').hidden=true;
     const a=document.createElement('a');a.href=receipt.folderUrl;a.textContent='Open visit folder';a.target='_blank';a.rel='noopener';el('intakeMessage').append(document.createElement('br'),a);
+    if(!el('intakeNewVisit')){
+      const next=document.createElement('button');next.id='intakeNewVisit';next.type='button';next.className='button secondary';next.textContent='Record another visit';
+      next.onclick=async()=>{
+        next.disabled=true;
+        try{
+          const job=jobs.find(j=>String(j.id)===String(active.jobId));if(!job)throw new Error('Reopen the assigned job first.');
+          await storeDraft({...structuredClone(active),key:active.key+':receipt:'+active.submissionId});
+          await storeDraft({key:active.key,submissionId:crypto.randomUUID(),jobId:active.jobId,jobContext:active.jobContext,assignmentVersion:active.assignmentVersion,visitDate:localDateValue(),notes:'',missingEvidenceReason:'',photos:[],locked:false});
+          await window.openVisitIntake(job);
+        }catch(e){message(e.message);next.disabled=false;}
+      };
+      el('techReportForm').append(next);
+    }
     return storeDraft(structuredClone(active));
   }
   async function submit() {
-    const button=el('intakeSubmit');button.disabled=true;
+    const button=el('intakeSubmit');button.disabled=true;el('intakeBack').disabled=true;
     try {
       if(!active.locked) {
         snapshot();
         if(!active.visitDate||!active.notes.trim())throw new Error('Add the visit date and notes.');
         if(active.photos.length<6&&!active.missingEvidenceReason.trim())throw new Error('Explain missing or limited evidence for office review.');
-        active.locked=true;
+        const verified=await api('context',{jobId:active.jobId});
+        if(active.jobContext&&JSON.stringify(active.jobContext)!==JSON.stringify(verified.job))throw new Error('Job details changed. Keep this draft for office review.');
+        active.jobContext=verified.job;active.assignmentVersion=verified.job.assignmentVersion;active.locked=true;
       }
       await persist();lockFields();
       message('Checking OneDrive for this submission…');
@@ -85,25 +100,51 @@
       message('Saving notes and original photos… Keep this draft until verified.');
       const photos=[];
       for(const p of active.photos) {
-        const base64=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result.split(',')[1]);r.onerror=()=>reject(r.error);r.readAsDataURL(p.file);});
-        photos.push({originalName:p.originalName,type:p.type,label:p.label,base64});
+        const digest=await crypto.subtle.digest('SHA-256',await p.file.arrayBuffer());
+        const sha256=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+        photos.push({originalName:p.originalName,type:p.type,label:p.label,bytes:p.file.size,sha256});
       }
-      const receipt=await api('submit',{submissionId:active.submissionId,jobId:active.jobId,visitDate:active.visitDate,notes:active.notes,missingEvidenceReason:active.missingEvidenceReason,photos});
+      // Old pilot drafts obtain context without changing the frozen notes or originals.
+      if(!active.assignmentVersion){const verified=await api('context',{jobId:active.jobId});active.jobContext=verified.job;active.assignmentVersion=verified.job.assignmentVersion;await persist();}
+      const request={submissionId:active.submissionId,jobId:active.jobId,assignmentVersion:active.assignmentVersion,visitDate:active.visitDate,notes:active.notes,missingEvidenceReason:active.missingEvidenceReason,photos};
+      const plan=await api('begin',request);
+      for(let i=0;i<photos.length;i++){
+        const count=Math.ceil(photos[i].bytes/plan.chunkBytes);
+        for(let c=0;c<count;c++){
+          if(plan.uploaded[i].includes(c))continue;
+          message(`Sending original photo ${i+1} of ${photos.length}…`);
+          const query=new URLSearchParams({submissionId:active.submissionId,jobId:active.jobId,photo:String(i),chunk:String(c)});
+          const r=await fetch('/api/visit-intake/chunk?'+query,{method:'POST',credentials:'include',headers:{'Content-Type':'application/octet-stream'},body:active.photos[i].file.slice(c*plan.chunkBytes,(c+1)*plan.chunkBytes),signal:AbortSignal.timeout(90000)});
+          if(!r.ok){const error=await r.json().catch(()=>({}));throw new Error(error.message||'Photo transfer interrupted.');}
+        }
+      }
+      message('Checking notes and every original in OneDrive…');
+      const receipt=await api('finish',{submissionId:active.submissionId,jobId:active.jobId,assignmentVersion:active.assignmentVersion});
       await received(receipt);
     }catch(e){message(`${e.message} Draft retained on this phone. Retry uses the same submission reference.`);button.textContent='Retry submission';}
-    finally{button.disabled=false;}
+    finally{button.disabled=false;if(el('intakeBack'))el('intakeBack').disabled=false;}
   }
   window.openVisitIntake=async job=>{
     closePriorityCommunicationAlert(false);
     const key=currentTechContext.technicianId+':'+job.id;
     try {
       active=await loadOrCreate(key,job.id);
+      let contextError='';
+      try{const verified=await api('context',{jobId:job.id});
+        if(active.jobContext&&JSON.stringify(active.jobContext)!==JSON.stringify(verified.job))contextError='Job details changed. Keep this draft for office review.';
+        else {active.jobContext=verified.job;active.assignmentVersion=verified.job.assignmentVersion;}
+      }catch(e){contextError=e.message;}
       const legacyTestDraft=job.id==='JOB-INTAKE-PILOT-001'&&!active.photos.length&&!active.notes&&!active.locked
         ? await readDraft(currentTechContext.technicianId+':JOB-PHASE05A-IAN-001') : null;
       const panel=el('techReportForm');
       // Replace the existing report entry surface; never open a second app or form URL.
-      panel.innerHTML=`<button type="button" class="button secondary" id="intakeBack">← Back to jobs</button><h3 id="intakeJob"></h3><p id="intakeAddress"></p><p>Private pilot • Visit evidence for office review</p><div class="section"><label for="intakeDate">Visit date</label><input id="intakeDate" type="date"></div><div class="section"><label for="intakeNotes">Visit notes</label><textarea id="intakeNotes" maxlength="16000"></textarea></div><div class="section"><label for="intakeFiles">Original photos (up to 20)</label><p>Before, After and Context labels are optional. No pairs required.</p><input id="intakeFiles" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple><div id="intakePhotos"></div></div><div class="section"><label for="intakeReason">Missing or limited evidence — explain why</label><textarea id="intakeReason" maxlength="2000" placeholder="Needed if fewer than six photos; flagged for office review"></textarea></div><p id="intakeMessage" role="status" aria-live="polite"></p><button type="button" class="button" id="intakeSubmit">Submit visit</button>`;
+      panel.innerHTML=`<button type="button" class="button secondary" id="intakeBack">← Back to jobs</button><h3 id="intakeJob"></h3><p id="intakeAddress"></p><p>Visit notes and photos • For office review</p><div class="section"><label for="intakeDate">Visit date</label><input id="intakeDate" type="date"></div><div class="section"><label for="intakeNotes">Visit notes</label><textarea id="intakeNotes" maxlength="16000"></textarea></div><div class="section"><label for="intakeFiles">Original photos (up to 20)</label><p>Before, After and Context labels are optional. No pairs required.</p><input id="intakeFiles" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple><div id="intakePhotos"></div></div><div class="section"><label for="intakeReason">Missing or limited evidence — explain why</label><textarea id="intakeReason" maxlength="2000" placeholder="Needed if fewer than six photos; flagged for office review"></textarea></div><p id="intakeMessage" role="status" aria-live="polite"></p><button type="button" class="button" id="intakeSubmit">Submit visit</button>`;
       el('intakeJob').textContent=job.jobReference+' • '+currentTech;el('intakeAddress').textContent=job.address;
+      if(active.jobContext){
+        el('intakeJob').textContent=active.jobContext.arkReference+' • '+currentTech;
+        const address=active.jobContext.address,flat=active.jobContext.flat,flatLabel=/flat|unit|suite/i.test(flat)?flat:flat?'Flat '+flat:'';
+        el('intakeAddress').textContent=address+(flatLabel&&!address.toLowerCase().includes(flatLabel.toLowerCase())?' • '+flatLabel:'');
+      }
       el('intakeDate').value=active.visitDate;el('intakeNotes').value=active.notes;el('intakeReason').value=active.missingEvidenceReason;
       if(legacyTestDraft&&!legacyTestDraft.receipt){
         const box=document.createElement('div');box.className='section';
@@ -130,6 +171,7 @@
       el('intakeBack').onclick=async()=>{try{await persist();panel.classList.add('hidden');el('techJobList').classList.remove('hidden');handlePriorityCommunicationAlerts();}catch{message('Draft could not be stored. Keep this page open.');}};
       el('intakeSubmit').onclick=submit;el('techJobList').classList.add('hidden');el('secureJobDetails')?.classList.add('hidden');panel.classList.remove('hidden');lockFields();
       await persist();
+      if(contextError)message(contextError+' Your phone draft is retained.');
       if(active.locked){message('Saved draft recovered. Checking OneDrive…');try{const r=await api('status',{jobId:active.jobId,submissionId:active.submissionId});if(r.verified)await received(r);else message('Unverified submission recovered. Retry with the same reference.');}catch(e){message(e.message+' Draft recovered; retry when connected.');}}
       navigator.storage?.persist?.().catch(()=>{});
     }catch(e){showReportError('Phone draft storage unavailable: '+e.message);}

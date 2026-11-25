@@ -1,4 +1,6 @@
 .env.local
+**/technician-credentials.private.json
+**/visit-intake.config.private.json
 node_modules/
 npm-debug.log*
 hub-server.log

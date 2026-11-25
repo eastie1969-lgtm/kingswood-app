@@ -702,7 +702,7 @@ status: 'Assigned' },
             return;
         }
 
-        if (pin !== techPINs[name]) {
+        if (!window.KINGSWOOD_VISIT_INTAKE && pin !== techPINs[name]) {
             errorEl.textContent = 'Invalid PIN';
             errorEl.classList.remove('hidden');
             return;
@@ -836,7 +836,7 @@ status: 'Assigned' },
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ selectedName })
+            body: JSON.stringify({ selectedName, pin: document.getElementById('techPin').value })
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.authenticated) {
@@ -2994,7 +2994,8 @@ status: 'Assigned' },
             return;
         }
 
-        if (typeof window.openVisitIntake === 'function') {
+        if (window.KINGSWOOD_VISIT_INTAKE) {
+            if (typeof window.openVisitIntake !== 'function') { showReportError('The visit uploader has not loaded. Refresh when connected; your saved draft will remain.'); return; }
             if (!job.secureFeed) { showReportError('Use an authenticated assigned job for the intake pilot.'); return; }
             return window.openVisitIntake(job);
         }
@@ -3182,6 +3183,7 @@ status: 'Assigned' },
         return result;
     }
     async function uploadToCloudinary() {
+        if (window.KINGSWOOD_VISIT_INTAKE) { showReportError('Open your assigned visit to submit notes and original photos.'); return; }
         if (authenticatedReportSubmitting) return;
         if (photoFiles.length < 6) {
             showReportError('Upload at least 6 photos.');
@@ -3249,6 +3251,7 @@ status: 'Assigned' },
         }
     }
     async function finishReportSubmission() {
+        if (window.KINGSWOOD_VISIT_INTAKE) { showReportError('Use the verified visit intake.'); return; }
         const fields = buildReportFields();
         const missing = validateReportFields(fields);
         if (missing.length) {
@@ -3595,6 +3598,7 @@ Submitted: ${report.submittedAt}`;
     }
 
   async function uploadToOneDrive(report, photoUrls, options = {}) {
+    if (window.KINGSWOOD_VISIT_INTAKE) return {saved:false,folder:''};
     const functionUrl = "https://savereporttoonedrive-rbwc7c6z7a-nw.a.run.app";
 
     try {

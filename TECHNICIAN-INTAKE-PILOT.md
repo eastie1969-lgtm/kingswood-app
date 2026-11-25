@@ -1,5 +1,7 @@
 # Technician visit intake pilot
 
+Historical proof record. The implementation has since moved to resumable uploads and server-verified sign-in. Follow `TECHNICIAN-VISIT-INTAKE.md` for the current review build, configuration and tests. The older single-request browser test has been replaced by `visit-intake-review-browser.cjs`.
+
 This branch extends `technician-app.html`. It does not create a second application. It is disabled unless `KINGSWOOD_INTAKE_PILOT=1` and `NODE_ENV` is not `production`. Do not merge or deploy it as a production rollout.
 
 ## Existing save traced
