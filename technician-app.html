@@ -1933,6 +1933,7 @@ status: 'Assigned' },
     }
 
     function renderPriorityCommunicationAlert(items = []) {
+        if (typeof window.openVisitIntake === 'function' && !document.getElementById('techReportForm').classList.contains('hidden')) return;
         closePriorityCommunicationAlert(false);
         const sorted = [...items].sort((a, b) => {
             if (a.priority !== b.priority) return a.priority - b.priority;
@@ -2991,6 +2992,11 @@ status: 'Assigned' },
         if (!job) {
             showReportError('Job not found. Please go back and select the job again.');
             return;
+        }
+
+        if (typeof window.openVisitIntake === 'function') {
+            if (!job.secureFeed) { showReportError('Use an authenticated assigned job for the intake pilot.'); return; }
+            return window.openVisitIntake(job);
         }
 
         if (job.secureFeed) {

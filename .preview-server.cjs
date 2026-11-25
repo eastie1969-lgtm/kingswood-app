@@ -71,6 +71,24 @@ const {
 const { calculateHolidayEntitlement, countedBankHolidays } = require("./packages/shared-models/holiday-entitlement");
 
 const root = __dirname;
+const intakePilotEnabled = process.env.KINGSWOOD_INTAKE_PILOT === '1' && process.env.NODE_ENV !== 'production';
+let intakePilot;
+if (intakePilotEnabled) {
+  if (!process.env.DATA_DIR || !process.env.KINGSWOOD_INTAKE_CONFIG) throw new Error('Pilot requires isolated DATA_DIR and private config.');
+  const { GraphStore, createIntake } = require('./visit-intake.cjs');
+  const config = JSON.parse(fs.readFileSync(process.env.KINGSWOOD_INTAKE_CONFIG, 'utf8'));
+  const graph = new GraphStore({...config, token: async () => {
+    const r = await fetch(`https://login.microsoftonline.com/${config.tenantId}/oauth2/v2.0/token`, {method:'POST',body:new URLSearchParams({client_id:config.clientId,client_secret:process.env.KINGSWOOD_INTAKE_GRAPH_SECRET,grant_type:'client_credentials',scope:'https://graph.microsoft.com/.default'})});
+    if (!r.ok) throw new Error('OneDrive authentication unavailable. Draft retained.');
+    return (await r.json()).access_token;
+  }});
+  intakePilot = createIntake({store:graph,ledgerDir:path.join(process.env.DATA_DIR,'visit-intake'),jobs:()=>config.jobs,fault:async(stage,count)=>{
+    const file=process.env.KINGSWOOD_INTAKE_FAULT_FILE;
+    if(file && fs.existsSync(file) && fs.readFileSync(file,'utf8').trim()===`${stage}:${count||0}`) {
+      fs.unlinkSync(file);throw new Error('Injected isolated pilot failure.');
+    }
+  }});
+}
 const port = Number(process.env.PORT || 8126);
 const host = process.env.HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const dataDir = process.env.DATA_DIR || path.join(root, "data");
@@ -350,6 +368,10 @@ function serveExistingTechnicianApp(response) {
   }
 
   let html = fs.readFileSync(technicianAppFile, "utf8");
+  if (intakePilotEnabled) {
+    html = html.replace('firebase.initializeApp(firebaseConfig);', 'throw new Error("Firebase disabled in isolated intake pilot");');
+    html += '\n<script src="/visit-intake-client.js"></script>\n';
+  }
   html = html.replace(
     /const\s+PHASE5A_FEED_BASE_URL\s*=\s*['"][^'"]+['"]\s*;/,
     "const PHASE5A_FEED_BASE_URL = window.location.protocol === 'file:' ? 'http://127.0.0.1:8126' : window.location.origin;"
@@ -6153,6 +6175,21 @@ async function saveRamsPdf(payload) {
 
 const server = http.createServer((request, response) => {
   const routePath = new URL(request.url, `http://${request.headers.host || "127.0.0.1"}`).pathname;
+  if (routePath.startsWith('/api/visit-intake')) {
+    if (!intakePilotEnabled) return sendJson(response,404,{ok:false});
+    if (!sameOrigin(request)) return sendJson(response,403,{ok:false,message:'Same-origin request required.'});
+    const auth = getPhase05bSession(request);
+    if (!auth.ok) return sendJson(response,auth.status,{ok:false,message:auth.message});
+    if(request.method!=='POST') return sendJson(response,405,{ok:false});
+    (async()=>{
+      let size=0; const chunks=[];
+      for await(const chunk of request) { size+=chunk.length; if(size>140*1024*1024) throw Object.assign(new Error('Visit upload too large.'),{status:413}); chunks.push(chunk); }
+      const payload=JSON.parse(Buffer.concat(chunks).toString());
+      const result=await (routePath==='/api/visit-intake/status'?intakePilot.status(auth.session,payload):routePath==='/api/visit-intake/submit'?intakePilot.submit(auth.session,payload):Promise.reject(Object.assign(new Error('Unknown intake route.'),{status:404})));
+      sendJson(response,200,result,{'Cache-Control':'no-store'});
+    })().catch(e=>sendJson(response,e.status||503,{ok:false,message:e.status?e.message:'Save could not be verified. Your draft is retained; retry.'},{'Cache-Control':'no-store'}));
+    return;
+  }
 
   if (isDirectorRoute(routePath)) {
     const configuredOrigin = process.env.RENDER_EXTERNAL_URL
@@ -6973,6 +7010,7 @@ const server = http.createServer((request, response) => {
   }
 
   if (request.url === "/api/phase-05d/technician-report-submit" && request.method === "POST") {
+    if (intakePilotEnabled) return sendJson(response,409,{ok:false,message:'Pilot intake cannot complete jobs or save ARK reports.'});
     const sessionResult = getPhase05bSession(request);
     if (!sessionResult.ok) {
       sendJson(response, sessionResult.status, {
