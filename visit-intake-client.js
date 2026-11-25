@@ -98,11 +98,26 @@
     const key=currentTechContext.technicianId+':'+job.id;
     try {
       active=await loadOrCreate(key,job.id);
+      const legacyTestDraft=job.id==='JOB-INTAKE-PILOT-001'&&!active.photos.length&&!active.notes&&!active.locked
+        ? await readDraft(currentTechContext.technicianId+':JOB-PHASE05A-IAN-001') : null;
       const panel=el('techReportForm');
       // Replace the existing report entry surface; never open a second app or form URL.
       panel.innerHTML=`<button type="button" class="button secondary" id="intakeBack">← Back to jobs</button><h3 id="intakeJob"></h3><p id="intakeAddress"></p><p>Private pilot • Visit evidence for office review</p><div class="section"><label for="intakeDate">Visit date</label><input id="intakeDate" type="date"></div><div class="section"><label for="intakeNotes">Visit notes</label><textarea id="intakeNotes" maxlength="16000"></textarea></div><div class="section"><label for="intakeFiles">Original photos (up to 20)</label><p>Before, After and Context labels are optional. No pairs required.</p><input id="intakeFiles" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple><div id="intakePhotos"></div></div><div class="section"><label for="intakeReason">Missing or limited evidence — explain why</label><textarea id="intakeReason" maxlength="2000" placeholder="Needed if fewer than six photos; flagged for office review"></textarea></div><p id="intakeMessage" role="status" aria-live="polite"></p><button type="button" class="button" id="intakeSubmit">Submit visit</button>`;
       el('intakeJob').textContent=job.jobReference+' • '+currentTech;el('intakeAddress').textContent=job.address;
       el('intakeDate').value=active.visitDate;el('intakeNotes').value=active.notes;el('intakeReason').value=active.missingEvidenceReason;
+      if(legacyTestDraft&&!legacyTestDraft.receipt){
+        const box=document.createElement('div');box.className='section';
+        const text=document.createElement('p');text.textContent='A saved test draft was found under the old demonstration job. You can use its notes and original photos for this dummy visit: '+job.jobReference+' — '+job.address+'. Review the details before submitting.';
+        const recover=document.createElement('button');recover.type='button';recover.className='button';recover.textContent='Use saved test notes and photos';
+        recover.onclick=async()=>{
+          try{
+            Object.assign(active,{submissionId:legacyTestDraft.submissionId,visitDate:legacyTestDraft.visitDate,notes:legacyTestDraft.notes,missingEvidenceReason:legacyTestDraft.missingEvidenceReason,photos:legacyTestDraft.photos,locked:false});
+            el('intakeDate').value=active.visitDate;el('intakeNotes').value=active.notes;el('intakeReason').value=active.missingEvidenceReason;
+            await storeDraft(structuredClone(active));lockFields();box.remove();message('Saved test draft recovered for '+job.jobReference+'. Please review the visit details, then submit.');
+          }catch(e){message('The saved test draft could not be recovered. The original draft is still stored.');}
+        };
+        box.append(text,recover);panel.prepend(box);
+      }
       ['intakeDate','intakeNotes','intakeReason'].forEach(id=>el(id).oninput=persist);
       el('intakeFiles').onchange=async e=>{
         const files=Array.from(e.target.files);e.target.value='';

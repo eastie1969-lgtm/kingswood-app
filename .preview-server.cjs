@@ -2559,7 +2559,7 @@ function phase073dBuildSourceRecordsForSession(session) {
       assignedStaffId: textValue(assignedVehicle.assignedStaffId)
     } : null,
     jobs: [
-      ...(phase05bSourceRecords.jobs || []),
+      ...(intakePilotEnabled ? [] : phase05bSourceRecords.jobs || []),
       ...hubJobs,
       ...phase073eWithdrawalJobsForSession(data, session.context)
     ],

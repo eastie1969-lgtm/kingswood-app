@@ -22,6 +22,8 @@ async function openJob(){
  await page.selectOption('#techName','Ian D');await page.fill('#techPin','1001');
  await page.getByRole('button',{name:'Log In',exact:true}).click();
  await page.getByText('TEST ONLY — OneDrive intake',{exact:true}).first().waitFor();
+ const assigned=await page.evaluate(async()=> (await(await fetch('/api/phase-05b/technician-feed')).json()).feed.jobs);
+ assert.deepEqual(assigned.map(j=>j.jobId),['JOB-INTAKE-PILOT-001'],'Pilot must exclude historical demonstration jobs without an intake mapping');
  await dismissAlerts();
  await page.getByText('TEST ONLY — OneDrive intake',{exact:true}).first().click();
  await page.getByRole('button',{name:'Start Report',exact:true}).click();

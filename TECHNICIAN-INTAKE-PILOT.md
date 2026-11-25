@@ -22,6 +22,7 @@ Cloud listing of the actual configured root found only `Proofing Reports` during
 - Retry/reopen reconciles first. Every expected original and note is downloaded from OneDrive and hash-checked before a receipt. The verifier checks the manifest against the locally bound payload, expected file inventory and exact cloud IDs. Partial saves resume without replacing matching files; changed content under an existing ID is rejected.
 - Receipt says `Received for review`, with `arkReportSaved: false`. It does not complete the job, write report metadata, save to Firestore, change a tracker, save ARK, approve evidence or alter Albert's template / Second Look / approval gates.
 - Existing priority popups are deferred while the pilot form is open, and can reappear on returning to jobs.
+- Pilot feeds exclude the Hub's historical Phase 5A demonstration jobs. Those samples have no verified intake mapping. If a test draft was created under the old Ian demonstration job, opening the verified dummy job offers an explicit recovery button. It copies the saved notes, date, explanation and original File objects while retaining the submission ID; the original draft remains stored. The technician reviews the new dummy reference/address before submitting. No live-job identity is remapped.
 
 ## Isolation and configuration
 
